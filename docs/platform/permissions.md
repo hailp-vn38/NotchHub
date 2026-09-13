@@ -52,20 +52,6 @@ Potential capabilities for future in-scope macOS modules:
 - Screen Recording for screenshot/OCR/screen-context features, if ever approved.
 - Automation for explicitly user-approved control of other macOS applications.
 
-### 2.3 Permanent exclusions
-
-NotchHub does not request or implement permissions for:
-
-- ESP-IDF workflows.
-- ESP32 gateway/BLE telemetry.
-- IoT/smart-home control.
-- LAN device control.
-- Hardware command routing.
-
-Those product domains are permanently outside scope; the permission architecture must not grow around them.
-
----
-
 ## 3. Permission principles
 
 1. **On-demand request** — prompt only after a clear user action.
@@ -386,7 +372,6 @@ You can change this permission later in System Settings → Privacy & Security �
 - Explain which application will be controlled and what action will be sent.
 - Never request broad automation access for a future possibility.
 - Use Action Registry confirmation and audit for side-effecting app control.
-- Do not use automation as a path to embedded/LAN/hardware control.
 
 ---
 
@@ -632,20 +617,7 @@ Copy must be reviewed whenever data flow or retention behavior changes.
 
 ---
 
-## 17. Explicit scope boundary
-
-The Permission Center is designed for in-scope macOS desktop capabilities and future Xiaozhi/media/clipboard/files/calendar modules. It must not be expanded to authorize:
-
-- ESP-IDF command execution.
-- ESP32 gateway/BLE telemetry.
-- IoT/MQTT/smart-home control.
-- LAN device control or hardware command routing.
-
-A local-network or hardware feature is not made acceptable merely by adding a new permission enum. Those domains are permanently excluded from NotchHub.
-
----
-
-## 18. Summary
+## 17. Summary
 
 NotchHub treats privacy permissions as explicit user decisions governed by a central, testable coordinator. Modules declare their needs; the platform explains and requests access only when the user activates a relevant feature; denied permissions produce graceful degraded states; and diagnostics retain only sanitized metadata.
 

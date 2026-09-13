@@ -22,7 +22,6 @@ Events are the integration boundary between:
 
 The protocol separates **what happened** from **how the Notch presents it**. A producer publishes an event; `EventRouter`, `EventBus`, and `PresentationPolicy` decide whether that event changes a module state, a compact status, a notification, or nothing visible. A separate detail view opens only after an explicit user-navigation action.
 
-This protocol does not provide hardware or LAN device-control messaging. ESP32, ESP-IDF, IoT telemetry, MQTT, BLE gateway, and LAN device-control event domains are permanently outside NotchHub scope.
 
 ---
 
@@ -174,7 +173,6 @@ calendar.event.upcoming                 # future Calendar module
 - Event types are stable public/internal contracts once released.
 - Use singular entity names and past-tense/changed verbs where possible.
 - Do not encode implementation details such as class names, transport names, or private database table names.
-- Do not create event names for excluded domains: `esp32.*`, `esp-idf.*`, `iot.*`, `mqtt.*`, `ble.gateway.*`, or `lan.device.*` are not valid NotchHub event families.
 - Every event type has a documented payload schema, producer, consumers, rate expectation, privacy classification, and presentation policy.
 
 ### 5.3 Registry entry template
@@ -389,7 +387,7 @@ Example transcript delta:
 - The relay must not forward raw authorization headers, tokens, binary audio frames, or unbounded protocol dumps as event payloads.
 - Transcript assembler/coalescer runs outside the main actor.
 - UI receives a bounded, coalesced presentation snapshot; it does not render every raw delta.
-- Tool events represent safe, registered NotchHub actions only. They do not create an IoT/LAN/hardware-control path.
+- Tool events represent safe, registered NotchHub actions only.
 
 ---
 
@@ -728,22 +726,7 @@ Active | Deprecated | Removed
 
 ---
 
-## 18. Explicit scope boundary
-
-The event protocol is generic, but its registry is intentionally limited to NotchHub's macOS desktop/productivity domain.
-
-Do not add event families for:
-
-- ESP-IDF build/flash/monitor.
-- ESP32 gateway/BLE device telemetry.
-- IoT/MQTT/smart-home state.
-- LAN device control or hardware command routing.
-
-These are permanently excluded by product requirements and ADR-0013. If a separate product later needs such events, it should define its own protocol and trust model rather than expanding NotchHub's event registry.
-
----
-
-## 19. Summary
+## 18. Summary
 
 The Event Protocol gives NotchHub one stable, validated, observable integration boundary. Producers report facts through versioned envelopes; the core validates and routes them; modules project domain state; Presentation Policy decides how much attention the user should receive; focused stores update the UI.
 

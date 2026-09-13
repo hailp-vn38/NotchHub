@@ -300,7 +300,7 @@ The menu bar is a recovery path and control center:
 - Dates/UUIDs/URLs.
 - `Duration`/timing abstractions where available.
 - File/persistence adapters.
-- `Process` only for a separately reviewed, in-scope macOS use case; not for arbitrary IPC input and not for excluded ESP/IoT domains.
+- `Process` only for a separately reviewed, in-scope macOS use case; not for arbitrary IPC input.
 - `NotificationCenter` observation adapters.
 - `FileManager` for controlled app-owned paths.
 
@@ -335,7 +335,6 @@ The Network framework may be used for local transport when Unix sockets alone ar
 - Keep transport details inside `NotchIPC`.
 - Do not pass raw incoming text to an executor.
 - Use backpressure/slow-client disconnect for streams.
-- Never expose ESP32/IoT/LAN device control routes.
 
 ### 11.3 Availability
 
@@ -675,20 +674,7 @@ ADR: Required before M5 implementation
 
 ---
 
-## 26. Explicit scope boundary
-
-This document does not authorize API use for:
-
-- ESP-IDF build/flash/monitor.
-- ESP32 gateway/BLE device telemetry.
-- IoT/MQTT/smart-home integrations.
-- LAN device control or hardware command routing.
-
-Those domains are permanently excluded from NotchHub. Adding a framework that could technically communicate with hardware does not change product scope.
-
----
-
-## 27. Summary
+## 26. Summary
 
 NotchHub uses Apple APIs through narrow, documented adapters: SwiftUI/Observation for focused UI state, AppKit for the native Notch panel and display/input behavior, Keychain for secrets, OSLog for sanitized diagnostics, and Network only for controlled local IPC. Privacy-sensitive frameworks such as EventKit, AVFoundation, ScreenCaptureKit, UserNotifications, and Pasteboard are future module dependencies, not first-launch foundation requirements.
 

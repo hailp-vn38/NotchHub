@@ -355,19 +355,6 @@ This checklist mirrors the module requirements template in [Requirements §9](..
 
 ---
 
-## 13. Explicit boundary reminder
-
-The module system described here is intentionally generic and does not assume any particular domain. It must **not** be used, extended, or special-cased to add:
-
-- ESP-IDF build/flash/monitor functionality.
-- ESP32 gateway or BLE device telemetry.
-- IoT/MQTT/smart-home device control.
-- LAN device control of any kind.
-
-These are permanently out of scope for NotchHub (ADR-0013), regardless of how well they might fit the module contract technically.
-
----
-
-## 14. Summary
+## 13. Summary
 
 The module system is the primary extension point for NotchHub. It trades a small amount of upfront ceremony (declared metadata, typed context, explicit lifecycle) for strong isolation guarantees: any single module — including the eventual Xiaozhi Display Companion — can fail, be disabled, or misbehave without ever taking down the core application, leaking resources, or bypassing the platform's permission, settings, action, or security boundaries.

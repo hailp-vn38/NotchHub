@@ -14,7 +14,6 @@ This document defines the functional and non-functional requirements for NotchHu
 
 NotchHub provides a reliable interaction surface around a MacBook notch for short-lived status, quick actions, and future desktop productivity modules. The platform is intentionally developed in a **foundation-first** order: the core application must establish windowing, interaction, settings, permissions, shortcuts, actions, module runtime, IPC, diagnostics, security, and performance behavior before real business modules such as Xiaozhi, media, clipboard, files, calendar, or system controls are added.
 
-NotchHub expressly excludes ESP-IDF development tooling, ESP32 gateway/IoT telemetry, hardware fleet monitoring, and LAN device control. Those capabilities are not planned modules and must not shape the platform’s product requirements.
 
 ---
 
@@ -55,11 +54,6 @@ NotchHub expressly excludes ESP-IDF development tooling, ESP32 gateway/IoT telem
 
 The following are excluded from NotchHub, not merely postponed:
 
-- ESP-IDF `build`, `flash`, `monitor`, serial-port selection, firmware workspace profile, or related command execution.
-- Embedded developer workflow modules or firmware build status integrations.
-- ESP32 gateway status, BLE device telemetry, device count, RSSI, OTA progress, or gateway dashboard integration.
-- IoT telemetry, MQTT device monitoring, smart-home control, or networked hardware control.
-- LAN device control, device command routing, or local-network actuator actions.
 
 Any proposal to include a permanently excluded area requires a new product decision outside the current NotchHub scope, not a normal feature request.
 
@@ -364,7 +358,7 @@ POST /v1/actions/{actionID}
 WS   /v1/stream
 ```
 
-Exact transport and endpoint formats may evolve, but the local-only, authenticated, validated boundary is mandatory. IPC is for desktop app integrations and future assistant relays, not hardware/LAN device control.
+Exact transport and endpoint formats may evolve, but the local-only, authenticated, validated boundary is mandatory. IPC is for desktop app integrations and future assistant relays.
 
 ## 5.9 Diagnostics and logging
 
@@ -646,7 +640,7 @@ Every future module must provide a document and implementation evidence for the 
 | Tests | Unit/integration/manual/performance scenarios |
 | Diagnostics | Health fields, logs, counters, sanitized report content |
 
-A module that does not provide this information is not ready to be accepted into the platform. A proposal involving ESP-IDF, ESP32 gateway, IoT telemetry, or LAN device control must be rejected as out of scope.
+A module that does not provide this information is not ready to be accepted into the platform.
 
 ---
 
@@ -742,6 +736,5 @@ A change that affects any of the following requires an update to this document, 
 - Performance budgets or bounded-buffer policy.
 - Addition of a privileged helper or private API dependency.
 - Foundation Completion Gate criteria.
-- Any proposal to alter the permanent exclusion of ESP-IDF, ESP32 gateway/IoT telemetry, or LAN device control.
 
 Requirements changes should be reviewed before implementation when they introduce new trust boundaries, permissions, persistent data, high-frequency streams, hardware actions, or external network exposure.

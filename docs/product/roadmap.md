@@ -25,18 +25,6 @@ The project will not begin by integrating Xiaozhi, media control, clipboard, fil
 
 A module is added only after the foundation can host it without causing architectural rewrites. Xiaozhi is planned as a future **M1 Display Companion** module, not as a shortcut around base-platform work.
 
-### Permanent scope exclusion
-
-The roadmap does not include:
-
-- ESP-IDF build, flash, monitor, serial-port, or firmware workflow modules.
-- ESP32 gateway status, BLE-device telemetry, OTA progress, or embedded-device dashboards.
-- IoT device control, MQTT integration, smart-home control, or LAN device-control modules.
-
-No future phase may add these domains without a new product vision, requirements review, ADR, and an explicit scope decision. They are not deferred work for NotchHub.
-
----
-
 ## 2. Delivery principles
 
 ### Foundation before feature
@@ -128,7 +116,7 @@ Create a codebase with explicit boundaries, repeatable builds, baseline document
 - `docs/development/setup.md`
 - `docs/development/agent-instructions.md`
 - `docs/references/boring-notch.md`
-- Initial ADRs 0001–0013
+- Initial architecture ADRs
 
 ### Exit criteria
 
@@ -495,7 +483,6 @@ Show Xiaozhi voice/AI session state and streamed text without adding native Mac 
 - No direct raw WebSocket/audio/Opus decoding inside `NotchSurface`.
 - No unbounded transcript persistence.
 - No arbitrary tool execution from voice/AI.
-- No IoT/gateway/device-control behavior as part of this module.
 
 ### Exit criteria
 
@@ -611,7 +598,6 @@ Every proposed module must include:
 - Test and diagnostics plan.
 - ADR if it changes a durable architectural decision.
 
-Embedded development tooling, ESP32 gateway/IoT telemetry, and LAN device control are excluded from this phase and from this product roadmap.
 
 ---
 
@@ -668,7 +654,6 @@ Every new action/widget must add accessible label, keyboard path, disabled/error
 - Network listener exposed beyond loopback.
 - Global event monitoring without a clear user benefit and privacy explanation.
 - Unbounded logs, transcripts, cache, or event streams.
-- ESP-IDF workflow, embedded build/flash/monitor tooling, ESP32 gateway telemetry, IoT control, or LAN device control.
 
 ---
 
@@ -687,7 +672,6 @@ Every new action/widget must add accessible label, keyboard path, disabled/error
 | Multi-display adds disproportionate complexity | Medium | Built-in display first; delay full support | F2 onward |
 | Private APIs compromise future stability/distribution | Medium/High | Public API-first; isolated helper only after ADR/review | Any future phase |
 | Xiaozhi protocol/backend changes | Medium | Adapter/relay normalizes into stable EventEnvelope | M1 |
-| Scope returns to IoT/embedded tooling | Medium | Explicit permanent product exclusion and requirements review | Every phase |
 
 ---
 
@@ -715,10 +699,10 @@ The immediate next step is **F0 — Bootstrap and architecture**:
 1. Initialize repository and macOS 14+ Swift app target.
 2. Create the six package boundaries.
 3. Add docs structure and initial product/architecture documents.
-4. Add ADR template and ADRs 0001–0013.
+4. Add ADR template and the initial architecture ADR set.
 5. Add CI build/test workflow.
 6. Implement pure `NotchDomain` identifiers, base states, event envelope, action IDs, and module protocol.
 7. Add basic unit tests for domain contracts.
 8. Create development setup guide with exact build/test commands.
 
-No Xiaozhi integration, `NSPanel`, global shortcut, audio, media, calendar, files, or system-control code should be started until F0 exit criteria pass. ESP-IDF, ESP32 gateway, IoT telemetry, and LAN device-control work are out of scope for the project.
+No Xiaozhi integration, `NSPanel`, global shortcut, audio, media, calendar, files, or system-control code should be started until F0 exit criteria pass.

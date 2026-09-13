@@ -126,7 +126,6 @@ These become NotchHub manual QA and performance scenarios, not assumptions copie
 | Treat logs/history as an implementation detail | Data classification, bounded retention, redaction, export policy |
 | Optimize after feature growth | Performance/resource policy required before every module |
 | Treat extension system as an early feature | Static modules first; dynamic plugins require separate ADR/security review |
-| Expand into broad hardware/IoT controls | ESP-IDF, ESP32, IoT, MQTT, BLE gateway, and LAN device control permanently excluded |
 
 ---
 
@@ -275,20 +274,7 @@ This reference document should link to:
 
 ---
 
-## 11. Scope boundary reminder
-
-Boring Notch's breadth or future roadmap must not be interpreted as a reason to expand NotchHub into excluded domains. NotchHub will not add:
-
-- ESP-IDF build/flash/monitor actions.
-- ESP32 gateway/BLE device telemetry.
-- IoT/MQTT/smart-home integration.
-- LAN device control or hardware command routing.
-
-These exclusions remain in [Vision](../product/vision.md), [Roadmap](../product/roadmap.md), [Requirements](../product/requirements.md), and ADR-0013.
-
----
-
-## 12. Summary
+## 11. Summary
 
 Boring Notch is a valuable technical reference for the macOS notch problem, especially native panel behavior, SwiftUI/AppKit composition, feature UX, and lifecycle edge cases. NotchHub will learn from those problems while implementing its own foundation-first architecture: a single `NSPanel` owner, explicit surface state machine, static module contracts, centralized permissions/actions, local validated IPC, bounded performance, and independent licensing.
 

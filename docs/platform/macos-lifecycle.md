@@ -686,20 +686,7 @@ Do not record private screen content, raw event streams, tokens, or sensitive us
 
 ---
 
-## 19. Explicit scope boundary
-
-Lifecycle behavior is defined for a local macOS desktop application and its in-scope modules. It does not define lifecycle handling for:
-
-- ESP-IDF processes.
-- ESP32/BLE gateways.
-- IoT/MQTT/smart-home devices.
-- LAN device-control sessions or hardware commands.
-
-Those domains are permanently excluded from NotchHub. No lifecycle adapter, reconnect manager, device session state, or LAN background service should be added for them.
-
----
-
-## 20. Summary
+## 19. Summary
 
 NotchHub treats macOS lifecycle events as normal operating conditions. App Shell, `NotchPanelController`, `SurfaceCoordinator`, `ModuleRuntime`, `PermissionCoordinator`, `IPCServer`, and persistence services each own a defined part of startup, suspension, recovery, and shutdown.
 

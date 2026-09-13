@@ -20,7 +20,6 @@ The IPC design is **local-first and deny-by-default**:
 - Validate every envelope/action before it reaches `EventBus` or `ActionRegistry`.
 - Rate-limit, size-limit, and diagnose invalid requests.
 - Never accept arbitrary shell commands, executable paths, or executor configuration.
-- Never expose a LAN device-control, IoT, MQTT, BLE gateway, or hardware-control interface.
 
 ---
 
@@ -42,7 +41,6 @@ The IPC design is **local-first and deny-by-default**:
 - No cloud relay or public internet endpoint.
 - No remote administration or multi-user access model.
 - No arbitrary script/shell execution endpoint.
-- No ESP32/IoT/LAN device-control or hardware command route.
 - No direct UI/window manipulation endpoint.
 - No endpoint that accepts raw Xiaozhi protocol; a future relay must normalize it first.
 
@@ -245,7 +243,7 @@ Forbidden:
 }
 ```
 
-No IPC request can define a new Action ID, executor kind, executable path, script, shell string, LAN target, hardware target, or timeout outside registered action policy.
+No IPC request can define a new Action ID, executor kind, executable path, script, shell string, external target, or timeout outside registered action policy.
 
 ---
 
@@ -511,7 +509,7 @@ notchctl modules
 - Read token from Keychain or a user-approved secure configuration path; do not pass secrets in shell history where avoidable.
 - Never expose raw token with normal `--verbose` output.
 - Use the same schema validator/fixture contract as other clients.
-- Do not add an `exec`, `shell`, `script`, `lan`, `device`, `mqtt`, `ble`, or hardware-control command.
+- Do not add an `exec`, `shell`, or `script` command.
 
 ---
 
@@ -635,25 +633,11 @@ Verify:
 - Do not expose full settings, transcript, clipboard, file, calendar, or diagnostics data through `status` unless explicitly requested and permissioned.
 - Sensitive event bodies are not copied into generic diagnostics.
 - Future Xiaozhi transcript content is user-content-sensitive and must have explicit retention settings.
-- No external IPC request can create a LAN/device-control path.
 
 ---
 
-## 17. Explicit scope boundary
-
-The IPC platform is for NotchHub's macOS desktop integrations and future assistant relay. It must not be extended to:
-
-- ESP-IDF build/flash/monitor commands.
-- ESP32 gateway or BLE device telemetry.
-- IoT/MQTT/smart-home control.
-- LAN device control or hardware command routing.
-
-These are permanent product exclusions. A future separate product may define another IPC protocol, but NotchHub's local IPC contract must remain focused and narrow.
-
----
-
-## 18. Summary
+## 17. Summary
 
 NotchHub's IPC is a local, authenticated, validated, bounded boundary—not a general remote-control server. It gives `notchctl`, local automation, and a future Xiaozhi relay a stable way to publish normalized events and invoke explicitly registered actions while keeping the core app, panel, permissions, and security model protected.
 
-The transport can evolve from Unix socket to loopback HTTP/WebSocket as real use cases require, but the core guarantees remain: local-only by default, source allow-list, typed event/action contracts, no arbitrary execution, bounded resources, observable failures, and no hardware/LAN-control scope.
+The transport can evolve from Unix socket to loopback HTTP/WebSocket as real use cases require, but the core guarantees remain: local-only by default, source allow-list, typed event/action contracts, no arbitrary execution, bounded resources, and observable failures.

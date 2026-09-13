@@ -36,7 +36,6 @@ The design must prevent secret leakage, settings corruption, unbounded memory/di
 7. **Bounded operational data** — logs, event history, transcript buffers, and caches have explicit count/byte limits.
 8. **Sanitized export** — diagnostic/config export excludes secrets and sensitive raw content.
 9. **Explicit deletion** — reset/delete behavior is documented and user-visible.
-10. **No excluded-domain data** — NotchHub does not persist ESP32, IoT, LAN device, or hardware-control data because those domains are out of scope.
 
 ---
 
@@ -424,20 +423,7 @@ A module may not silently add a persistent database, file cache, transcript hist
 
 ---
 
-## 15. Explicit scope boundary
-
-NotchHub persistence does not include schemas or storage for:
-
-- ESP-IDF projects/build logs/firmware artifacts.
-- ESP32 gateway/device lists/telemetry/OTA state.
-- IoT/MQTT/smart-home state.
-- LAN device-control history or hardware commands.
-
-These domains are permanently excluded from the product and must not be added as module persistence merely because the generic storage layer could technically support them.
-
----
-
-## 16. Summary
+## 15. Summary
 
 NotchHub separates non-secret settings, secure credentials, diagnostics, module data, caches, and transient UI state. Every persistent item has an owner, schema, sensitivity, retention rule, size budget, and deletion path.
 

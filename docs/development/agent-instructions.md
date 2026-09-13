@@ -54,20 +54,6 @@ The foundation includes:
 
 The first intended AI feature is **Xiaozhi Display Companion**, which will be added only after the Foundation Completion Gate. It should display assistant state and streamed text through a normalized adapter, without coupling the core UI to raw Xiaozhi protocol/audio.
 
-### Permanent product exclusions
-
-Do not add, prepare for, or recommend implementation of:
-
-- ESP-IDF `build`, `flash`, `monitor`, serial-port, or firmware workflows.
-- Embedded development tooling.
-- ESP32 gateway status, BLE telemetry, device count, OTA, or hardware dashboards.
-- IoT/MQTT/smart-home device control.
-- LAN device control or hardware command routing.
-
-These are not postponed tasks. They are permanently outside NotchHub scope. If asked to implement them, stop and explain that the request conflicts with the current product boundary; do not add code, namespaces, schemas, actions, events, settings, permissions, or dependencies for those domains.
-
----
-
 ## 3. Required reading before changing code
 
 Before making a non-trivial change, read:
@@ -210,7 +196,6 @@ Modules must not:
 - Register another module's action namespace.
 - Subscribe to every event without a documented reason.
 - Create an unrestricted IPC listener.
-- Add excluded ESP/IoT/LAN functionality.
 
 ### 5.5 Static modules first
 
@@ -584,7 +569,6 @@ Require:
 - Schema/version/size/rate limits.
 - Threat-model update.
 - Negative/security tests.
-- No LAN/hardware/device-control expansion.
 
 ### If asked to persist data
 
@@ -604,7 +588,6 @@ Require:
 
 An AI agent must not:
 
-- Implement excluded ESP-IDF/ESP32/IoT/LAN functionality.
 - Add arbitrary shell/script execution.
 - Add private macOS APIs without an ADR/security/release review.
 - Bypass `ActionRegistry`, `PermissionCoordinator`, `EventRouter`, `SettingsStore`, or `ModuleRuntime`.
@@ -638,7 +621,6 @@ A change is done only when:
 [ ] ADR updated/created if needed
 [ ] Build/tests run and results recorded
 [ ] No secrets or personal data added
-[ ] No excluded ESP/IoT/LAN scope introduced
 ```
 
 A code snippet that compiles is not necessarily a completed change.
@@ -697,7 +679,7 @@ Stop and release every resource
 
 ### Product scope sentence
 
-> NotchHub is a foundation-first, local-first macOS Notch Platform for glanceable status, quick actions, Xiaozhi/AI display integration, and macOS productivity modules; it is not an ESP-IDF, ESP32, IoT, or LAN device-control application.
+> NotchHub is a foundation-first, local-first macOS Notch Platform for glanceable status, quick actions, Xiaozhi/AI display integration, and macOS productivity modules.
 
 ---
 
@@ -713,5 +695,4 @@ Work conservatively and transparently:
 6. Keep UI focused and background work bounded.
 7. Test failure, recovery, lifecycle, security, and performance—not only the happy path.
 8. Update documentation and ADRs with code.
-9. Refuse excluded ESP/IoT/LAN scope.
-10. Report exactly what was changed and verified.
+9. Report exactly what was changed and verified.

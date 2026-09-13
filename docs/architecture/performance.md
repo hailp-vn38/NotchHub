@@ -584,20 +584,7 @@ A module cannot be accepted without this section.
 
 ---
 
-## 16. Explicit scope boundary
-
-This performance architecture does not define budgets or runtime support for:
-
-- ESP-IDF build/flash/monitor operations.
-- ESP32 gateway/BLE telemetry.
-- IoT/MQTT/smart-home services.
-- LAN device control or hardware command routing.
-
-These domains are permanently excluded from NotchHub. The performance policy applies to in-scope macOS desktop modules and future Xiaozhi/media/clipboard/files/calendar capabilities only.
-
----
-
-## 17. Summary
+## 16. Summary
 
 NotchHub performance comes from architecture, not from a last-minute optimization pass: focused state observation, actor boundaries, event coalescing, bounded buffers, visibility-aware work, explicit module resource policies, and repeatable Instruments scenarios.
 

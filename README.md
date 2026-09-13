@@ -4,7 +4,7 @@
 
 NotchHub turns the area around a MacBook notch into a focused interaction surface. It is designed as a **foundation-first, modular platform** rather than a clone of any single notch utility: the base app provides windowing, UI, settings, permissions, shortcuts, actions, IPC, diagnostics, performance controls, and testing infrastructure before feature modules are introduced.
 
-The first intended AI integration is Xiaozhi, but Xiaozhi is deliberately **not part of the base app core**. Future modules may add voice/AI status, media controls, clipboard history, files, system metrics, calendar/reminders, and other macOS productivity utilities. NotchHub does **not** include ESP-IDF development tooling, ESP32 gateway telemetry, IoT device management, or LAN device control.
+The first intended AI integration is Xiaozhi, but Xiaozhi is deliberately **not part of the base app core**. Future modules may add voice/AI status, media controls, clipboard history, files, system metrics, calendar/reminders, and other macOS productivity utilities.
 
 ## Status
 
@@ -38,8 +38,6 @@ No production Xiaozhi, audio, media, clipboard, file-shelf, calendar, or system-
 - Support dynamic third-party `.dylib` or `.bundle` plugins in the initial architecture.
 - Run arbitrary shell commands sent by AI, WebSocket, HTTP, or IPC clients.
 - Expose a LAN-accessible control API by default.
-- Build ESP-IDF `build`, `flash`, `monitor`, serial-port, or firmware-workflow functionality.
-- Build ESP32 gateway telemetry, BLE device monitoring, IoT control, OTA progress, MQTT device integration, or LAN device control.
 - Use private macOS APIs as a dependency of the core platform.
 - Fully support all external displays and multi-display layouts in the first release.
 - Request every privacy permission at launch.
@@ -226,7 +224,6 @@ Documentation is part of the repository and must evolve with code. High-priority
 | 0010 | Support the built-in display first |
 | 0011 | Use public macOS APIs first; isolate any future privileged helper |
 | 0012 | Keep documentation as code in the repository |
-| 0013 | Exclude ESP-IDF, ESP32 gateway telemetry, IoT control, and LAN device control from product scope |
 
 ## Security principles
 

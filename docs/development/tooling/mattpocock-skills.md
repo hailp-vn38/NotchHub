@@ -370,8 +370,7 @@ Sau đó chuyển sang behavior tiếp theo.
 Giả sử có bug:
 
 ```text
-ESP32 BLE Central đôi khi không reconnect
-sau khi peripheral restart.
+Một client đôi khi không reconnect sau khi phiên kết nối bị khởi động lại.
 ```
 
 Không nên bắt đầu bằng:
@@ -507,7 +506,7 @@ Sau đó mỗi ticket có thể triển khai bằng:
 Nếu task rất lớn và chưa rõ hướng thiết kế:
 
 ```text
-Redesign architecture toàn bộ IoT Gateway.
+Redesign architecture toàn bộ ứng dụng.
 ```
 
 Không nên ngay lập tức chạy:
@@ -639,31 +638,9 @@ wizard
 
 ---
 
-# 14. Workflow đề xuất cho ESP32 / Embedded
+# 14. Workflow đề xuất cho project
 
-Với một project như:
-
-```text
-esp-ble-gateway
-```
-
-có thể bắt đầu:
-
-```bash
-cd esp-ble-gateway
-
-npx skills@latest add mattpocock/skills
-```
-
-Sau đó setup:
-
-```text
-/setup-matt-pocock-skills
-```
-
----
-
-## Khi thêm feature
+Với một project bất kỳ, có thể bắt đầu bằng việc cài bộ skill và chọn workflow phù hợp:
 
 Ví dụ:
 
@@ -966,4 +943,3 @@ Không biết làm gì tiếp
 
 - Repository: https://github.com/mattpocock/skills
 - Skills directory: https://skills.sh/mattpocock/skills
-

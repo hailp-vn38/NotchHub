@@ -30,9 +30,6 @@ NotchHub is a **macOS menu-bar and Notch-surface application**. It runs entirely
 
 ### Explicitly out of scope for context
 
-- ESP32 devices, BLE gateways, or any embedded hardware system.
-- IoT platforms, MQTT brokers, or smart-home hubs.
-- LAN-based device control systems.
 - Cloud backend services owned by this project.
 - Multi-tenant or multi-user server-side concerns.
 
@@ -137,7 +134,7 @@ The relay is modeled as external because NotchHub's core does not implement or d
 | Xiaozhi Relay | NotchHub | Sends normalized assistant events; receives registered actions | Module M1 |
 | Local Desktop Data Sources | NotchHub | Provide media/clipboard/calendar/file data through permissioned modules | Modules M2–M4 |
 
-No relationship in this system involves a network service exposed beyond the local machine, and no relationship involves ESP32, IoT, or LAN device control, consistent with the project's permanent scope exclusion.
+All external relationships terminate at the local-machine boundary by default.
 
 ---
 
@@ -168,7 +165,6 @@ These details belong in the [Container diagram](c4-container.md) and subsequent 
 This document should be revisited whenever:
 
 - A new external system or actor is introduced (for example, a second AI backend, a companion iOS app, or a cloud sync service).
-- Any relationship crosses the local-machine boundary (for example, if a future LAN or cloud API were proposed — this would also require a dedicated ADR and threat-model update per [Requirements §12](../product/requirements.md#12-change-control)).
-- The permanently excluded scope (ESP-IDF, ESP32 gateway, IoT telemetry, LAN device control) is reconsidered, which would require a new product decision outside current NotchHub scope.
+- Any relationship crosses the local-machine boundary (for example, if a future network or cloud API were proposed — this would also require a dedicated ADR and threat-model update per [Requirements §12](../product/requirements.md#12-change-control)).
 
 Until then, this Level 1 view should remain small and stable, reflecting the project's local-first, single-user design.

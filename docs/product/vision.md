@@ -34,7 +34,6 @@ These signals are often fragmented. They either require opening a full applicati
 
 The challenge is not simply drawing a black panel around the notch. The challenge is to create a stable macOS platform that handles panel behavior, settings, permissions, shortcuts, actions, security, resource usage, diagnostics, and future modules without becoming an unstable all-in-one utility.
 
-NotchHub deliberately excludes embedded development operations, ESP-IDF actions, ESP32 gateway telemetry, IoT fleet status, and LAN device control. Those are separate product domains and would unnecessarily dilute the app’s macOS productivity and AI-interaction focus.
 
 ---
 
@@ -198,9 +197,6 @@ Before business modules, NotchHub must provide:
 
 NotchHub does not include:
 
-- ESP-IDF build, flash, monitor, serial-port, or firmware workflow functionality.
-- ESP32 gateway health/status, BLE device monitoring, OTA controls, or telemetry.
-- IoT device integration, MQTT device state, smart-home control, or LAN device control.
 
 ---
 
@@ -217,7 +213,6 @@ NotchHub will not initially:
 - Ask for microphone, camera, calendar, screen recording, accessibility, or automation permissions on first launch without an explicit user action.
 - Depend on private macOS APIs in the core platform.
 - Promise perfect multi-display behavior before the built-in display experience is stable.
-- Include embedded/firmware-development functionality, ESP32/IoT monitoring, or LAN device-control features.
 
 ---
 
@@ -286,7 +281,6 @@ The base platform is successful when it can be used and extended safely even bef
 - Adding an integration does not require changing the UI core.
 - A module can declare permissions, settings, actions, UI slots, and resource policy through contracts.
 - AI/voice integrations are replaceable adapters, not hard dependencies of the platform.
-- The platform remains focused on macOS desktop productivity rather than expanding into embedded development or IoT-device control.
 
 ---
 
@@ -330,7 +324,6 @@ The base platform is successful when it can be used and extended safely even bef
 - The settings and diagnostics experience cannot be deferred until after modules exist.
 - Performance and energy behavior must be considered before adding streaming, media, system-monitoring, or file features.
 - Module authors cannot be trusted to manage window lifecycle or permission prompts correctly; the platform must centralize those concerns.
-- The project does not expand into ESP-IDF, ESP32 gateway, IoT telemetry, or LAN device-control scope.
 
 ---
 

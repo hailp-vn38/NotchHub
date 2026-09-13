@@ -686,24 +686,10 @@ For a future Xiaozhi Display Companion specifically:
 - Test transcript delta ordering, gaps, duplicates, finalization, Unicode, bounded memory, and 20–30 Hz UI coalescing.
 - Test disconnect/reconnect and stale session handling.
 - Test that display-only mode does not request Microphone permission.
-- Test that assistant/tool events cannot create arbitrary or hardware/LAN actions.
 
 ---
 
-## 18. Explicit scope boundary
-
-The testing strategy excludes tests for:
-
-- ESP-IDF build/flash/monitor.
-- ESP32 gateway/BLE telemetry.
-- IoT/MQTT/smart-home control.
-- LAN device control or hardware command routing.
-
-These features are not hidden backlog items; they are permanently outside NotchHub's product requirements. If a separate product is developed later, it should have a separate architecture, threat model, protocol, and test strategy.
-
----
-
-## 19. Summary
+## 18. Summary
 
 NotchHub quality is established through multiple layers: fast pure tests for contracts and state, integration tests for routing and isolation, real macOS tests for windowing/permissions/lifecycle, security/privacy tests for trust boundaries, and Instruments-based profiling for long-running behavior.
 

@@ -39,7 +39,7 @@ This document is the architectural map. It explains the boundaries, dependency r
    - Add modules through explicit contracts rather than allowing every feature to modify windowing, permissions, shortcuts, settings, and IPC independently.
 
 3. **Local-first integration**
-   - Support safe local event/action integrations before any remote or LAN-facing service is considered.
+   - Support safe local event/action integrations before any remote service is considered.
    - Keep Xiaozhi and other external protocol details outside the presentation core.
 
 4. **Safe actions**
@@ -58,9 +58,6 @@ This document is the architectural map. It explains the boundaries, dependency r
 
 The architecture is not designed to support the following product domains:
 
-- ESP-IDF build, flash, monitor, serial-port, or firmware workflow actions.
-- ESP32 gateway monitoring, BLE telemetry, OTA progress, or embedded-device dashboards.
-- IoT/smart-home/MQTT telemetry or LAN device control.
 - Arbitrary scripting received through external input.
 - Dynamic executable third-party plugin loading in the early architecture.
 - Private macOS APIs as a required core dependency.
@@ -157,7 +154,6 @@ flowchart LR
 - macOS provides windows, events, permissions, notifications, media/session APIs, and system services.
 - Local scripts interact through controlled local IPC and `notchctl`.
 - Future integrations, including a Xiaozhi relay, provide normalized event/action input through defined adapters.
-- NotchHub does not control ESP32 devices, IoT systems, or LAN hardware in its product scope.
 
 ---
 
@@ -364,7 +360,7 @@ NotchIPC
  └── HealthRoute
 ```
 
-IPC exists to support local status/events, `notchctl`, and future desktop/assistant adapters. It is loopback or local-socket only by default and is not an IoT/device-control network server.
+IPC exists to support local status/events, `notchctl`, and future desktop/assistant adapters. It is loopback or local-socket only by default.
 
 ---
 
@@ -742,7 +738,6 @@ The following ADRs are foundational:
 | 0010 | Support the built-in display first |
 | 0011 | Use public macOS APIs first; isolate any future privileged helper |
 | 0012 | Keep documentation as code in the repository |
-| 0013 | Exclude ESP-IDF, ESP32 gateway telemetry, IoT control, and LAN device control from product scope |
 
 Any change to the package graph, panel ownership, module model, action safety model, IPC trust boundary, permission model, performance budget, or permanently excluded scope requires an ADR review.
 

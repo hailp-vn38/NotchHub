@@ -71,20 +71,6 @@ Architecture and contract changes require documentation/ADR updates in the same 
 - Future media, clipboard, files, calendar/reminders, and selected system-control modules.
 - macOS public APIs and local-first integrations.
 
-### Permanently out of scope
-
-Contributions must not add or prepare for:
-
-- ESP-IDF `build`, `flash`, `monitor`, serial-port, or firmware command execution.
-- Embedded developer workflow tooling.
-- ESP32 gateway/BLE device telemetry, device counts, OTA status, or gateway dashboards.
-- IoT/MQTT/smart-home integrations.
-- LAN device control, hardware command routing, or actuator actions.
-
-These are product exclusions, not merely postponed roadmap items. A proposal in these domains should be rejected or developed as a separate product with a separate architecture and threat model.
-
----
-
 ## 4. Before starting work
 
 1. Read `README.md`.
@@ -127,8 +113,6 @@ refactor/focused-presentation-stores
 docs/c4-container-update
 perf/event-coalescing
 ```
-
-Do not use a branch name that suggests excluded ESP/IoT/LAN device-control work for this repository.
 
 ### Commit guidelines
 
@@ -217,10 +201,10 @@ raw script
 arbitrary executable path
 arbitrary executor type
 unvalidated URL/host
-LAN/hardware target
+undeclared target
 ```
 
-Use registered `ActionID` plus validated structured input. Any future in-scope process integration requires a dedicated security review and ADR; ESP/IoT/LAN actions are permanently prohibited.
+Use registered `ActionID` plus validated structured input. Any future in-scope process integration requires a dedicated security review and ADR.
 
 ### 6.5 Permissions
 
@@ -285,7 +269,6 @@ A module must not:
 - Run unowned detached tasks.
 - Continue timers/observers/sockets after `stop()`.
 - Put raw sensitive content into generic diagnostics.
-- Create ESP-IDF, ESP32, IoT, or LAN device-control functionality.
 
 ---
 
@@ -323,7 +306,6 @@ Create a numbered ADR when a change affects:
 - Performance budgets.
 - Private API/privileged helper.
 - Signing/distribution.
-- Permanent product scope exclusions.
 
 ADR format:
 
@@ -420,8 +402,6 @@ Event types:       assistant.state.changed, action.completed
 Permission feature: xiaozhi.nativeVoice, calendar.upcoming
 ```
 
-Do not create namespaces for excluded ESP/IoT/LAN domains.
-
 ---
 
 ## 11. Security and privacy contribution rules
@@ -482,7 +462,6 @@ The agent should read:
 
 - Make the smallest coherent change.
 - Do not invent APIs, permission behavior, or external integrations without documentation.
-- Do not add ESP-IDF/ESP32/IoT/LAN device-control code.
 - Do not introduce arbitrary shell/script execution.
 - Do not bypass module/action/permission/event owners.
 - Preserve public-API-first policy.
@@ -594,7 +573,6 @@ Commands run:
 ### Product scope
 
 - Does it support NotchHub's macOS desktop/productivity/AI direction?
-- Does it accidentally reintroduce ESP-IDF, ESP32, IoT, MQTT, BLE gateway, or LAN device control?
 - Is the Notch still calm, concise, and not a full dashboard?
 
 ---
@@ -618,4 +596,4 @@ Before a change is included in a release candidate:
 
 Contributing to NotchHub means extending a platform, not merely adding UI. Every contribution must respect single ownership of native windowing, permissions, persistence, actions, events, IPC, and diagnostics; keep external input typed and bounded; keep the app efficient when idle; and update the documentation that explains why the code is structured this way.
 
-The project welcomes future Xiaozhi and macOS productivity modules, but it does not accept ESP-IDF, ESP32, IoT, or LAN device-control scope. Small, testable, documented, secure changes are preferred over broad feature branches that create hidden coupling.
+The project welcomes future Xiaozhi and macOS productivity modules. Small, testable, documented, secure changes are preferred over broad feature branches that create hidden coupling.

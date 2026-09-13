@@ -23,7 +23,6 @@ External request = ActionID + validated structured input
 
 The foundation does not provide arbitrary shell/script execution. It provides safe internal actions, URL/app-opening actions, module-defined typed actions, and a reviewed path for any future executor that has a legitimate macOS desktop use case.
 
-ESP-IDF workflows, ESP32 gateway control, IoT actions, MQTT actions, BLE device control, and LAN device-control actions are permanently outside this platform's scope.
 
 ---
 
@@ -102,10 +101,6 @@ Invalid/out-of-scope names must not be accepted:
 
 ```text
 shell.executeRaw
-esp32.flash
-idf.build
-lan.device.command
-mqtt.publish
 ```
 
 ### 4.2 Action definition
@@ -284,7 +279,6 @@ Any failed check returns a typed error and a sanitized diagnostics event. It doe
 | `clipboard.*` | Future Clipboard module |
 | `calendar.*` | Future Calendar module |
 
-Actions for ESP-IDF, ESP32, IoT, MQTT, BLE gateway, or LAN device control are not valid namespaces for this product.
 
 ---
 
@@ -321,7 +315,6 @@ A general process/shell executor is **not part of the foundation**. If a future 
 - Resource and privacy review.
 - A dedicated ADR.
 
-ESP-IDF, firmware, embedded, IoT, hardware, and LAN device-control process actions remain permanently prohibited, regardless of this review path.
 
 ---
 

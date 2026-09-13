@@ -102,8 +102,7 @@ docs/
 │       ├── 0009-performance-budgets-and-bounded-streams.md
 │       ├── 0010-built-in-display-first.md
 │       ├── 0011-public-apis-first.md
-│       ├── 0012-docs-as-code.md
-│       └── 0013-exclude-embedded-iot-lan-scope.md
+│       └── 0012-docs-as-code.md
 │
 ├── design/
 │   ├── design-system.md                  # F3
@@ -141,9 +140,6 @@ docs/
 ├── references/
 │   ├── boring-notch.md
 │   └── apple-apis.md
-│
-├── archive/
-│   └── historical superseded drafts      # never authoritative
 │
 └── modules/
     ├── _template.md
@@ -201,15 +197,14 @@ Create a buildable repository with a shared vocabulary, product boundary, archit
 | `docs/development/agent-instructions.md` | Required | AI coding-agent boundaries and verification rules |
 | `docs/references/boring-notch.md` | Required | Reference study/license/reuse policy |
 | `docs/references/apple-apis.md` | Required | Public API map and adoption rules |
-| `docs/architecture/decisions/` | Required | Initial ADRs 0001–0013 |
+| `docs/architecture/decisions/` | Required | Initial architecture ADRs |
 
 ### F0 gate
 
 - All required files exist.
 - Links between core documents resolve.
-- Product exclusions are consistent everywhere.
-- No document promises ESP-IDF/ESP32/IoT/LAN functionality.
-- ADRs record minimum OS, SwiftUI/AppKit, static modules, local IPC, event/action contracts, permission coordinator, performance budgets, public API policy, docs-as-code, and scope exclusion.
+- Product scope is consistent everywhere.
+- ADRs record minimum OS, SwiftUI/AppKit, static modules, local IPC, event/action contracts, permission coordinator, performance budgets, public API policy, and docs-as-code.
 
 ---
 
@@ -550,7 +545,7 @@ Prove the base app is stable, secure, efficient, documented, and ready for a rea
 - Display-only mode works without Microphone permission.
 - Raw Xiaozhi protocol/audio does not enter `NotchSurface`.
 - Transcript data is bounded and privacy policy is explicit.
-- Assistant actions cannot become arbitrary command/device-control paths.
+- Assistant actions cannot become arbitrary command paths.
 
 ---
 
@@ -767,7 +762,6 @@ Before merging documentation/code changes:
 [ ] Links/anchors work
 [ ] Status/date/owner updated when appropriate
 [ ] Product scope remains consistent
-[ ] ESP-IDF/ESP32/IoT/LAN exclusions remain intact
 [ ] Requirements and acceptance criteria updated
 [ ] Architecture/ADR updated when durable decision changed
 [ ] Permission/security/privacy impact documented
@@ -800,7 +794,6 @@ The documentation set is ready for real module work only when:
 - Threat model and testing strategy cover all foundation boundaries.
 - Setup/contributing/agent instructions are sufficient for a clean clone and safe change.
 - Boring Notch and Apple API references have license/public-API boundaries.
-- No document introduces ESP-IDF/ESP32/IoT/LAN work into the project scope.
 - F10 evidence is linked from the roadmap and index.
 
 ---
@@ -905,14 +898,9 @@ This order minimizes rework: product boundaries come before architecture, contra
 - `docs/development/agent-instructions.md`
 - `docs/development/tooling/mattpocock-skills.md`
 
-### Archived/non-authoritative
-
-- `docs/archive/macos-notch-platform-modular-base-project.md`
-- `docs/archive/macos-notch-platform-foundation-first-roadmap-updated.md`
-
 ### Still to create when relevant
 
-- `docs/architecture/decisions/0001` through `0013` as separate ADR files.
+- Initial architecture ADR files.
 - `docs/design/design-system.md`.
 - `docs/design/notch-interaction.md`.
 - `docs/design/settings-information-architecture.md`.
@@ -938,7 +926,7 @@ Update this index when:
 - A document changes authority or status.
 - A roadmap phase changes its gate/deliverables.
 - A new module/document template is introduced.
-- A product scope exclusion changes (which requires a separate product decision and ADR).
+- A product boundary changes (which requires a separate product decision and ADR).
 - A new security/privacy/permission/API boundary is introduced.
 
 The index is not a substitute for the authoritative documents; it is the map that keeps the whole documentation set navigable and phase-aware.

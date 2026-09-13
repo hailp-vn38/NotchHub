@@ -23,13 +23,12 @@ The threat model exists to answer:
 
 This document covers the foundation and future in-scope modules such as Xiaozhi Display Companion, Media, Clipboard, Files, Calendar/Reminders, and selected System Controls.
 
-It explicitly excludes ESP-IDF tooling, ESP32 gateway telemetry, IoT/smart-home control, MQTT/BLE device management, and LAN device control. These are permanent product exclusions, not unimplemented security features.
 
 ---
 
 ## 2. Security objectives
 
-1. **Prevent arbitrary side effects** — untrusted input must not become arbitrary shell code, app automation, hardware command, or LAN device control.
+1. **Prevent arbitrary side effects** — untrusted input must not become arbitrary shell code or app automation.
 2. **Protect secrets** — IPC tokens, future relay credentials, and API keys must remain in secure storage and out of logs/exports.
 3. **Protect user content** — future transcripts, clipboard data, files, calendar/reminder data, screen content, audio, and camera frames must not leak through diagnostics or IPC.
 4. **Maintain local trust boundaries** — local IPC is not automatically trusted; authentication and source policy remain required.
@@ -62,7 +61,7 @@ Separate local clients may include:
 - User-authored local scripts.
 - A future Xiaozhi relay/adapter.
 
-There is no required cloud backend, remote administrator, multi-user account system, or LAN device-control API.
+There is no required cloud backend, remote administrator, or multi-user account system.
 
 ---
 
@@ -600,7 +599,7 @@ Every change affecting security-sensitive behavior must answer:
 - Does it persist new data or change retention?
 - Can it cause high-rate events, unbounded storage, or background work?
 - Does a module bypass a core owner?
-- Does it alter a threat, mitigation, permission, or scope exclusion?
+- Does it alter a threat, mitigation, permission, or product boundary?
 - Are tests and docs updated?
 
 ### Dependency controls
@@ -686,18 +685,7 @@ Residual risks must be documented, not hidden. The app reduces them through leas
 
 ## 15. Explicit product boundary
 
-This threat model does not authorize or provide controls for:
-
-- ESP-IDF build/flash/monitor.
-- ESP32 gateway/BLE device telemetry.
-- IoT/MQTT/smart-home integrations.
-- LAN device control or hardware command routing.
-
-These are permanently excluded from NotchHub. A separate product supporting those domains must create a separate threat model, trust boundary, protocol, permission model, and release process.
-
----
-
-## 16. Change control
+## 15. Change control
 
 Update this threat model and create/review an ADR when any of the following changes:
 
@@ -709,14 +697,13 @@ Update this threat model and create/review an ADR when any of the following chan
 - A privileged helper/private API is added.
 - Dynamic plugin loading is proposed.
 - Authentication/token/Keychain behavior changes.
-- The permanent scope exclusion is reconsidered.
 
 Threat review is required before implementation for any change that creates a new trust boundary, persistent sensitive data, permission, high-rate stream, hardware effect, or external network exposure.
 
 ---
 
-## 17. Summary
+## 16. Summary
 
 NotchHub's security model is built around narrow, explicit trust boundaries: local IPC is authenticated and validated; events are versioned; actions are registered and typed; permissions are centralized and on demand; secrets use Keychain; diagnostics are sanitized and bounded; modules cannot bypass core policy; and high-rate/failure behavior is controlled.
 
-The architecture is deliberately macOS desktop/productivity-focused. Excluding ESP-IDF, ESP32/IoT, and LAN device control keeps the platform's trust model narrow enough to understand, test, and maintain while leaving a clean future path for Xiaozhi and other in-scope macOS modules.
+The architecture is deliberately macOS desktop/productivity-focused, keeping the platform's trust model narrow enough to understand, test, and maintain while leaving a clean future path for Xiaozhi and other in-scope macOS modules.

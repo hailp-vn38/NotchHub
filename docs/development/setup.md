@@ -31,17 +31,6 @@ This setup covers:
 - Instruments performance profiling.
 - Documentation/ADR workflow.
 
-This setup does not cover or install tooling for:
-
-- ESP-IDF or ESP32 firmware workflows.
-- IoT/LAN device-control development.
-- MQTT/BLE gateway tooling.
-- Hardware flashing or embedded telemetry.
-
-Those domains are permanently outside the NotchHub project scope.
-
----
-
 ## 3. Required environment
 
 ### 3.1 Hardware
@@ -250,7 +239,7 @@ Development builds may expose deterministic test events or an internal injector.
 - Be disabled or restricted in release builds.
 - Use the same event schema validator as real IPC.
 - Use synthetic data.
-- Never accept raw commands or hardware/LAN targets.
+- Never accept raw commands or undeclared targets.
 
 ---
 
@@ -477,20 +466,7 @@ A developer environment is ready when:
 
 ---
 
-## 16. Explicit scope boundary
-
-Development setup must not introduce toolchains or commands for:
-
-- ESP-IDF build/flash/monitor.
-- ESP32 gateway/BLE telemetry.
-- IoT/MQTT/smart-home control.
-- LAN device control or hardware command routing.
-
-NotchHub is a macOS desktop/productivity platform with a future Xiaozhi/AI integration, not an embedded or IoT development environment.
-
----
-
-## 17. Summary
+## 16. Summary
 
 A reproducible NotchHub setup is intentionally small: macOS, Xcode/Swift, Git, documented project commands, and the Apple tools needed to test the native surface. The foundation should run without sensitive permissions, external services, hardware toolchains, or hidden setup steps.
 
