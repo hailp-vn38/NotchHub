@@ -10,6 +10,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private let presentationModel = NotchSurfacePresentationModel()
     private var hostingView: NSHostingView<NotchSurfaceRootView>?
     private var closeHostSettleTask: Task<Void, Never>?
+    private var projectionTask: Task<Void, Never>?
     private var projectionGeneration = 0
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
     private var detailNavigationHandler: (@MainActor (DetailNavigationRequest) -> Void)?
@@ -47,6 +48,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     }
 
     deinit {
+        closeHostSettleTask?.cancel()
+        projectionTask?.cancel()
         screenParametersObservation?.cancel()
         activeSpaceObservation?.cancel()
     }
@@ -58,6 +61,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         case .showExpanded(let focus): return showExpanded(focus: focus)
         case .hide, .suppress, .pauseInteraction:
             cancelCloseHostSettle()
+            cancelPendingProjection()
             removeEventMonitors()
             panel?.orderOut(nil)
             return true
@@ -111,10 +115,11 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private func showCollapsed() -> Bool {
         removeEventMonitors()
         cancelCloseHostSettle()
+        cancelPendingProjection()
         guard let collapsedSize = collapsedSize(), let frame = surfaceFrame(for: collapsedSize) else { return false }
         let panel = panel ?? makePanel()
         ensurePresentation(on: panel)
-        presentationModel.project(.collapsed, collapsedSize: collapsedSize)
+        presentationModel.projectCollapsed(collapsedSize: collapsedSize)
         if panel.frame.size == SurfaceExpansionContract.hostSize {
             scheduleCollapsedHostSettle(for: panel, collapsedSize: collapsedSize)
         } else {
@@ -131,11 +136,12 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private func showCompact() -> Bool {
         removeEventMonitors()
         cancelCloseHostSettle()
+        cancelPendingProjection()
         guard let frame = surfaceFrame(for: NotchSurfaceMetrics.compactSize) else { return false }
         let panel = panel ?? makePanel()
         ensurePresentation(on: panel)
         panel.setFrame(frame, display: true)
-        presentationModel.project(.compact)
+        presentationModel.projectCompact()
         panel.orderFrontRegardless()
         panel.resignKey()
         self.panel = panel
@@ -144,6 +150,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     private func showExpanded(focus: Bool) -> Bool {
         cancelCloseHostSettle()
+        cancelPendingProjection()
         guard let frame = surfaceFrame(for: SurfaceExpansionContract.hostSize) else { return false }
         let panel = panel ?? makePanel()
         ensurePresentation(on: panel)
@@ -175,10 +182,11 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private func projectExpandedOnNextRunLoop() {
         projectionGeneration &+= 1
         let generation = projectionGeneration
-        Task { @MainActor [weak self] in
+        projectionTask = Task { @MainActor [weak self] in
             await Task.yield()
-            guard let self, self.projectionGeneration == generation else { return }
-            self.presentationModel.project(.expanded, collapsedSize: self.collapsedSize())
+            guard let self, !Task.isCancelled, self.projectionGeneration == generation else { return }
+            self.presentationModel.projectExpanded(collapsedSize: self.collapsedSize())
+            self.projectionTask = nil
         }
     }
 
@@ -188,7 +196,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         closeHostSettleTask = Task { @MainActor [weak self, weak panel] in
             try? await Task.sleep(for: NotchSurfaceMetrics.closeHostSettleDelay)
             guard let self, let panel, !Task.isCancelled, self.projectionGeneration == generation,
-                self.presentationModel.projectedState == .collapsed,
+                !self.presentationModel.isExpandedGeometry,
+                !self.presentationModel.isCompactGeometry,
                 let frame = self.surfaceFrame(for: collapsedSize)
             else { return }
             panel.setFrame(frame, display: false)
@@ -200,6 +209,12 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         projectionGeneration &+= 1
         closeHostSettleTask?.cancel()
         closeHostSettleTask = nil
+    }
+
+    private func cancelPendingProjection() {
+        projectionGeneration &+= 1
+        projectionTask?.cancel()
+        projectionTask = nil
     }
 
     private func makePanel() -> NSPanel {

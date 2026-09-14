@@ -16,7 +16,8 @@ enum NotchSurfaceMetrics {
 final class NotchSurfacePresentationModel {
     private(set) var snapshot = SurfaceSnapshot()
     private(set) var collapsedSize = NotchSurfaceGeometry.fallbackCollapsedSize
-    private(set) var projectedState: SurfaceState = .hidden
+    private(set) var isExpandedGeometry = false
+    private(set) var isCompactGeometry = false
     var isHovering = false
     var debugLabel: String?
 
@@ -25,27 +26,37 @@ final class NotchSurfacePresentationModel {
         if let collapsedSize { self.collapsedSize = collapsedSize }
     }
 
-    func project(_ state: SurfaceState, collapsedSize: CGSize? = nil) {
-        projectedState = state
+    func projectCollapsed(collapsedSize: CGSize) {
+        isExpandedGeometry = false
+        isCompactGeometry = false
+        self.collapsedSize = collapsedSize
+    }
+
+    func projectCompact() {
+        isExpandedGeometry = false
+        isCompactGeometry = true
+    }
+
+    func projectExpanded(collapsedSize: CGSize? = nil) {
+        isExpandedGeometry = true
+        isCompactGeometry = false
         if let collapsedSize { self.collapsedSize = collapsedSize }
     }
 
     var visibleSurfaceSize: CGSize {
-        switch projectedState {
-        case .expanded: SurfaceExpansionContract.surfaceSize
-        case .compact: NotchSurfaceMetrics.compactSize
-        default: collapsedSize
-        }
+        if isExpandedGeometry { return SurfaceExpansionContract.surfaceSize }
+        if isCompactGeometry { return NotchSurfaceMetrics.compactSize }
+        return collapsedSize
     }
 
     var topShoulderRadius: CGFloat {
-        projectedState == .expanded
+        isExpandedGeometry
             ? NotchSurfaceMetrics.openedTopShoulderRadius
             : NotchSurfaceMetrics.closedTopShoulderRadius
     }
 
     var bottomCornerRadius: CGFloat {
-        projectedState == .expanded
+        isExpandedGeometry
             ? NotchSurfaceMetrics.openedBottomCornerRadius
             : NotchSurfaceMetrics.closedBottomCornerRadius
     }
@@ -98,27 +109,17 @@ struct NotchSurfaceShape: Shape {
     }
 }
 
-private struct NotchSurfaceTouchView<S: Shape>: View {
-    let shape: S
-    let onHoverChanged: (Bool) -> Void
-    let onTap: () -> Void
-
-    var body: some View {
-        shape
-            .fill(.clear)
-            .contentShape(shape)
-            .onHover(perform: onHoverChanged)
-            .onTapGesture(perform: onTap)
-    }
-}
-
 struct NotchSurfaceRootView: View {
     @Bindable var model: NotchSurfacePresentationModel
     let send: (SurfaceIntent) -> Void
     let openDetail: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var isExpanded: Bool { model.projectedState == .expanded }
+    private var isExpanded: Bool { model.isExpandedGeometry }
+
+    private var accessibilityState: String {
+        isExpanded ? "expanded" : model.isCompactGeometry ? "compact" : "collapsed"
+    }
 
     var body: some View {
         let shape = NotchSurfaceShape(
@@ -137,6 +138,11 @@ struct NotchSurfaceRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(12)
                 .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
+            } else if model.isCompactGeometry {
+                Text("Surface ready")
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             Rectangle()
                 .fill(.black)
@@ -156,11 +162,17 @@ struct NotchSurfaceRootView: View {
         .frame(width: model.visibleSurfaceSize.width, height: model.visibleSurfaceSize.height, alignment: .top)
         .clipShape(shape)
         .overlay {
-            NotchSurfaceTouchView(shape: shape, onHoverChanged: handleHover) { send(.clicked) }
+            shape
+                .fill(.clear)
+                .contentShape(shape)
+                .onHover(perform: handleHover)
+                .onTapGesture { send(.clicked) }
+                .accessibilityHidden(true)
         }
         .shadow(color: isExpanded || model.isHovering ? .black.opacity(0.7) : .clear, radius: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(surfaceAnimation, value: model.projectedState)
+        .accessibilityLabel("NotchHub \(accessibilityState) surface")
+        .animation(surfaceAnimation, value: model.visibleSurfaceSize)
     }
 
     private var surfaceAnimation: Animation {
