@@ -152,7 +152,7 @@ xcodebuild \
 swift test
 ```
 
-F0 has no app-level test bundle yet. The package test target verifies the public package boundary; CI will become the source of truth for the complete verification workflow in issue 03.
+F0 has no app-level test bundle yet. The package test target verifies the public package boundary; pull-request CI runs the complete repository verification workflow.
 
 ### 6.4 Swift Package Manager commands
 
@@ -180,11 +180,13 @@ To apply formatting:
 
 ### 6.6 Verify the scaffold
 
-Run the same local scaffold checks in one command:
+Run the same composite verification seam that pull-request CI runs. Set `VERIFY_BASE_REF` to the commit, branch, or remote-tracking branch that your work will merge into; the secret check scans only content changed from that base.
 
 ```bash
-./Scripts/verify.sh
+VERIFY_BASE_REF=main ./Scripts/verify.sh
 ```
+
+The command checks the pinned Xcode version, Swift formatting, the pure-domain import boundary, package dependency resolution/build/tests, the app build, local Markdown links, and secret-like values added in changed files. CI invokes this exact command with the pull request base commit as `VERIFY_BASE_REF`.
 
 Do not use `swift run` to launch the macOS app unless the project explicitly supports that target; the native app target normally runs through Xcode/xcodebuild.
 

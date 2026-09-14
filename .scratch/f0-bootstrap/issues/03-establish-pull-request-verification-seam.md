@@ -6,6 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] CI dùng toolchain pin tương ứng và chạy trên pull request.
-- [ ] CI chạy formatter, build, pure-domain test, Markdown-link validation và changed-file secret check.
-- [ ] Lệnh local documented và lệnh CI cho cùng kết quả tại composite verification seam.
+- [x] CI dùng toolchain pin tương ứng và chạy trên pull request.
+- [x] CI chạy formatter, build, pure-domain test, Markdown-link validation và changed-file secret check.
+- [x] Lệnh local documented và lệnh CI cho cùng kết quả tại composite verification seam.
+
+## Comments
+
+- Implemented in the pull-request workflow and `Scripts/verify.sh`. Ticket 04 records the phase-level F0 evidence gate.
