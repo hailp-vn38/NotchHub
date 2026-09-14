@@ -3,7 +3,8 @@ import NotchCore
 import NotchDomain
 
 public enum SurfaceInteractionDefaults {
-    public static let hoverDelay: Duration = .milliseconds(150)
+    public static let hoverDelay: Duration = .milliseconds(300)
+    public static let hoverCloseGrace: Duration = .milliseconds(100)
     public static let autoCollapseDelay: Duration = .seconds(3)
     public static let admissionFeedbackDuration: Duration = .seconds(3)
     public static let recoveryBackoff: Duration = .milliseconds(250)
@@ -41,6 +42,9 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
     private var hoverGeneration = 0
     private var collapseGeneration = 0
     private var isHoveringExpanded = false
+    private var expandedOrigin: SurfaceExpansionOrigin?
+    private var interactionSessionGeneration: UInt64 = 0
+    private var interactionHolds: [UUID: SurfaceInteractionHoldKind] = [:]
     private var recoveryTask: (any SurfaceInteractionTask)?
     private var recoveryGeneration = 0
     private var sessionResumeState: SurfaceState?
@@ -116,14 +120,34 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
             cancelAutoCollapse()
         case .expandedHoverExited where snapshot.state == .expanded:
             isHoveringExpanded = false
-            scheduleAutoCollapse()
+            scheduleCloseForCurrentOrigin()
         case .interaction where snapshot.state == .expanded:
-            if !isHoveringExpanded { scheduleAutoCollapse() }
+            if !isHoveringExpanded { scheduleCloseForCurrentOrigin() }
+        case .autoCollapseElapsed where snapshot.state == .expanded:
+            guard interactionHolds.isEmpty, !isHoveringExpanded else { return snapshot.state }
+            guard let state = apply(intent) else { return snapshot.state }
+            updateTimers(after: intent, state: state)
         default:
             guard let state = apply(intent) else { return snapshot.state }
             updateTimers(after: intent, state: state)
         }
         return snapshot.state
+    }
+
+    /// Acquires a session-scoped hold that prevents hover/inactivity collapse.
+    public func acquireInteractionHold(_ kind: SurfaceInteractionHoldKind) -> SurfaceInteractionHoldLease? {
+        guard snapshot.state == .expanded else { return nil }
+        let id = UUID()
+        interactionHolds[id] = kind
+        cancelAutoCollapse()
+        return SurfaceInteractionHoldLease(coordinator: self, id: id, generation: interactionSessionGeneration)
+    }
+
+    fileprivate func releaseInteractionHold(id: UUID, generation: UInt64) {
+        guard snapshot.state == .expanded, generation == interactionSessionGeneration else { return }
+        guard interactionHolds.removeValue(forKey: id) != nil else { return }
+        guard interactionHolds.isEmpty, !isHoveringExpanded else { return }
+        scheduleCloseForCurrentOrigin()
     }
 
     public func toggleNotchSurface() -> NotchSurfaceToggleResult {
@@ -184,7 +208,18 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
             }
             return nil
         }
+        let wasExpanded = snapshot.state == .expanded
         snapshot.state = transition.state
+        if transition.state == .expanded, !wasExpanded {
+            interactionSessionGeneration &+= 1
+            interactionHolds.removeAll()
+            expandedOrigin = switch intent {
+            case .hoverDelayElapsed: .hover
+            default: .deliberate
+            }
+        } else if wasExpanded, transition.state != .expanded {
+            invalidateInteractionSession()
+        }
         return snapshot.state
     }
 
@@ -226,7 +261,9 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
 
     private func updateTimers(after intent: SurfaceIntent, state: SurfaceState) {
         if state != .collapsed { cancelHoverExpansion() }
-        if state == .expanded || state == .compact { scheduleAutoCollapse() } else { cancelAutoCollapse() }
+        if state == .expanded {
+            if intent != .hoverDelayElapsed { scheduleAutoCollapse() }
+        } else if state == .compact { scheduleAutoCollapse() } else { cancelAutoCollapse() }
         if intent == .hide || intent == .suppressed { cancelHoverExpansion() }
     }
 
@@ -253,6 +290,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         guard snapshot.state != .hidden, snapshot.state != .recovering else { return }
         cancelHoverExpansion()
         cancelAutoCollapse()
+        invalidateInteractionSession()
         clearAdmissionFeedback()
         snapshot.state = .recovering
         snapshot.recoveryAttemptCount = 0
@@ -277,6 +315,10 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
                 : recoveryTargetState == .compact ? .showCompact : .showCollapsed
             guard panel.apply(effect) else { return failRecovery() }
             snapshot.state = recoveryTargetState
+            if recoveryTargetState == .expanded {
+                interactionSessionGeneration &+= 1
+                expandedOrigin = .deliberate
+            }
             return
         }
         guard snapshot.recoveryAttemptCount < 2 else {
@@ -345,6 +387,58 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         collapseTask?.cancel()
         collapseTask = nil
     }
+
+    private func scheduleCloseForCurrentOrigin() {
+        guard interactionHolds.isEmpty, !isHoveringExpanded else { return }
+        if expandedOrigin == .hover {
+            cancelAutoCollapse()
+            collapseGeneration += 1
+            let generation = collapseGeneration
+            collapseTask = scheduler.schedule(after: SurfaceInteractionDefaults.hoverCloseGrace) { [weak self] in
+                guard let self, self.collapseGeneration == generation else { return }
+                self.collapseTask = nil
+                _ = self.handle(.autoCollapseElapsed)
+            }
+        } else {
+            scheduleAutoCollapse()
+        }
+    }
+
+    private func invalidateInteractionSession() {
+        interactionSessionGeneration &+= 1
+        interactionHolds.removeAll()
+        expandedOrigin = nil
+        isHoveringExpanded = false
+        cancelAutoCollapse()
+    }
+}
+
+public enum SurfaceInteractionHoldKind: CaseIterable, Equatable, Sendable {
+    case keyboardFocus, popover, drag, confirmation, accessibilityInteraction
+}
+
+@MainActor
+public final class SurfaceInteractionHoldLease {
+    private weak var coordinator: SurfaceCoordinator?
+    private let id: UUID
+    private let generation: UInt64
+    private var isReleased = false
+
+    fileprivate init(coordinator: SurfaceCoordinator, id: UUID, generation: UInt64) {
+        self.coordinator = coordinator
+        self.id = id
+        self.generation = generation
+    }
+
+    public func release() {
+        guard !isReleased else { return }
+        isReleased = true
+        coordinator?.releaseInteractionHold(id: id, generation: generation)
+    }
+}
+
+private enum SurfaceExpansionOrigin: Equatable {
+    case hover, deliberate
 }
 
 public struct SurfaceSnapshot: Equatable, Sendable {

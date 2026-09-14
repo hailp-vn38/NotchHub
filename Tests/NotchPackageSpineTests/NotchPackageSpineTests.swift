@@ -369,6 +369,114 @@ func expandsAfterBoundedHoverDelay() {
     #expect(panel.effects == [.showCollapsed, .showExpanded(focus: false)])
 }
 
+@Test("Hover uses a 300 ms dwell and 100 ms exit grace")
+@MainActor
+func hoverUsesDwellAndGraceWithoutFlicker() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    #expect(scheduler.scheduledDelays == [SurfaceInteractionDefaults.hoverDelay])
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+
+    _ = coordinator.handle(.expandedHoverExited)
+    #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.hoverCloseGrace)
+    _ = coordinator.handle(.expandedHoverEntered)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+}
+
+@Test("Interaction holds defer hover close and final release restarts grace outside")
+@MainActor
+func interactionHoldsDeferHoverClose() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    scheduler.fireLatest()
+    _ = coordinator.handle(.expandedHoverExited)
+    let lease = coordinator.acquireInteractionHold(.keyboardFocus)
+    #expect(lease != nil)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+    lease?.release()
+    #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.hoverCloseGrace)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
+@Test("Every interaction hold kind suppresses close and stale releases are harmless")
+@MainActor
+func interactionHoldKindsAreTypedAndSessionScoped() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    for kind in SurfaceInteractionHoldKind.allCases {
+        _ = coordinator.handle(.showCollapsed)
+        _ = coordinator.handle(.clicked)
+        let lease = coordinator.acquireInteractionHold(kind)
+        #expect(lease != nil)
+        _ = coordinator.handle(.escapePressed)
+        lease?.release()
+        #expect(coordinator.snapshot.state == .collapsed)
+    }
+
+    _ = coordinator.handle(.clicked)
+    let stale = coordinator.acquireInteractionHold(.drag)
+    _ = coordinator.handle(.escapePressed)
+    _ = coordinator.handle(.clicked)
+    stale?.release()
+    _ = coordinator.handle(.autoCollapseElapsed)
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
+@Test("Suppression and recovery invalidate interaction holds and close work")
+@MainActor
+func invalidatesHoldsAcrossSuppressionAndRecovery() {
+    let panel = RecordingSurfacePanel(revalidationSucceeds: false)
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    scheduler.fireLatest()
+    _ = coordinator.handle(.expandedHoverExited)
+    let suppressedLease = coordinator.acquireInteractionHold(.accessibilityInteraction)
+    _ = coordinator.handle(.fullScreenPolicyEngaged)
+    suppressedLease?.release()
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .suppressed)
+
+    _ = coordinator.handle(.fullScreenPolicyCleared)
+    _ = coordinator.handle(.clicked)
+    let recoveringLease = coordinator.acquireInteractionHold(.confirmation)
+    _ = coordinator.handle(.displayInvalidated)
+    recoveringLease?.release()
+    #expect(coordinator.snapshot.state == .recovering)
+    #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.recoveryBackoff)
+}
+
+@Test("Click and keyboard origins retain bounded inactivity instead of hover grace")
+@MainActor
+func deliberateOriginsRetainInactivityPolicy() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.expandedHoverExited)
+    #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.autoCollapseDelay)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
 @Test("Surface interaction cancels hover and collapses through its documented exits")
 @MainActor
 func cancelsHoverAndCollapsesThroughSafeExits() {
