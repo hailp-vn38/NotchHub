@@ -45,7 +45,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
                         : .fullScreenPolicyCleared)
             }
         }
-        activeSpaceObservation = ScreenParametersObservation(activeSpaceObserver)
+        activeSpaceObservation = ScreenParametersObservation(
+            activeSpaceObserver,
+            center: NSWorkspace.shared.notificationCenter
+        )
     }
 
     deinit {
@@ -107,9 +110,14 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         debugSnapshot = snapshot
     }
 
-    public func toggleDebugOverlay() {
-        debugOverlayEnabled.toggle()
-        refreshDebugOverlay()
+    public func toggleDebugOverlay() -> Bool {
+        #if DEBUG
+            debugOverlayEnabled.toggle()
+            refreshDebugOverlay()
+            return true
+        #else
+            return false
+        #endif
     }
 
     private func showCollapsed() -> Bool {
@@ -229,7 +237,12 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private func debugOverlay(for panel: NSPanel) -> some View {
         if debugOverlayEnabled {
             SurfaceDebugOverlay(
-                snapshot: debugSnapshot, frame: panel.frame, collectionBehavior: panel.collectionBehavior)
+                snapshot: debugSnapshot,
+                frame: panel.frame,
+                collectionBehavior: panel.collectionBehavior,
+                level: panel.level,
+                screenIdentifier: panel.screen.map(screenIdentifier(for:)) ?? "unavailable"
+            )
         }
     }
 
@@ -244,8 +257,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     private func anotherApplicationOwnsFullScreenSpace() -> Bool {
         let ownProcessID = ProcessInfo.processInfo.processIdentifier
-        let screens = NSScreen.screens.map(\.frame)
-        guard !screens.isEmpty,
+        let displayBounds = NSScreen.screens.compactMap { screen in
+            displayID(for: screen).map(CGDisplayBounds)
+        }
+        guard !displayBounds.isEmpty,
             let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
                 as? [[CFString: Any]]
         else { return false }
@@ -256,8 +271,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             else { return false }
             let bounds = window[kCGWindowBounds] as! CFDictionary  // CoreGraphics guarantees this window-list field.
             guard let frame = CGRect(dictionaryRepresentation: bounds) else { return false }
-            return screens.contains { screen in
-                frame.width >= screen.width && frame.height >= screen.height
+            return displayBounds.contains { screen in
+                frame.contains(screen)
             }
         }
     }
@@ -302,6 +317,8 @@ private struct SurfaceDebugOverlay: View {
     let snapshot: SurfaceSnapshot
     let frame: NSRect
     let collectionBehavior: NSWindow.CollectionBehavior
+    let level: NSWindow.Level
+    let screenIdentifier: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -309,6 +326,7 @@ private struct SurfaceDebugOverlay: View {
             Text(
                 verbatim: "frame=\(Int(frame.origin.x)),\(Int(frame.origin.y)) \(Int(frame.width))×\(Int(frame.height))"
             )
+            Text(verbatim: "screen=\(screenIdentifier) level=\(level.rawValue)")
             Text(
                 verbatim:
                     "flags=\(collectionBehavior.rawValue) suppress=\(snapshot.suppressionReason.map { String(describing: $0) } ?? "none")"
@@ -328,13 +346,15 @@ private struct SurfaceDebugOverlay: View {
 
 private final class ScreenParametersObservation: @unchecked Sendable {
     private let observer: NSObjectProtocol
+    private let center: NotificationCenter
 
-    init(_ observer: NSObjectProtocol) {
+    init(_ observer: NSObjectProtocol, center: NotificationCenter = .default) {
         self.observer = observer
+        self.center = center
     }
 
     func cancel() {
-        NotificationCenter.default.removeObserver(observer)
+        center.removeObserver(observer)
     }
 }
 

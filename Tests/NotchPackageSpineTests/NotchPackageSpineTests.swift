@@ -153,6 +153,40 @@ func keepsHiddenSurfaceHiddenWhenFullScreenContextClears() {
     #expect(panel.effects == [])
 }
 
+@Test("Wake and unlock cannot recover through an active full-screen suppression")
+@MainActor
+func retainsFullScreenSuppressionAcrossContextRecovery() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.fullScreenPolicyEngaged)
+    _ = coordinator.handle(.willSleep)
+    _ = coordinator.handle(.didWake)
+    _ = coordinator.handle(.sessionLocked)
+    _ = coordinator.handle(.sessionUnlocked)
+
+    #expect(coordinator.snapshot.state == .suppressed)
+    #expect(coordinator.snapshot.suppressionReason == .fullScreen)
+    #expect(panel.effects.filter { $0 == .showCollapsed }.count == 1)
+}
+
+@Test("Unlock restores the prior expanded interaction after safe geometry revalidation")
+@MainActor
+func restoresPriorStateAfterLockWithoutCreatingDuplicateRecovery() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: RecordingSurfaceScheduler())
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.sessionLocked)
+    _ = coordinator.handle(.sessionUnlocked)
+
+    #expect(coordinator.snapshot.state == .expanded)
+    #expect(coordinator.snapshot.isInteractionPaused == false)
+}
+
 @Test("Wake recovery retries once after the F2 backoff then hides with a warning")
 @MainActor
 func boundsRecoveryAndKeepsTheMenuBarRecoverySeamAvailable() {

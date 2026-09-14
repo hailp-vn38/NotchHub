@@ -40,6 +40,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
     private var isHoveringExpanded = false
     private var recoveryTask: (any SurfaceInteractionTask)?
     private var recoveryGeneration = 0
+    private var sessionResumeState: SurfaceState?
 
     public init(
         panel: any SurfacePanelPresenting,
@@ -83,10 +84,17 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
             snapshot.suppressionReason = nil
             _ = apply(.showCollapsed)
             updateTimers(after: .showCollapsed, state: snapshot.state)
-        case .willSleep, .sessionLocked:
+        case .willSleep:
+            sessionResumeState = nil
             pauseInteraction()
-        case .didWake, .sessionUnlocked, .displayInvalidated:
+        case .sessionLocked:
+            sessionResumeState = snapshot.state
+            pauseInteraction()
+        case .didWake, .displayInvalidated:
             resumeAndRecover()
+        case .sessionUnlocked:
+            resumeAndRecover(restoring: sessionResumeState)
+            sessionResumeState = nil
         case .hoverEntered where snapshot.state == .collapsed:
             scheduleHoverExpansion()
         case .hoverExited:
@@ -130,7 +138,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
 
     public func toggleDebugOverlay() -> Bool {
         guard let overlay = panel as? any SurfaceDebugOverlayToggling else { return false }
-        overlay.toggleDebugOverlay()
+        guard overlay.toggleDebugOverlay() else { return false }
         publishDebugSnapshot()
         return true
     }
@@ -162,13 +170,13 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         _ = panel.apply(.pauseInteraction)
     }
 
-    private func resumeAndRecover() {
+    private func resumeAndRecover(restoring state: SurfaceState? = nil) {
         guard snapshot.state != .hidden else { return }
         snapshot.isInteractionPaused = false
-        beginRecovery()
+        beginRecovery(restoring: state)
     }
 
-    private func beginRecovery() {
+    private func beginRecovery(restoring state: SurfaceState? = nil) {
         guard snapshot.state != .hidden, snapshot.state != .recovering else { return }
         cancelHoverExpansion()
         cancelAutoCollapse()
@@ -176,22 +184,29 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         snapshot.recoveryAttemptCount = 0
         snapshot.recoveryOutcome = .pending
         snapshot.warning = nil
+        recoveryTargetState = state ?? .collapsed
         _ = panel.apply(.suppress)
         attemptRecovery()
     }
 
     private func attemptRecovery() {
         snapshot.recoveryAttemptCount += 1
-        if geometryInput?.revalidateGeometry() == true, panel.apply(.showCollapsed) {
-            snapshot.state = .collapsed
+        if geometryInput?.revalidateGeometry() == true {
             snapshot.recoveryOutcome = .recovered
+            if snapshot.suppressionReason == .fullScreen || recoveryTargetState == .suppressed {
+                snapshot.state = .suppressed
+                return
+            }
+            let effect: SurfacePanelEffect =
+                recoveryTargetState == .expanded
+                ? .showExpanded(focus: false)
+                : recoveryTargetState == .compact ? .showCompact : .showCollapsed
+            guard panel.apply(effect) else { return failRecovery() }
+            snapshot.state = recoveryTargetState
             return
         }
         guard snapshot.recoveryAttemptCount < 2 else {
-            snapshot.state = .hidden
-            snapshot.recoveryOutcome = .failed
-            snapshot.warning = .recoveryFailed
-            _ = panel.apply(.hide)
+            failRecovery()
             return
         }
         recoveryGeneration += 1
@@ -202,6 +217,15 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
             self.attemptRecovery()
             self.publishDebugSnapshot()
         }
+    }
+
+    private var recoveryTargetState: SurfaceState = .collapsed
+
+    private func failRecovery() {
+        snapshot.state = .hidden
+        snapshot.recoveryOutcome = .failed
+        snapshot.warning = .recoveryFailed
+        _ = panel.apply(.hide)
     }
 
     private func cancelRecovery() {
@@ -292,7 +316,7 @@ public protocol SurfaceDebugOverlayPresenting: AnyObject {
 
 @MainActor
 public protocol SurfaceDebugOverlayToggling: SurfaceDebugOverlayPresenting {
-    func toggleDebugOverlay()
+    func toggleDebugOverlay() -> Bool
 }
 
 @MainActor
