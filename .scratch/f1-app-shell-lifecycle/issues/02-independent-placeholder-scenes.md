@@ -4,9 +4,13 @@
 
 **Blocked by:** 01 — Menu-bar recovery baseline.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Menu mở được hai placeholder scene độc lập cho Settings và Diagnostics.
-- [ ] Mỗi scene công bố giới hạn F1 và không khởi tạo persistence, `NSPanel`, ModuleRuntime, IPC listener hay Diagnostics store.
-- [ ] Lỗi/đóng một scene không làm menu bar hoặc scene kia mất reachable.
-- [ ] Test ở coordinator/scene-presentation seam xác minh hành vi mở độc lập thay vì cấu trúc `body` của SwiftUI.
+- [x] Menu mở được hai placeholder scene độc lập cho Settings và Diagnostics.
+- [x] Mỗi scene công bố giới hạn F1 và không khởi tạo persistence, `NSPanel`, ModuleRuntime, IPC listener hay Diagnostics store.
+- [x] Lỗi/đóng một scene không làm menu bar hoặc scene kia mất reachable.
+- [x] Test ở coordinator/scene-presentation seam xác minh hành vi mở độc lập thay vì cấu trúc `body` của SwiftUI.
+
+## Comments
+
+- Implemented 2026-09-14: `AppCoordinator` routes Settings and Diagnostics through an injected scene-presenter seam. The SwiftUI App shell opens separate `WindowGroup` placeholder scenes; both disclose the F1 boundary. `swift test`, `xcodebuild`, and `./Scripts/verify.sh` passed.

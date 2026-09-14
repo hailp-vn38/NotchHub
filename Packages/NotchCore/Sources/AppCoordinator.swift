@@ -2,8 +2,11 @@
 @MainActor
 public final class AppCoordinator {
     public private(set) var snapshot = AppShellSnapshot()
+    private let scenePresenter: any AppShellScenePresenter
 
-    public init() {}
+    public init(scenePresenter: (any AppShellScenePresenter)? = nil) {
+        self.scenePresenter = scenePresenter ?? NoopScenePresenter()
+    }
 
     @discardableResult
     public func start() -> AppShellStartResult {
@@ -20,6 +23,10 @@ public final class AppCoordinator {
             return .unavailable(.notchSurface)
         case .showDemoState:
             return .unavailable(.demoState)
+        case .openSettings:
+            return presentPlaceholderScene(.settings)
+        case .openDiagnostics:
+            return presentPlaceholderScene(.diagnostics)
         case .restartAppShell:
             stop()
             _ = start()
@@ -36,6 +43,12 @@ public final class AppCoordinator {
 
     private func stop() {
         snapshot.isRunning = false
+    }
+
+    private func presentPlaceholderScene(_ scene: AppShellPlaceholderScene) -> AppShellMenuOutcome {
+        scenePresenter.present(scene) == .presented
+            ? .placeholderSceneRequested(scene)
+            : .placeholderSceneUnavailable(scene)
     }
 }
 
@@ -54,12 +67,16 @@ public enum AppShellStartResult: Equatable, Sendable {
 public enum AppShellMenuIntent: Sendable {
     case toggleNotchSurface
     case showDemoState
+    case openSettings
+    case openDiagnostics
     case restartAppShell
     case quit
 }
 
 public enum AppShellMenuOutcome: Equatable, Sendable {
     case unavailable(AppShellUnavailableFeature)
+    case placeholderSceneRequested(AppShellPlaceholderScene)
+    case placeholderSceneUnavailable(AppShellPlaceholderScene)
     case restarted
     case quitRequested
 
@@ -67,11 +84,55 @@ public enum AppShellMenuOutcome: Equatable, Sendable {
         switch self {
         case .unavailable(let feature):
             "\(feature.title) is unavailable until its owning phase is implemented."
+        case .placeholderSceneRequested(let scene):
+            "Opening \(scene.title) placeholder."
+        case .placeholderSceneUnavailable(let scene):
+            "\(scene.title) placeholder is unavailable."
         case .restarted:
             "App shell restarted."
         case .quitRequested:
             "Quitting NotchHub."
         }
+    }
+}
+
+public enum AppShellPlaceholderScene: Equatable, Hashable, Sendable {
+    case settings
+    case diagnostics
+
+    public var title: String {
+        switch self {
+        case .settings:
+            "Settings"
+        case .diagnostics:
+            "Diagnostics"
+        }
+    }
+
+    public var windowID: String {
+        switch self {
+        case .settings:
+            "settings-placeholder"
+        case .diagnostics:
+            "diagnostics-placeholder"
+        }
+    }
+}
+
+@MainActor
+public protocol AppShellScenePresenter: AnyObject {
+    func present(_ scene: AppShellPlaceholderScene) -> AppShellScenePresentationResult
+}
+
+public enum AppShellScenePresentationResult: Equatable, Sendable {
+    case presented
+    case unavailable
+}
+
+@MainActor
+private final class NoopScenePresenter: AppShellScenePresenter {
+    func present(_: AppShellPlaceholderScene) -> AppShellScenePresentationResult {
+        .unavailable
     }
 }
 

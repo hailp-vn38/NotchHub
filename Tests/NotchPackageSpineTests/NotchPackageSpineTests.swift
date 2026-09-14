@@ -19,6 +19,28 @@ func exposesSafeMenuBarRecoveryOutcomes() {
     #expect(coordinator.snapshot.startCount == 2)
 }
 
+@Test("App shell requests independent placeholder scenes")
+@MainActor
+func requestsIndependentPlaceholderScenes() {
+    let presenter = RecordingScenePresenter()
+    let coordinator = AppCoordinator(scenePresenter: presenter)
+
+    #expect(coordinator.perform(.openSettings) == .placeholderSceneRequested(.settings))
+    #expect(coordinator.perform(.openDiagnostics) == .placeholderSceneRequested(.diagnostics))
+    #expect(presenter.presentedScenes == [.settings, .diagnostics])
+}
+
+@Test("A failed placeholder scene request does not block the other scene")
+@MainActor
+func isolatesPlaceholderScenePresentationFailures() {
+    let presenter = SelectiveScenePresenter(unavailableScenes: [.settings])
+    let coordinator = AppCoordinator(scenePresenter: presenter)
+
+    #expect(coordinator.perform(.openSettings) == .placeholderSceneUnavailable(.settings))
+    #expect(coordinator.perform(.openDiagnostics) == .placeholderSceneRequested(.diagnostics))
+    #expect(presenter.requestedScenes == [.settings, .diagnostics])
+}
+
 @Test("NotchDomain encodes a typed Action, Module, and Event envelope")
 func encodesPureDomainContracts() throws {
     let action = try #require(ActionID("app.openSettings"))
@@ -80,6 +102,31 @@ func rejectsMalformedContracts() {
 }
 
 private struct EmptyPayload: Codable, Sendable {}
+
+@MainActor
+private final class RecordingScenePresenter: AppShellScenePresenter {
+    private(set) var presentedScenes: [AppShellPlaceholderScene] = []
+
+    func present(_ scene: AppShellPlaceholderScene) -> AppShellScenePresentationResult {
+        presentedScenes.append(scene)
+        return .presented
+    }
+}
+
+@MainActor
+private final class SelectiveScenePresenter: AppShellScenePresenter {
+    let unavailableScenes: Set<AppShellPlaceholderScene>
+    private(set) var requestedScenes: [AppShellPlaceholderScene] = []
+
+    init(unavailableScenes: Set<AppShellPlaceholderScene>) {
+        self.unavailableScenes = unavailableScenes
+    }
+
+    func present(_ scene: AppShellPlaceholderScene) -> AppShellScenePresentationResult {
+        requestedScenes.append(scene)
+        return unavailableScenes.contains(scene) ? .unavailable : .presented
+    }
+}
 
 private struct DemoModule: NotchModule {
     let id: ModuleID
