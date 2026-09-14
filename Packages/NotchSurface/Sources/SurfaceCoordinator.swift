@@ -24,6 +24,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
     public private(set) var snapshot = SurfaceSnapshot()
     private let panel: any SurfacePanelPresenting
     private let input: (any SurfaceInputMonitoring)?
+    private let geometryInput: (any SurfaceGeometryRevalidating)?
     private let detailInput: (any DetailNavigationInput)?
     private let detailNavigator: (any DetailNavigating)?
     private let scheduler: any SurfaceInteractionScheduling
@@ -43,12 +44,16 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
     ) {
         self.panel = panel
         self.input = input ?? (panel as? any SurfaceInputMonitoring)
+        self.geometryInput = panel as? any SurfaceGeometryRevalidating
         self.detailInput = self.input as? any DetailNavigationInput
         self.detailNavigator = detailNavigator
         self.scheduler = scheduler ?? MainQueueSurfaceScheduler()
         self.configuration = configuration
         self.input?.setInteractionHandler { [weak self] intent in
             _ = self?.handle(intent)
+        }
+        self.geometryInput?.setDisplayChangeHandler { [weak self] in
+            self?.revalidateDisplayGeometry()
         }
         self.detailInput?.setDetailNavigationHandler { [weak detailNavigator] request in
             _ = detailNavigator?.open(request)
@@ -100,6 +105,17 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
         if state != .collapsed { cancelHoverExpansion() }
         if state == .expanded || state == .compact { scheduleAutoCollapse() } else { cancelAutoCollapse() }
         if intent == .hide || intent == .suppressed { cancelHoverExpansion() }
+    }
+
+    private func revalidateDisplayGeometry() {
+        guard snapshot.state != .hidden else { return }
+        guard geometryInput?.revalidateGeometry() == true else {
+            _ = handle(.suppressed)
+            return
+        }
+        if snapshot.state == .suppressed {
+            _ = handle(.showCollapsed)
+        }
     }
 
     private func scheduleHoverExpansion() {
@@ -167,6 +183,16 @@ public protocol SurfaceInputMonitoring: AnyObject {
 }
 
 @MainActor
+public protocol SurfaceDisplayObserving: AnyObject {
+    func setDisplayChangeHandler(_ handler: @escaping @MainActor () -> Void)
+}
+
+@MainActor
+public protocol SurfaceGeometryRevalidating: SurfaceDisplayObserving {
+    func revalidateGeometry() -> Bool
+}
+
+@MainActor
 public protocol SurfaceInteractionScheduling: AnyObject {
     func schedule(after delay: Duration, _ action: @escaping @MainActor () -> Void) -> any SurfaceInteractionTask
 }
@@ -218,6 +244,8 @@ public enum SurfaceStateMachine {
             (.expanded, .showExpanded(focus: true))
         case (.compact, .autoCollapseElapsed),
             (.expanded, .escapePressed), (.expanded, .clickedOutside), (.expanded, .autoCollapseElapsed):
+            (.collapsed, .showCollapsed)
+        case (.suppressed, .showCollapsed):
             (.collapsed, .showCollapsed)
         case (_, .suppressed):
             (.suppressed, .suppress)

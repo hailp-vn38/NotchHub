@@ -4,6 +4,121 @@ import NotchDomain
 import NotchSurface
 import Testing
 
+@Test("Geometry targets the built-in physical notch instead of the main external display")
+func anchorsGeometryToBuiltInPhysicalNotch() {
+    let external = ScreenTopology.Screen(
+        identifier: "external-main",
+        isBuiltIn: false,
+        frame: CGRect(x: -1200, y: 0, width: 1200, height: 900),
+        visibleFrame: CGRect(x: -1200, y: 0, width: 1200, height: 860),
+        scale: 1
+    )
+    let builtIn = ScreenTopology.Screen(
+        identifier: "built-in",
+        isBuiltIn: true,
+        frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 942),
+        physicalNotchFrame: CGRect(x: 648, y: 946, width: 216, height: 36),
+        scale: 2
+    )
+
+    let geometry = NotchSurfaceGeometry.frame(
+        for: .init(width: 136, height: 46),
+        in: .init(screens: [external, builtIn])
+    )
+
+    #expect(geometry?.screenIdentifier == builtIn.identifier)
+    #expect(geometry?.frame.midX == builtIn.physicalNotchFrame?.midX)
+    #expect(geometry?.frame.maxY == min(builtIn.physicalNotchFrame!.minY, builtIn.visibleFrame.maxY))
+    #expect(geometry.map { builtIn.visibleFrame.contains($0.frame) } == true)
+}
+
+@Test("Geometry uses a contained top-center fallback for a built-in display without a valid notch")
+func fallsBackSafelyWhenPhysicalNotchIsMissingOrInvalid() {
+    let builtIn = ScreenTopology.Screen(
+        identifier: "built-in",
+        isBuiltIn: true,
+        frame: CGRect(x: 40, y: 20, width: 1440, height: 900),
+        visibleFrame: CGRect(x: 40, y: 20, width: 1440, height: 860),
+        physicalNotchFrame: CGRect(x: -1, y: 0, width: 1, height: 1),
+        scale: 2
+    )
+
+    let geometry = NotchSurfaceGeometry.frame(
+        for: .init(width: 220, height: 52),
+        in: .init(screens: [builtIn])
+    )
+
+    #expect(geometry?.screenIdentifier == builtIn.identifier)
+    #expect(geometry.map { builtIn.visibleFrame.contains($0.frame) } == true)
+    #expect(geometry?.frame.midX == builtIn.visibleFrame.midX)
+}
+
+@Test("Geometry suppresses unavailable or invalid built-in displays and reframes changed topology")
+func suppressesInvalidTopologiesAndReframesAfterScaleChange() {
+    let externalOnly = ScreenTopology.Screen(
+        identifier: "external",
+        isBuiltIn: false,
+        frame: CGRect(x: 0, y: 0, width: 1000, height: 700),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 660),
+        scale: 1
+    )
+    let invalidBuiltIn = ScreenTopology.Screen(
+        identifier: "invalid-built-in",
+        isBuiltIn: true,
+        frame: .zero,
+        visibleFrame: .zero,
+        scale: 2
+    )
+    #expect(NotchSurfaceGeometry.frame(for: .init(width: 136, height: 46), in: .init(screens: [externalOnly])) == nil)
+    #expect(NotchSurfaceGeometry.frame(for: .init(width: 136, height: 46), in: .init(screens: [invalidBuiltIn])) == nil)
+
+    let original = ScreenTopology.Screen(
+        identifier: "built-in",
+        isBuiltIn: true,
+        frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 860),
+        scale: 2
+    )
+    let changed = ScreenTopology.Screen(
+        identifier: original.identifier,
+        isBuiltIn: true,
+        frame: CGRect(x: 0, y: 0, width: 1728, height: 1117),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1728, height: 1072),
+        scale: 1
+    )
+    let size = CGSize(width: 320, height: 160)
+    let originalGeometry = NotchSurfaceGeometry.frame(for: size, in: .init(screens: [original]))
+    let changedGeometry = NotchSurfaceGeometry.frame(for: size, in: .init(screens: [changed]))
+
+    #expect(originalGeometry.map { original.visibleFrame.contains($0.frame) } == true)
+    #expect(changedGeometry.map { changed.visibleFrame.contains($0.frame) } == true)
+    #expect(originalGeometry?.frame != changedGeometry?.frame)
+}
+
+@Test("Display revalidation keeps valid geometry visible and suppresses a detached built-in display")
+@MainActor
+func revalidatesDisplayGeometryThroughTheCoordinatorSeam() {
+    let validPanel = RecordingSurfacePanel(revalidationSucceeds: true)
+    let validCoordinator = SurfaceCoordinator(panel: validPanel)
+    _ = validCoordinator.handle(.showCollapsed)
+    validPanel.sendDisplayChange()
+    #expect(validPanel.revalidationCount == 1)
+    #expect(validCoordinator.snapshot.state == .collapsed)
+
+    let detachedPanel = RecordingSurfacePanel(revalidationSucceeds: false)
+    let detachedCoordinator = SurfaceCoordinator(panel: detachedPanel)
+    _ = detachedCoordinator.handle(.showCollapsed)
+    detachedPanel.sendDisplayChange()
+    #expect(detachedPanel.revalidationCount == 1)
+    #expect(detachedCoordinator.snapshot.state == .suppressed)
+    #expect(detachedPanel.effects == [.showCollapsed, .suppress])
+    detachedPanel.setRevalidationSucceeds(true)
+    detachedPanel.sendDisplayChange()
+    #expect(detachedCoordinator.snapshot.state == .collapsed)
+    #expect(detachedPanel.effects == [.showCollapsed, .suppress, .showCollapsed])
+}
+
 @Test("App shell exposes safe menu-bar recovery outcomes")
 @MainActor
 func exposesSafeMenuBarRecoveryOutcomes() {
@@ -437,17 +552,38 @@ private final class RecordingSurfaceToggleController: NotchSurfaceToggling {
 }
 
 @MainActor
-private final class RecordingSurfacePanel: SurfacePanelPresenting {
+private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeometryRevalidating {
     private let succeeds: Bool
+    private var revalidationSucceeds: Bool
     private(set) var effects: [SurfacePanelEffect] = []
+    private(set) var revalidationCount = 0
+    private var displayChangeHandler: (@MainActor () -> Void)?
 
-    init(succeeds: Bool = true) {
+    init(succeeds: Bool = true, revalidationSucceeds: Bool = true) {
         self.succeeds = succeeds
+        self.revalidationSucceeds = revalidationSucceeds
     }
 
     func apply(_ effect: SurfacePanelEffect) -> Bool {
         effects.append(effect)
         return succeeds
+    }
+
+    func setDisplayChangeHandler(_ handler: @escaping @MainActor () -> Void) {
+        displayChangeHandler = handler
+    }
+
+    func revalidateGeometry() -> Bool {
+        revalidationCount += 1
+        return revalidationSucceeds
+    }
+
+    func setRevalidationSucceeds(_ succeeds: Bool) {
+        revalidationSucceeds = succeeds
+    }
+
+    func sendDisplayChange() {
+        displayChangeHandler?()
     }
 }
 

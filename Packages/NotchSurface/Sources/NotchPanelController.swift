@@ -3,14 +3,37 @@ import SwiftUI
 
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
-public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring, DetailNavigationInput {
+public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring, DetailNavigationInput,
+    SurfaceGeometryRevalidating
+{
     private var panel: NSPanel?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
     private var detailNavigationHandler: (@MainActor (DetailNavigationRequest) -> Void)?
     private var eventMonitors: [Any] = []
     private weak var priorKeyWindow: NSWindow?
+    private var screenParametersObservation: ScreenParametersObservation?
+    private var displayChangeHandler: (@MainActor () -> Void)?
 
-    public init() {}
+    public init() {
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                if let handler = self?.displayChangeHandler {
+                    handler()
+                } else {
+                    _ = self?.revalidateGeometry()
+                }
+            }
+        }
+        screenParametersObservation = ScreenParametersObservation(observer)
+    }
+
+    deinit {
+        screenParametersObservation?.cancel()
+    }
 
     public func apply(_ effect: SurfacePanelEffect) -> Bool {
         switch effect {
@@ -39,12 +62,27 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         detailNavigationHandler = handler
     }
 
+    public func setDisplayChangeHandler(_ handler: @escaping @MainActor () -> Void) {
+        displayChangeHandler = handler
+    }
+
+    public func revalidateGeometry() -> Bool {
+        guard let panel else { return false }
+        guard let frame = surfaceFrame(for: panel.frame.size) else {
+            removeEventMonitors()
+            panel.orderOut(nil)
+            return false
+        }
+        panel.setFrame(frame, display: true)
+        return true
+    }
+
     private func showCollapsed() -> Bool {
-        guard let screen = builtInScreen() else { return false }
+        guard let frame = surfaceFrame(for: NSSize(width: 136, height: 46)) else { return false }
 
         removeEventMonitors()
         let panel = panel ?? makePanel()
-        panel.setFrame(collapsedFrame(on: screen), display: true)
+        panel.setFrame(frame, display: true)
         panel.contentView = NSHostingView(
             rootView: CollapsedNotchSurfaceView { [weak self] intent in
                 self?.interactionHandler?(intent)
@@ -58,11 +96,11 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     }
 
     private func showCompact() -> Bool {
-        guard let screen = builtInScreen() else { return false }
+        guard let frame = surfaceFrame(for: NSSize(width: 220, height: 52)) else { return false }
 
         removeEventMonitors()
         let panel = panel ?? makePanel()
-        panel.setFrame(compactFrame(on: screen), display: true)
+        panel.setFrame(frame, display: true)
         panel.contentView = NSHostingView(
             rootView: CompactNotchSurfaceView { [weak self] in
                 self?.interactionHandler?(.clicked)
@@ -74,10 +112,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     }
 
     private func showExpanded(focus: Bool) -> Bool {
-        guard let screen = builtInScreen() else { return false }
+        guard let frame = surfaceFrame(for: NSSize(width: 320, height: 160)) else { return false }
 
         let panel = panel ?? makePanel()
-        panel.setFrame(expandedFrame(on: screen), display: true)
+        panel.setFrame(frame, display: true)
         panel.contentView = NSHostingView(
             rootView: ExpandedNotchSurfaceView { [weak self] intent in
                 self?.interactionHandler?(intent)
@@ -138,46 +176,60 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         eventMonitors.removeAll()
     }
 
-    private func builtInScreen() -> NSScreen? {
-        NSScreen.screens.first { screen in
-            let displayID =
-                screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
-                as? NSNumber
-            return displayID.map { CGDisplayIsBuiltin($0.uint32Value) != 0 } ?? false
-        }
+    private func surfaceFrame(for size: NSSize) -> NSRect? {
+        let screens = NSScreen.screens
+        let topology = ScreenTopology(screens: screens.map(screenTopology))
+        guard let geometry = NotchSurfaceGeometry.frame(for: size, in: topology),
+            screens.indices.contains(where: { screenIdentifier(for: screens[$0]) == geometry.screenIdentifier })
+        else { return nil }
+        return geometry.frame
     }
 
-    private func collapsedFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 136, height: 46)
-        let frame = screen.frame
-        return NSRect(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - size.height,
-            width: size.width,
-            height: size.height
+    private func screenTopology(for screen: NSScreen) -> ScreenTopology.Screen {
+        let displayID = displayID(for: screen)
+        return ScreenTopology.Screen(
+            identifier: screenIdentifier(for: screen),
+            isBuiltIn: displayID.map { CGDisplayIsBuiltin($0) != 0 } ?? false,
+            frame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            physicalNotchFrame: physicalNotchFrame(on: screen),
+            scale: screen.backingScaleFactor
         )
     }
 
-    private func expandedFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 320, height: 160)
-        let frame = screen.frame
-        return NSRect(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - size.height,
-            width: size.width,
-            height: size.height
-        )
+    private func screenIdentifier(for screen: NSScreen) -> String {
+        displayID(for: screen).map(String.init) ?? ""
     }
 
-    private func compactFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 220, height: 52)
-        let frame = screen.frame
-        return NSRect(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - size.height,
-            width: size.width,
-            height: size.height
+    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
+            .map { CGDirectDisplayID($0.uint32Value) }
+    }
+
+    private func physicalNotchFrame(on screen: NSScreen) -> NSRect? {
+        guard #available(macOS 12.0, *) else { return nil }
+        guard let left = screen.auxiliaryTopLeftArea,
+            let right = screen.auxiliaryTopRightArea
+        else { return nil }
+        let notch = NSRect(
+            x: left.maxX,
+            y: max(left.minY, right.minY),
+            width: right.minX - left.maxX,
+            height: min(left.height, right.height)
         )
+        return screen.frame.contains(notch) && !notch.isEmpty ? notch : nil
+    }
+}
+
+private final class ScreenParametersObservation: @unchecked Sendable {
+    private let observer: NSObjectProtocol
+
+    init(_ observer: NSObjectProtocol) {
+        self.observer = observer
+    }
+
+    func cancel() {
+        NotificationCenter.default.removeObserver(observer)
     }
 }
 
