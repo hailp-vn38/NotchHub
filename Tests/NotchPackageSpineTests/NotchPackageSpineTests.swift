@@ -1,6 +1,7 @@
 import Foundation
 import NotchCore
 import NotchDomain
+import NotchSurface
 import Testing
 
 @Test("App shell exposes safe menu-bar recovery outcomes")
@@ -17,6 +18,64 @@ func exposesSafeMenuBarRecoveryOutcomes() {
     #expect(coordinator.perform(.quit) == .quitRequested)
     #expect(coordinator.snapshot.isRunning == false)
     #expect(coordinator.snapshot.startCount == 2)
+}
+
+@Test("App shell routes the menu toggle through the Notch surface seam")
+@MainActor
+func routesMenuToggleThroughSurfaceSeam() {
+    let surface = RecordingSurfaceToggleController(results: [.shownCollapsed, .hidden])
+    let coordinator = AppCoordinator(surfaceController: surface)
+
+    #expect(coordinator.perform(.toggleNotchSurface) == .notchSurfaceToggled(.collapsed))
+    #expect(coordinator.perform(.toggleNotchSurface) == .notchSurfaceToggled(.hidden))
+    #expect(surface.toggleCount == 2)
+}
+
+@Test("App shell remains usable when the Notch surface cannot be created")
+@MainActor
+func retainsRecoveryPathWhenSurfaceIsUnavailable() {
+    let surface = RecordingSurfaceToggleController(results: [.unavailable])
+    let presenter = RecordingScenePresenter()
+    let coordinator = AppCoordinator(scenePresenter: presenter, surfaceController: surface)
+
+    #expect(coordinator.perform(.toggleNotchSurface) == .unavailable(.notchSurface))
+    #expect(coordinator.perform(.openDiagnostics) == .placeholderSceneRequested(.diagnostics))
+}
+
+@Test("Surface coordinator toggles only declared collapsed and hidden states")
+@MainActor
+func togglesCollapsedSurfaceThroughPanelEffects() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel)
+
+    #expect(coordinator.snapshot.state == .hidden)
+    #expect(coordinator.handle(.toggle) == .collapsed)
+    #expect(coordinator.snapshot.state == .collapsed)
+    #expect(panel.effects == [.showCollapsed])
+    #expect(coordinator.handle(.toggle) == .hidden)
+    #expect(panel.effects == [.showCollapsed, .hide])
+}
+
+@Test("Surface coordinator rejects an undeclared transition without panel effects")
+@MainActor
+func rejectsUndeclaredSurfaceTransition() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel)
+
+    #expect(coordinator.handle(.hide) == .hidden)
+    #expect(coordinator.snapshot.state == .hidden)
+    #expect(panel.effects == [])
+}
+
+@Test("Surface coordinator reports an unavailable panel without changing state")
+@MainActor
+func reportsUnavailablePanelCreation() {
+    let panel = RecordingSurfacePanel(succeeds: false)
+    let coordinator = SurfaceCoordinator(panel: panel)
+
+    #expect(coordinator.toggleNotchSurface() == .unavailable)
+    #expect(coordinator.snapshot.state == .hidden)
+    #expect(panel.effects == [.showCollapsed])
 }
 
 @Test("App shell requests independent placeholder scenes")
@@ -208,6 +267,36 @@ private struct FixedLaunchAtLoginController: LaunchAtLoginControlling {
 
     func status() -> LaunchAtLoginStatus {
         value
+    }
+}
+
+@MainActor
+private final class RecordingSurfaceToggleController: NotchSurfaceToggling {
+    private var results: [NotchSurfaceToggleResult]
+    private(set) var toggleCount = 0
+
+    init(results: [NotchSurfaceToggleResult]) {
+        self.results = results
+    }
+
+    func toggleNotchSurface() -> NotchSurfaceToggleResult {
+        toggleCount += 1
+        return results.removeFirst()
+    }
+}
+
+@MainActor
+private final class RecordingSurfacePanel: SurfacePanelPresenting {
+    private let succeeds: Bool
+    private(set) var effects: [SurfacePanelEffect] = []
+
+    init(succeeds: Bool = true) {
+        self.succeeds = succeeds
+    }
+
+    func apply(_ effect: SurfacePanelEffect) -> Bool {
+        effects.append(effect)
+        return succeeds
     }
 }
 

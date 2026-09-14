@@ -1,5 +1,6 @@
 import AppKit
 import NotchCore
+import NotchSurface
 import ServiceManagement
 import SwiftUI
 
@@ -61,10 +62,12 @@ struct NotchHubApp: App {
 @MainActor
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
+    private lazy var notchSurface = SurfaceCoordinator(panel: NotchPanelController())
     private lazy var coordinator = AppCoordinator(
         scenePresenter: self,
         lifecycleObserver: lifecycleObserver,
-        launchAtLoginController: SMAppServiceLaunchAtLoginController()
+        launchAtLoginController: SMAppServiceLaunchAtLoginController(),
+        surfaceController: notchSurface
     )
     private var openScene: ((AppShellPlaceholderScene) -> Void)?
 

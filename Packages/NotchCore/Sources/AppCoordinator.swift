@@ -1,3 +1,5 @@
+import NotchDomain
+
 /// The F1 owner of in-process App shell coordination.
 @MainActor
 public final class AppCoordinator {
@@ -5,15 +7,18 @@ public final class AppCoordinator {
     private let scenePresenter: any AppShellScenePresenter
     private let lifecycleObserver: any AppShellLifecycleObserving
     private let launchAtLoginController: any LaunchAtLoginControlling
+    private let surfaceController: any NotchSurfaceToggling
 
     public init(
         scenePresenter: (any AppShellScenePresenter)? = nil,
         lifecycleObserver: (any AppShellLifecycleObserving)? = nil,
-        launchAtLoginController: (any LaunchAtLoginControlling)? = nil
+        launchAtLoginController: (any LaunchAtLoginControlling)? = nil,
+        surfaceController: (any NotchSurfaceToggling)? = nil
     ) {
         self.scenePresenter = scenePresenter ?? NoopScenePresenter()
         self.lifecycleObserver = lifecycleObserver ?? NoopLifecycleObserver()
         self.launchAtLoginController = launchAtLoginController ?? UnavailableLaunchAtLoginController()
+        self.surfaceController = surfaceController ?? UnavailableNotchSurfaceController()
     }
 
     @discardableResult
@@ -33,7 +38,14 @@ public final class AppCoordinator {
     public func perform(_ intent: AppShellMenuIntent) -> AppShellMenuOutcome {
         switch intent {
         case .toggleNotchSurface:
-            return .unavailable(.notchSurface)
+            switch surfaceController.toggleNotchSurface() {
+            case .shownCollapsed:
+                return .notchSurfaceToggled(.collapsed)
+            case .hidden:
+                return .notchSurfaceToggled(.hidden)
+            case .unavailable:
+                return .unavailable(.notchSurface)
+            }
         case .showDemoState:
             return .unavailable(.demoState)
         case .openSettings:
@@ -149,6 +161,7 @@ public enum AppShellMenuIntent: Sendable {
 
 public enum AppShellMenuOutcome: Equatable, Sendable {
     case unavailable(AppShellUnavailableFeature)
+    case notchSurfaceToggled(SurfaceState)
     case placeholderSceneRequested(AppShellPlaceholderScene)
     case placeholderSceneUnavailable(AppShellPlaceholderScene)
     case restarted
@@ -158,6 +171,12 @@ public enum AppShellMenuOutcome: Equatable, Sendable {
         switch self {
         case .unavailable(let feature):
             "\(feature.title) is unavailable until its owning phase is implemented."
+        case .notchSurfaceToggled(.collapsed):
+            "Notch surface shown."
+        case .notchSurfaceToggled(.hidden):
+            "Notch surface hidden."
+        case .notchSurfaceToggled:
+            "Notch surface updated."
         case .placeholderSceneRequested(let scene):
             "Opening \(scene.title) placeholder."
         case .placeholderSceneUnavailable(let scene):
@@ -219,6 +238,22 @@ private final class NoopLifecycleObserver: AppShellLifecycleObserving {
 @MainActor
 private final class UnavailableLaunchAtLoginController: LaunchAtLoginControlling {
     func status() -> LaunchAtLoginStatus { .unavailable }
+}
+
+@MainActor
+public protocol NotchSurfaceToggling: AnyObject {
+    func toggleNotchSurface() -> NotchSurfaceToggleResult
+}
+
+public enum NotchSurfaceToggleResult: Equatable, Sendable {
+    case shownCollapsed
+    case hidden
+    case unavailable
+}
+
+@MainActor
+private final class UnavailableNotchSurfaceController: NotchSurfaceToggling {
+    func toggleNotchSurface() -> NotchSurfaceToggleResult { .unavailable }
 }
 
 public enum AppShellUnavailableFeature: Equatable, Sendable {
