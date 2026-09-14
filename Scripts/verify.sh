@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ./Scripts/lint-format.sh
+./Scripts/check-domain-boundary.sh
 swift package resolve
 swift build --build-tests
 swift test
