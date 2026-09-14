@@ -1,6 +1,23 @@
 import Foundation
+import NotchCore
 import NotchDomain
 import Testing
+
+@Test("App shell exposes safe menu-bar recovery outcomes")
+@MainActor
+func exposesSafeMenuBarRecoveryOutcomes() {
+    let coordinator = AppCoordinator()
+
+    #expect(coordinator.snapshot.isRunning == false)
+    #expect(coordinator.start() == .started)
+    #expect(coordinator.start() == .alreadyRunning)
+    #expect(coordinator.perform(.toggleNotchSurface) == .unavailable(.notchSurface))
+    #expect(coordinator.perform(.showDemoState) == .unavailable(.demoState))
+    #expect(coordinator.perform(.restartAppShell) == .restarted)
+    #expect(coordinator.perform(.quit) == .quitRequested)
+    #expect(coordinator.snapshot.isRunning == false)
+    #expect(coordinator.snapshot.startCount == 2)
+}
 
 @Test("NotchDomain encodes a typed Action, Module, and Event envelope")
 func encodesPureDomainContracts() throws {

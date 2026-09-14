@@ -44,7 +44,7 @@ let package = Package(
         ),
         .testTarget(
             name: "NotchPackageSpineTests",
-            dependencies: ["NotchDomain"],
+            dependencies: ["NotchCore", "NotchDomain"],
             path: "Tests/NotchPackageSpineTests"
         ),
     ]

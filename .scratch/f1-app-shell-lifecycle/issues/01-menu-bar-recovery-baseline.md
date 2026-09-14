@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] App shell có một `AppCoordinator` sở hữu startup, restart và teardown F1, với startup idempotent.
-- [ ] Menu bar luôn reachable và các intent surface/demo không tạo `NSPanel`, ModuleRuntime, IPC hay permission request.
-- [ ] Restart App Shell và Quit dừng tài nguyên F1 theo ownership; không được đặt tên hay hoạt động như ModuleRuntime restart.
-- [ ] Test ở coordinator seam chứng minh observable menu outcomes, startup lặp, restart và teardown mà không phụ thuộc chi tiết SwiftUI/AppKit.
+- [x] App shell có một `AppCoordinator` sở hữu startup, restart và teardown F1, với startup idempotent.
+- [x] Menu bar luôn reachable và các intent surface/demo không tạo `NSPanel`, ModuleRuntime, IPC hay permission request.
+- [x] Restart App Shell và Quit dừng tài nguyên F1 theo ownership; không được đặt tên hay hoạt động như ModuleRuntime restart.
+- [x] Test ở coordinator seam chứng minh observable menu outcomes, startup lặp, restart và teardown mà không phụ thuộc chi tiết SwiftUI/AppKit.
