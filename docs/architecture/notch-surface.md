@@ -215,13 +215,13 @@ public struct NotchGeometry: Sendable {
 ### 8.1 Hover
 
 - `PointerMonitor` observes mouse position relative to a defined trigger region (approximately the collapsed/compact panel bounds plus a small margin).
-- A configurable hover delay (see Settings → Notch Behavior, [Requirements §7.1](../product/requirements.md#71-settings-information-architecture)) prevents accidental expansion from incidental cursor movement.
-- Hover-to-expand can be disabled entirely in Settings for users who prefer click/shortcut-only interaction.
+- F2 uses a 150 ms hover delay and an 8 pt trigger margin around the visible collapsed surface. Both values are dependency-injected test defaults, not persisted settings.
+- F3/F4 may expose validated hover settings; until then, the menu-bar toggle remains available.
 
 ### 8.2 Click
 
 - A click on the `collapsed` or `compact` panel triggers `.userTriggeredExpand(reason: .click)`.
-- A click on an item within `expanded` content may trigger a registered action (via `NotchActions`) and/or an explicit detail-navigation request handled by `DetailWindowCoordinator`.
+- A click on F2 placeholder content sends a local user intent and may open the explicit placeholder detail window through `DetailWindowCoordinator`. Registered actions arrive in F6.
 
 ### 8.3 Click-outside and Escape
 
@@ -230,13 +230,13 @@ public struct NotchGeometry: Sendable {
 
 ### 8.4 Auto-collapse timeout
 
-- `AutoCollapseController` starts a timer when entering `expanded` (and optionally `compact`), configurable in Settings.
+- `AutoCollapseController` starts a 3-second, dependency-injected timer when entering `expanded` or `compact`; F3/F4 may later make this a validated setting.
 - Any user interaction with the panel resets the timer; the timer fires `.autoCollapseTimeoutFired` only after a period of true inactivity.
 
-### 8.5 Global shortcut
+### 8.5 Menu control and future shortcut
 
-- `GlobalHotkeyService` maps the user-configured shortcut (via `NotchActions`' shortcut recorder, see [`action-platform.md`](action-platform.md)) to a toggle intent: expand if collapsed/compact, collapse if expanded. It does not open or close detail windows.
-- This service does not itself decide *how* to expand (which module content to show) — it sends a generic toggle event; `SurfaceCoordinator` and `PresentationPolicy` decide the resulting content based on current context (for example, "show the most recent relevant module" or "show a default overview").
+- In F2, the menu-bar Toggle NotchHub control sends the generic toggle intent. It does not open or close detail windows.
+- F6 may map a user-configured shortcut through `NotchActions` to the same intent. The input source does not decide how to expand; `SurfaceCoordinator` decides the placeholder content in F2 and `PresentationPolicy` decides later module content.
 
 ### 8.6 Click-through when collapsed
 
@@ -260,7 +260,7 @@ public struct NotchGeometry: Sendable {
 | Event | Required behavior |
 |---|---|
 | User switches to a different Space | Panel remains reachable (per collection-behavior policy in §7.3) or is consistently suppressed, according to a single documented policy — not inconsistent behavior across Spaces |
-| Another app enters full-screen | `SurfaceCoordinator` evaluates the "show on full-screen" setting (see [Requirements §7.1](../product/requirements.md#71-settings-information-architecture)); if disabled, sends `.fullScreenPolicyEngaged` |
+| Another app enters full-screen | F2 sends `.fullScreenPolicyEngaged` and suppresses by default. F3/F4 may add a validated user preference. |
 | Full-screen app exits | Sends `.fullScreenPolicyCleared`, returning to `collapsed` |
 
 ### 9.3 Sleep/wake and lock/unlock
@@ -292,7 +292,7 @@ sequenceDiagram
     end
 ```
 
-- Recovery attempts must be **bounded** (for example, a small fixed number of retries with short backoff) to avoid a tight failure loop consuming CPU.
+- Recovery makes at most **two attempts** with a **250 ms backoff**. It then sends `.recoveryFailedPermanently`, hides the surface, and records a diagnostics warning.
 - A permanently failed recovery must leave the app otherwise fully functional — the user can still reach Settings and Diagnostics via the menu bar (per [Requirements FR-APP-002](../product/requirements.md#51-application-shell-and-lifecycle)) even if the Notch panel itself cannot be restored, and can attempt a manual "Restart App Shell" action. A ModuleRuntime-specific restart is only available after F7.
 
 ---
@@ -307,7 +307,7 @@ sequenceDiagram
 - Last suppression reason, if `suppressed`.
 - Count and outcome of recovery attempts.
 
-A development-only **debug overlay** (toggleable via the `surface.toggleDebugOverlay` action defined in [`action-platform.md`](action-platform.md)) should render this information directly over or near the panel for fast visual debugging during development, and must not be enabled by default in release builds.
+A development-only **debug overlay**, toggled by an F2-only menu/debug control, should render this information directly over or near the panel for fast visual debugging during development and must not be enabled by default in release builds. F6 may route the same intent through `surface.toggleDebugOverlay` after the Action Registry exists.
 
 ---
 
@@ -342,10 +342,10 @@ Using the AppKit-free `SurfaceStateMachine` interface (§5.4):
 - Launch/relaunch with the panel visible.
 - Sleep/wake while `expanded`.
 - Switch Spaces while `collapsed` and while `expanded`.
-- Enter/exit full-screen on another app with "show on full-screen" both enabled and disabled.
+- Enter/exit full-screen on another app and verify F2's default suppression behavior.
 - Attach/detach an external display; close/open the MacBook lid.
 - Change display resolution/scale while the panel is visible.
-- Open a module detail view from `expanded`, verify it is a separate window, then close it without changing the Notch panel into a detail state.
+- Open the F2 placeholder detail view from `expanded`, verify it is a separate window, then close it without changing the Notch panel into a detail state.
 - Trigger rapid open/close (1,000 cycles per the performance stress scenario in [`performance.md`](performance.md)) and confirm no window/allocation leak and no animation hitching.
 
 ---

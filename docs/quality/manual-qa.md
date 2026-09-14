@@ -291,7 +291,7 @@ Notes:
 
 ## QA-SUR-004 — Escape and click-outside
 
-**Steps:** Expand surface. Press Escape. Reopen and click outside. Repeat from detail state if available.
+**Steps:** Expand surface. Press Escape. Reopen and click outside. If a detail window is available, repeat its independent Escape/back route.
 
 **Expected:**
 
@@ -338,7 +338,7 @@ Notes:
 
 ## QA-DIS-001 — Physical notch built-in display
 
-**Steps:** Run on a supported MacBook with physical notch. Test collapsed/compact/expanded/detail states.
+**Steps:** Run on a supported MacBook with physical notch. Test collapsed/compact/expanded surface states and the separate detail window route.
 
 **Expected:**
 
