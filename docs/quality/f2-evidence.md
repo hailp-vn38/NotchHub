@@ -33,6 +33,24 @@ physical-notch gate.
 
 `verification-checks.sh` deliberately prints rejected bad-anchor, secret-like, and forbidden-domain-import fixtures. Those messages are successful negative tests, not failures of the composite gate.
 
+## Boring-style shape slice
+
+Ticket 02 adds the presentation primitive without claiming completion of the later native
+shape-aware click-through or hover-session tickets.
+
+| Contract | Automated evidence | Result |
+|---|---|---|
+| Collapsed geometry | `derivesCollapsedSizeAndExposesFixedExpandedSurfaceSizes` verifies physical-notch width plus tolerance and the safe `185 × 32 pt` fallback. | Passed |
+| Fixed expanded geometry | The same test asserts the public `640 × 190 pt` visible Surface and `640 × 210 pt` host contracts. | Passed |
+| Persistent presentation | `NotchPanelController` creates one `NSHostingView<NotchSurfaceRootView>` and updates an observation-backed geometry projection instead of replacing collapsed, compact, and expanded roots. | Build-verified |
+| Animation and settling | `NotchSurfaceShape` animates the closed `6/14` and expanded `19/24` radii; opening prepares the fixed host before a next-run-loop projection, and closing cancels/versions its delayed host shrink. | Build-verified |
+| Accessibility and motion | The root labels collapsed, compact, and expanded surfaces; Reduce Motion uses a short non-spring transition. | Build-verified |
+
+The controller owns and cancels both the deferred open projection and close-host-settle tasks.
+This prevents a stale close task from shrinking a host after it has reopened. The deterministic
+automated seam remains geometry and `SurfaceCoordinator`; real `NSPanel` hierarchy identity and
+window-server animation behavior require the manual cases below.
+
 ## Manual macOS verification
 
 The host is a supported physical-notch MacBook, but this session was not granted macOS Computer
@@ -49,6 +67,9 @@ the native UI. No manual row below is inferred from source, tests, build output,
 | Attach/detach external display, lid, resolution/scale | Unrun | Change topology while visible; confirm only built-in display is targeted and clamshell/external-only context suppresses or hides safely. |
 | Debug overlay | Unrun | Use the F2 menu/debug control; confirm state, target display, frame, interaction flags, collection behavior, suppression reason, and recovery result are visible. |
 | No-notch hardware fallback | Unrun / hardware unavailable | Automated coverage passes. Manual proof requires a built-in no-notch Mac; do not treat the physical-notch host as fallback evidence. |
+| Boring-style shape and morph | Unrun | On a physical-notch Mac, verify the custom top shoulder is inset rather than a rounded rectangle; verify closed `6/14` to expanded `19/24` radii, top seam, shadow, and no frame jump. |
+| Host settle and rapid reopen | Unrun | Expand, collapse, then reopen before the close spring settles. Confirm the old settle task does not shrink the reopened `640 × 210 pt` host. |
+| Reduced Motion | Unrun | Enable Reduce Motion and confirm the state change remains understandable with a short non-spring transition and no overshoot. |
 
 ## F2 gate decision
 
