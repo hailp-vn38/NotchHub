@@ -37,3 +37,11 @@ if (cd "$secret_workspace" && VERIFY_BASE_REF="$base_commit" "$repository_root/S
   echo 'Secret checker accepted a bearer token.' >&2
   exit 1
 fi
+
+boundary_workspace="$temporary_directory/boundary"
+mkdir -p "$boundary_workspace/Packages/NotchDomain/Sources"
+printf '%s\n' 'import SwiftUI' > "$boundary_workspace/Packages/NotchDomain/Sources/InvalidDomain.swift"
+if (cd "$boundary_workspace" && PATH='/usr/bin:/bin' "$repository_root/Scripts/check-domain-boundary.sh"); then
+  echo 'Domain boundary checker accepted a forbidden framework import without rg.' >&2
+  exit 1
+fi

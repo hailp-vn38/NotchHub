@@ -5,7 +5,7 @@
 **Owner:** Product / UX / Architecture  
 **Last updated:** 2026-09-14  
 **Location:** `docs/design/settings-information-architecture.md`  
-**Related documents:** [Vision](../product/vision.md), [Requirements](../product/requirements.md), [Roadmap](../product/roadmap.md), [Architecture Overview](../architecture/overview.md), [State Management](../architecture/state-management.md), [Data Persistence](../architecture/data-persistence.md), [Permissions](../platform/permissions.md), [Action Platform](../architecture/action-platform.md), [Module System](../architecture/module-system.md), [Diagnostics](../operations/logging-diagnostics.md), [Accessibility](accessibility.md)
+**Related documents:** [Vision](../product/vision.md), [Requirements](../product/requirements.md), [Roadmap](../product/roadmap.md), [Architecture Overview](../architecture/overview.md), [State Management](../architecture/state-management.md), [Data Persistence](../architecture/data-persistence.md), [Permissions](../platform/permissions.md), [Action Platform](../architecture/action-platform.md), [Module System](../architecture/module-system.md), Diagnostics (F9, not yet implemented), [Accessibility](accessibility.md)
 
 ---
 
