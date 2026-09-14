@@ -1,66 +1,193 @@
 import NotchCore
 import NotchDomain
 
+public enum SurfaceInteractionDefaults {
+    public static let hoverDelay: Duration = .milliseconds(150)
+    public static let autoCollapseDelay: Duration = .seconds(3)
+}
+
+public struct SurfaceInteractionConfiguration: Equatable, Sendable {
+    public let hoverDelay: Duration
+    public let autoCollapseDelay: Duration
+
+    public init(
+        hoverDelay: Duration = SurfaceInteractionDefaults.hoverDelay,
+        autoCollapseDelay: Duration = SurfaceInteractionDefaults.autoCollapseDelay
+    ) {
+        self.hoverDelay = hoverDelay
+        self.autoCollapseDelay = autoCollapseDelay
+    }
+}
+
 @MainActor
 public final class SurfaceCoordinator: NotchSurfaceToggling {
     public private(set) var snapshot = SurfaceSnapshot()
     private let panel: any SurfacePanelPresenting
+    private let input: (any SurfaceInputMonitoring)?
+    private let scheduler: any SurfaceInteractionScheduling
+    private let configuration: SurfaceInteractionConfiguration
+    private var hoverTask: (any SurfaceInteractionTask)?
+    private var collapseTask: (any SurfaceInteractionTask)?
+    private var hoverGeneration = 0
+    private var collapseGeneration = 0
+    private var isHoveringExpanded = false
 
-    public init(panel: any SurfacePanelPresenting) {
+    public init(
+        panel: any SurfacePanelPresenting,
+        scheduler: (any SurfaceInteractionScheduling)? = nil,
+        configuration: SurfaceInteractionConfiguration = .init(),
+        input: (any SurfaceInputMonitoring)? = nil
+    ) {
         self.panel = panel
+        self.input = input ?? (panel as? any SurfaceInputMonitoring)
+        self.scheduler = scheduler ?? MainQueueSurfaceScheduler()
+        self.configuration = configuration
+        self.input?.setInteractionHandler { [weak self] intent in
+            _ = self?.handle(intent)
+        }
     }
 
     @discardableResult
     public func handle(_ intent: SurfaceIntent) -> SurfaceState {
-        _ = apply(intent)
+        switch intent {
+        case .hoverEntered where snapshot.state == .collapsed:
+            scheduleHoverExpansion()
+        case .hoverExited:
+            cancelHoverExpansion()
+        case .expandedHoverEntered where snapshot.state == .expanded:
+            isHoveringExpanded = true
+            cancelAutoCollapse()
+        case .expandedHoverExited where snapshot.state == .expanded:
+            isHoveringExpanded = false
+            scheduleAutoCollapse()
+        case .interaction where snapshot.state == .expanded:
+            if !isHoveringExpanded { scheduleAutoCollapse() }
+        default:
+            guard let state = apply(intent) else { return snapshot.state }
+            updateTimers(after: intent, state: state)
+        }
         return snapshot.state
     }
 
     public func toggleNotchSurface() -> NotchSurfaceToggleResult {
-        guard let state = apply(.toggle) else { return .unavailable }
-
+        let priorState = snapshot.state
+        let state = handle(.toggle)
+        guard state != priorState else { return .unavailable }
         return switch state {
-        case .collapsed:
-            .shownCollapsed
-        case .hidden:
-            .hidden
-        default:
-            .unavailable
+        case .collapsed: .shownCollapsed
+        case .hidden: .hidden
+        default: .unavailable
         }
     }
 
     private func apply(_ intent: SurfaceIntent) -> SurfaceState? {
         guard let transition = SurfaceStateMachine.transition(from: snapshot.state, for: intent),
             panel.apply(transition.effect)
-        else {
-            return nil
-        }
-
+        else { return nil }
         snapshot.state = transition.state
         return snapshot.state
+    }
+
+    private func updateTimers(after intent: SurfaceIntent, state: SurfaceState) {
+        if state != .collapsed { cancelHoverExpansion() }
+        if state == .expanded || state == .compact { scheduleAutoCollapse() } else { cancelAutoCollapse() }
+        if intent == .hide || intent == .suppressed { cancelHoverExpansion() }
+    }
+
+    private func scheduleHoverExpansion() {
+        cancelHoverExpansion()
+        hoverGeneration += 1
+        let generation = hoverGeneration
+        hoverTask = scheduler.schedule(after: configuration.hoverDelay) { [weak self] in
+            guard let self, self.hoverGeneration == generation else { return }
+            self.hoverTask = nil
+            _ = self.handle(.hoverDelayElapsed)
+        }
+    }
+
+    private func cancelHoverExpansion() {
+        hoverGeneration += 1
+        hoverTask?.cancel()
+        hoverTask = nil
+    }
+
+    private func scheduleAutoCollapse() {
+        cancelAutoCollapse()
+        collapseGeneration += 1
+        let generation = collapseGeneration
+        collapseTask = scheduler.schedule(after: configuration.autoCollapseDelay) { [weak self] in
+            guard let self, self.collapseGeneration == generation else { return }
+            self.collapseTask = nil
+            _ = self.handle(.autoCollapseElapsed)
+        }
+    }
+
+    private func cancelAutoCollapse() {
+        collapseGeneration += 1
+        collapseTask?.cancel()
+        collapseTask = nil
     }
 }
 
 public struct SurfaceSnapshot: Equatable, Sendable {
     public fileprivate(set) var state: SurfaceState = .hidden
-
     public init() {}
 }
 
-public enum SurfaceIntent: Sendable {
-    case toggle
-    case showCollapsed
-    case hide
+public enum SurfaceIntent: Equatable, Sendable {
+    case toggle, showCollapsed, hide, hoverEntered, hoverExited, hoverDelayElapsed
+    case expandedHoverEntered, expandedHoverExited, clicked, interaction
+    case escapePressed, clickedOutside, autoCollapseElapsed, suppressed, showCompact
 }
 
 public enum SurfacePanelEffect: Equatable, Sendable {
     case showCollapsed
+    case showCompact
+    case showExpanded(focus: Bool)
     case hide
+    case suppress
 }
 
 @MainActor
 public protocol SurfacePanelPresenting: AnyObject {
     func apply(_ effect: SurfacePanelEffect) -> Bool
+}
+
+@MainActor
+public protocol SurfaceInputMonitoring: AnyObject {
+    func setInteractionHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void)
+}
+
+@MainActor
+public protocol SurfaceInteractionScheduling: AnyObject {
+    func schedule(after delay: Duration, _ action: @escaping @MainActor () -> Void) -> any SurfaceInteractionTask
+}
+
+@MainActor
+public protocol SurfaceInteractionTask: AnyObject { func cancel() }
+
+@MainActor
+private final class MainQueueSurfaceScheduler: SurfaceInteractionScheduling {
+    func schedule(after delay: Duration, _ action: @escaping @MainActor () -> Void) -> any SurfaceInteractionTask {
+        let task = MainQueueSurfaceTask()
+        task.start(after: delay, action)
+        return task
+    }
+}
+
+@MainActor
+private final class MainQueueSurfaceTask: SurfaceInteractionTask {
+    private var task: Task<Void, Never>?
+
+    func start(after delay: Duration, _ action: @escaping @MainActor () -> Void) {
+        task = Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            action()
+        }
+    }
+
+    func cancel() { task?.cancel() }
 }
 
 public enum SurfaceStateMachine {
@@ -73,6 +200,19 @@ public enum SurfaceStateMachine {
             (.collapsed, .showCollapsed)
         case (.collapsed, .toggle), (.collapsed, .hide):
             (.hidden, .hide)
+        case (.collapsed, .hoverDelayElapsed):
+            (.expanded, .showExpanded(focus: false))
+        case (.collapsed, .clicked):
+            (.expanded, .showExpanded(focus: true))
+        case (.collapsed, .showCompact):
+            (.compact, .showCompact)
+        case (.compact, .clicked):
+            (.expanded, .showExpanded(focus: true))
+        case (.compact, .autoCollapseElapsed),
+            (.expanded, .escapePressed), (.expanded, .clickedOutside), (.expanded, .autoCollapseElapsed):
+            (.collapsed, .showCollapsed)
+        case (_, .suppressed):
+            (.suppressed, .suppress)
         default:
             nil
         }

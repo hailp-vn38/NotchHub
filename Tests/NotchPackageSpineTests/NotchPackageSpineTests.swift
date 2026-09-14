@@ -78,6 +78,119 @@ func reportsUnavailablePanelCreation() {
     #expect(panel.effects == [.showCollapsed])
 }
 
+@Test("Surface interaction expands only after the F2 hover delay within its bounded trigger")
+@MainActor
+func expandsAfterBoundedHoverDelay() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let configuration = SurfaceInteractionConfiguration(
+        hoverDelay: .milliseconds(42),
+        autoCollapseDelay: .seconds(7)
+    )
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, configuration: configuration)
+
+    #expect(coordinator.handle(.showCollapsed) == .collapsed)
+    #expect(coordinator.handle(.hoverEntered) == .collapsed)
+    #expect(scheduler.scheduledDelays == [configuration.hoverDelay])
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+    #expect(panel.effects == [.showCollapsed, .showExpanded(focus: false)])
+}
+
+@Test("Surface interaction cancels hover and collapses through its documented exits")
+@MainActor
+func cancelsHoverAndCollapsesThroughSafeExits() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    _ = coordinator.handle(.hoverExited)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+
+    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(coordinator.handle(.escapePressed) == .collapsed)
+    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(coordinator.handle(.clickedOutside) == .collapsed)
+    #expect(
+        panel.effects == [
+            .showCollapsed,
+            .showExpanded(focus: true),
+            .showCollapsed,
+            .showExpanded(focus: true),
+            .showCollapsed,
+        ])
+}
+
+@Test("Surface interaction resets but does not persist the F2 auto-collapse default")
+@MainActor
+func resetsAutoCollapseAfterExpandedInteraction() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(scheduler.scheduledDelays == [SurfaceInteractionDefaults.autoCollapseDelay])
+    _ = coordinator.handle(.interaction)
+    #expect(
+        scheduler.scheduledDelays == [
+            SurfaceInteractionDefaults.autoCollapseDelay,
+            SurfaceInteractionDefaults.autoCollapseDelay,
+        ])
+    scheduler.fire(at: 0)
+    #expect(coordinator.snapshot.state == .expanded)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
+@Test("Expanded hover pauses auto-collapse and compact remains passive until clicked")
+@MainActor
+func pausesExpandedHoverAndExpandsCompactOnClick() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    #expect(coordinator.handle(.showCompact) == .compact)
+    #expect(panel.effects == [.showCollapsed, .showCompact])
+    #expect(coordinator.handle(.clicked) == .expanded)
+    _ = coordinator.handle(.expandedHoverEntered)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+    _ = coordinator.handle(.expandedHoverExited)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
+@Test("Hidden and suppressed surfaces expose no pointer target")
+@MainActor
+func rejectsPointerInteractionWhileUnavailable() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: RecordingSurfaceScheduler())
+
+    #expect(coordinator.handle(.hoverEntered) == .hidden)
+    #expect(coordinator.handle(.clicked) == .hidden)
+    #expect(coordinator.handle(.suppressed) == .suppressed)
+    #expect(coordinator.handle(.hoverEntered) == .suppressed)
+    #expect(coordinator.handle(.clicked) == .suppressed)
+    #expect(panel.effects == [.suppress])
+}
+
+@Test("Surface coordinator receives native input through an injectable monitor seam")
+@MainActor
+func receivesInputThroughMonitorSeam() {
+    let panel = RecordingSurfacePanel()
+    let input = RecordingSurfaceInput()
+    let coordinator = SurfaceCoordinator(panel: panel, input: input)
+
+    _ = coordinator.handle(.showCollapsed)
+    input.send(.clicked)
+    #expect(coordinator.snapshot.state == .expanded)
+}
+
 @Test("App shell requests independent placeholder scenes")
 @MainActor
 func requestsIndependentPlaceholderScenes() {
@@ -297,6 +410,44 @@ private final class RecordingSurfacePanel: SurfacePanelPresenting {
     func apply(_ effect: SurfacePanelEffect) -> Bool {
         effects.append(effect)
         return succeeds
+    }
+}
+
+@MainActor
+private final class RecordingSurfaceScheduler: SurfaceInteractionScheduling {
+    private var actions: [() -> Void] = []
+    private(set) var scheduledDelays: [Duration] = []
+
+    func schedule(after delay: Duration, _ action: @escaping @MainActor () -> Void) -> any SurfaceInteractionTask {
+        scheduledDelays.append(delay)
+        actions.append(action)
+        return RecordingSurfaceTask()
+    }
+
+    func fireLatest() {
+        actions.last?()
+    }
+
+    func fire(at index: Int) {
+        actions[index]()
+    }
+}
+
+@MainActor
+private final class RecordingSurfaceTask: SurfaceInteractionTask {
+    func cancel() {}
+}
+
+@MainActor
+private final class RecordingSurfaceInput: SurfaceInputMonitoring {
+    private var handler: (@MainActor (SurfaceIntent) -> Void)?
+
+    func setInteractionHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
+        self.handler = handler
+    }
+
+    func send(_ intent: SurfaceIntent) {
+        handler?(intent)
     }
 }
 
