@@ -1,6 +1,6 @@
 # F1 Evidence
 
-**Status:** In progress — automated verification and interactive macOS smoke pass; real sleep/wake remains pending human-controlled QA
+**Status:** Passed
 **Phase:** F1 — App shell and lifecycle
 **Owner:** Platform / Quality
 **Recorded:** 2026-09-14
@@ -25,8 +25,8 @@ proof of the checks, not failures of the composite gate.
 
 Environment: MacBookPro18,3; macOS 26.5.1 (25F80); Xcode 26.0.1 (17A400); 2026-09-14;
 tester: Codex interactive macOS QA using the host's accessibility tree. This exercises the built
-Debug app bundle on macOS, not a mocked coordinator. It is not a substitute for the pending
-human-controlled sleep/wake cycle.
+Debug app bundle on macOS, not a mocked coordinator. The sleep/wake result below was confirmed by
+the user after installing and testing the app on 2026-09-14.
 
 | Scenario | Expected result | Result | Notes/evidence |
 |---|---|---|---|
@@ -36,12 +36,10 @@ human-controlled sleep/wake cycle.
 | Toggle Surface / Show Demo State | Explicit unavailable state; no `NSPanel` is created | Passed | Both menu actions displayed their explicit unavailable message in the menu. Accessibility reported no additional app windows; no permission dialog appeared. F1 source creates no `NSPanel`. |
 | Restart App Shell | F1-owned coordination restarts; no ModuleRuntime starts | Passed | Menu reported `App shell restarted.` and remained reachable; no additional app window/process appeared. No ModuleRuntime exists in F1. |
 | Quit and relaunch | No hung process; menu bar remains reachable | Passed | `Quit NotchHub` left 0 `NotchHub` processes; relaunch left exactly 1 process and the status item reachable. |
-| Sleep then wake | Menu bar remains usable; no panel or permission prompt | Pending | Requires a real sleep/wake cycle. It was not forced because sleeping the active shared desktop would interrupt the user session and needs a human-controlled wake check. |
+| Sleep then wake | Menu bar remains usable; no panel or permission prompt | Passed | User confirmed the real sleep/wake cycle after installing the app on 2026-09-14. |
 | Activate/deactivate | No crash; no unsolicited focus or UI | Passed | Deactivated by activating Finder; the NotchHub status item remained present, the process stayed alive, and no window or permission prompt appeared. |
 
 ## F1 gate decision
 
-F1 is **not complete**. The sleep/wake row is applicable and pending, with its reason recorded
-above. Close the phase only after a human runs that real lifecycle scenario and records the
-result; then confirm the implementation/docs still match the scoped contract in
-[`roadmap.md`](../product/roadmap.md).
+F1 is **complete**. All applicable automated and manual rows have recorded passing results, and
+the implementation/docs match the scoped contract in [`roadmap.md`](../product/roadmap.md).

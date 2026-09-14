@@ -140,7 +140,7 @@ Create a codebase with explicit boundaries, repeatable builds, baseline document
 
 ## F1 — App shell and lifecycle
 
-**Status:** Ready to implement. F0 is complete; see [F0 evidence](../quality/f0-evidence.md).
+**Status:** Complete. F1 passed its automated and manual macOS gate; see [F1 evidence](../quality/f1-evidence.md).
 
 ### Goal
 
@@ -712,14 +712,6 @@ A feature is not done merely because it appears visually correct in one happy-pa
 
 ## 10. Next execution step
 
-The immediate next step is **F1 — App shell and lifecycle**:
-
-1. Implement `AppCoordinator` as the idempotent F1 composition/lifecycle owner.
-2. Create the menu-bar-first App Shell and independent placeholder Settings/Diagnostics scenes.
-3. Route later-phase menu intents to explicit unavailable outcomes; do not create an `NSPanel` or runtime.
-4. Add the fakeable `SMAppService` launch-at-login abstraction, without preference UI or persistence.
-5. Add automated coordinator/menu/lifecycle tests and record physical macOS evidence in
-   [`f1-evidence.md`](../quality/f1-evidence.md).
-
-No `NSPanel`, global shortcut, typed settings persistence, module runtime, IPC, audio, media,
-calendar, files, or system-control code belongs in F1.
+The immediate next step is **F2 — Notch surface shell**. Start from the closed F1 App shell and
+introduce `NotchPanelController` as the sole native `NSPanel` owner, with its state machine and
+F2-specific manual macOS verification.

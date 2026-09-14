@@ -1,6 +1,6 @@
 # F1 App Shell and Lifecycle
 
-**Status:** ready-for-agent
+**Status:** complete
 **Phase:** F1
 **Owner:** Platform / Architecture
 

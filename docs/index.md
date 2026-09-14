@@ -7,8 +7,8 @@
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
-**Current execution phase:** F1 — App shell and lifecycle, ready to implement. F0 is complete;
-[F0 evidence](quality/f0-evidence.md) records passing local and pull-request verification seams.
+**Current execution phase:** F2 — Notch surface shell. F0 and F1 are complete; [F0 evidence](quality/f0-evidence.md)
+and [F1 evidence](quality/f1-evidence.md) record their passing gates.
 
 ---
 
