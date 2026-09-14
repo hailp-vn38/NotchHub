@@ -1,15 +1,14 @@
 # NotchHub Documentation Index
 ## Documentation map and phase ownership
 
-**Status:** Draft v0.1  
+**Status:** Draft v0.2
 **Owner:** Project / Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
-**Current execution phase:** F0 — Bootstrap complete. The documented
+**Current execution phase:** F1 — App shell and lifecycle, ready to implement. F0 is complete;
 [F0 evidence](quality/f0-evidence.md) records passing local and pull-request verification seams.
-F1 has not started.
 
 ---
 
@@ -123,6 +122,7 @@ docs/
 │
 ├── quality/
 │   ├── testing-strategy.md
+│   ├── f1-evidence.md                 # F1 evidence template
 │   ├── manual-qa.md                      # F2/F10
 │   └── performance-test-plan.md          # F10; may link performance.md
 │
@@ -228,6 +228,7 @@ Create a reliable menu-bar-first application and recovery path.
 | `docs/architecture/c4-container.md` | Update | App Shell container responsibilities and runtime sequence |
 | `docs/product/requirements.md` | Update | FR-APP requirements and acceptance criteria |
 | `docs/quality/testing-strategy.md` | Update | Launch/relaunch/quit/manual lifecycle tests |
+| `docs/quality/f1-evidence.md` | Required | Automated and manual F1-gate evidence, including the macOS environment |
 | `docs/operations/logging-diagnostics.md` | Optional | Create if startup/shutdown logging becomes a distinct operational contract |
 | Relevant ADR | Update/Create | Startup model, single-instance, launch-at-login if architectural |
 
@@ -236,6 +237,7 @@ Create a reliable menu-bar-first application and recovery path.
 - Startup/shutdown sequence documented and tested.
 - Menu bar remains available when the surface fails.
 - Sleep/wake and relaunch behavior has manual test evidence.
+- F1 evidence records the automated result, the physical macOS manual result, and any unrun scenario.
 
 ---
 
@@ -810,7 +812,8 @@ F0  [x] product docs       [x] architecture docs       [x] ADRs
     [x] security baseline  [x] quality baseline        [x] setup/contributing
     [x] recorded green pull-request verification run
 
-F1  [ ] lifecycle          [ ] app shell requirements  [ ] startup/quit tests
+F1  [x] scoped lifecycle   [x] app shell requirements  [x] test plan/evidence template
+    [ ] implementation     [ ] startup/quit tests       [ ] manual macOS evidence
 
 F2  [ ] notch surface      [ ] interaction design     [ ] Apple API records
     [ ] geometry/manual QA [ ] lifecycle updates       [ ] state tests

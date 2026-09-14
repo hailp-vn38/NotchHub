@@ -293,7 +293,7 @@ sequenceDiagram
 ```
 
 - Recovery attempts must be **bounded** (for example, a small fixed number of retries with short backoff) to avoid a tight failure loop consuming CPU.
-- A permanently failed recovery must leave the app otherwise fully functional — the user can still reach Settings and Diagnostics via the menu bar (per [Requirements FR-APP-002](../product/requirements.md#51-application-shell-and-lifecycle)) even if the Notch panel itself cannot be restored, and can attempt a manual "Restart Runtime" action.
+- A permanently failed recovery must leave the app otherwise fully functional — the user can still reach Settings and Diagnostics via the menu bar (per [Requirements FR-APP-002](../product/requirements.md#51-application-shell-and-lifecycle)) even if the Notch panel itself cannot be restored, and can attempt a manual "Restart App Shell" action. A ModuleRuntime-specific restart is only available after F7.
 
 ---
 

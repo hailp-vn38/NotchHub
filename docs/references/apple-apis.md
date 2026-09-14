@@ -111,7 +111,7 @@ MenuBarExtra
 ├── Toggle Notch
 ├── Open Settings
 ├── Open Diagnostics
-├── Restart Runtime
+├── Restart App Shell
 └── Quit
 ```
 

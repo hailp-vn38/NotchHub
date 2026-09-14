@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Related documents:** [README](../../README.md), [Vision](../product/vision.md), [Roadmap](../product/roadmap.md), [Requirements](../product/requirements.md), [Notch Surface](notch-surface.md), [Module System](module-system.md), [Event Protocol](event-protocol.md), [Action Platform](action-platform.md), [IPC](ipc.md), [Performance](performance.md), [Threat Model](../security/threat-model.md), [Boring Notch Reference](../references/boring-notch.md)
 
 ---
@@ -72,6 +72,7 @@ Every resource with lifecycle complexity has one explicit owner:
 
 | Resource | Owner | Rule |
 |---|---|---|
+| App-shell lifecycle | `AppCoordinator` | Starts F1-owned dependencies idempotently and stops them in reverse order; it does not own a Notch panel or module runtime in F1 |
 | Native `NSPanel` | `NotchPanelController` | Only this component creates, frames, orders, shows, hides, or destroys the panel |
 | Surface transition state | `SurfaceStateMachine` / `SurfaceCoordinator` | Modules request intent or publish events; they do not mutate native panel state |
 | Module lifecycle | `ModuleRuntime` | Modules do not self-register or self-restart outside runtime policy |
@@ -197,7 +198,7 @@ flowchart TB
 
 | Container | Responsibility | Must not do |
 |---|---|---|
-| `NotchHubApp` | Composition root, AppDelegate/AppCoordinator, menu bar, Settings scenes, process lifecycle | Contain module business logic or raw protocol parsing |
+| `NotchHubApp` | Composition root, `AppCoordinator`, menu bar, placeholder Settings/Diagnostics scenes in F1, and process lifecycle | Contain module business logic, persistence policy, or raw protocol parsing |
 | `NotchDomain` | Pure Swift types, identifiers, event/action/module contracts, errors | Import SwiftUI/AppKit or perform I/O |
 | `NotchCore` | Module runtime, settings, permissions, event bus, presentation policy, lifecycle coordination, diagnostics | Directly manipulate `NSPanel` or render feature UI |
 | `NotchSurface` | Native Notch `NSPanel`, separate detail-window coordination, screen geometry, state transitions, hit-testing, hotkey interaction, SwiftUI hosts | Parse external data or execute module business work |
@@ -206,6 +207,13 @@ flowchart TB
 | `NotchIPC` | Local listener, request auth, decoding, validation, rate limiting, event/action routes | Decide panel layout or bypass Action Registry |
 | `Modules` | Domain-specific capabilities and UI contributions through contracts | Directly control panel/permission prompts or bypass platform policy |
 | `Tools/notchctl` | Local developer/client utility for health, status, test events, and registered actions | Access app internals directly |
+
+### F1 container boundary
+
+F1 implements only `NotchHubApp` ownership: menu-bar reachability, coordinator lifecycle,
+placeholder windows, and a launch-at-login adapter. It must not create a `NotchSurface`, a module
+runtime, persistent Settings store, Diagnostics store, or IPC listener. Menu intents for those
+future containers remain observable unavailable-state outcomes until their owning phase.
 
 ---
 

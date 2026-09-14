@@ -226,7 +226,7 @@ Notes:
 
 **Expected:**
 
-- Settings, Diagnostics, Restart Runtime, and Quit remain available.
+- Settings, Diagnostics, Restart App Shell, and Quit remain available. A ModuleRuntime-specific restart is only applicable after F7.
 - User can inspect why surface is unavailable.
 - Menu bar does not depend on successful panel creation.
 

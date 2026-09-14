@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Development / Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Location:** `docs/development/setup.md`  
 **Related documents:** [README](../../README.md), [Vision](../product/vision.md), [Architecture Overview](../architecture/overview.md), [Testing Strategy](../quality/testing-strategy.md), [Apple APIs](../references/apple-apis.md)
 
@@ -32,7 +32,8 @@ This setup covers the implemented F0 foundation:
 - Documentation/ADR workflow.
 
 Local IPC, `notchctl`, lifecycle QA, and performance profiling are later-phase work, not F0 setup
-requirements.
+requirements. F1 adds app-shell manual QA; use the explicit F1 matrix in
+[`f1-evidence.md`](../quality/f1-evidence.md) when that phase is implemented.
 
 ## 3. Required environment
 
@@ -411,7 +412,7 @@ If environment variables are required in the future:
 - Inspect surface state, selected display, calculated frame, suppression reason, and recovery count.
 - Confirm the built-in display is available.
 - Test with debug overlay enabled.
-- Use “Restart Runtime” rather than force-killing the process first.
+- Use “Restart App Shell” rather than force-killing the process first. “Restart Runtime” is only applicable after F7 introduces `ModuleRuntime`.
 
 ### Permission prompt does not appear
 

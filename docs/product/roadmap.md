@@ -1,9 +1,9 @@
 # Product Roadmap
 ## NotchHub — Foundation-first delivery plan
 
-**Status:** Draft v0.2  
+**Status:** Draft v0.3
 **Owner:** Product / Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Related documents:** [README](../../README.md), [Vision](vision.md), [Requirements](requirements.md), [Architecture Overview](../architecture/overview.md), [Testing Strategy](../quality/testing-strategy.md), [Performance](../architecture/performance.md)
 
 ---
@@ -94,7 +94,7 @@ The first implementation supports the built-in MacBook display only. Multi-displ
 Create a codebase with explicit boundaries, repeatable builds, baseline documentation, and decisions that prevent early architectural drift.
 
 **Status:** Complete. The local repository checks and green pull-request workflow are recorded in
-[F0 evidence](../quality/f0-evidence.md). F1 has not started.
+[F0 evidence](../quality/f0-evidence.md). F1 is ready to implement.
 
 ### Scope
 
@@ -140,6 +140,8 @@ Create a codebase with explicit boundaries, repeatable builds, baseline document
 
 ## F1 — App shell and lifecycle
 
+**Status:** Ready to implement. F0 is complete; see [F0 evidence](../quality/f0-evidence.md).
+
 ### Goal
 
 Create a reliable application entry point that remains usable even if the notch UI is hidden, suppressed, or temporarily unavailable.
@@ -147,16 +149,22 @@ Create a reliable application entry point that remains usable even if the notch 
 ### Scope
 
 - Create menu-bar-first app shell using `MenuBarExtra` or a wrapper around `NSStatusItem`.
-- Implement menu items: Toggle Notch Surface, Show Demo State, Open Settings, Open Diagnostics, Restart Runtime, Quit.
+- Implement menu items: Toggle Notch Surface, Show Demo State, Open Settings, Open Diagnostics, Restart App Shell, Quit.
 - Introduce `AppCoordinator` as composition and lifecycle owner.
 - Define app lifecycle state and startup/shutdown ordering.
-- Add single-instance behavior.
-- Add launch-at-login abstraction.
+- Rely on the normal macOS app-bundle/LaunchServices path and make `AppCoordinator` startup
+  idempotent; do not add a custom process lock or IPC handoff in F1.
+- Add a thin launch-at-login abstraction backed by `SMAppService`; defer its preference UI and
+  persistence to F3/F4.
 - Observe launch, activation, deactivation, termination, sleep/wake, and lock/unlock states as needed.
 
 ### Demonstrable slice
 
-The app launches as a menu-bar utility. Settings and Diagnostics windows can be opened through the menu even though no real Notch surface exists yet.
+The app launches as a menu-bar utility. Settings and Diagnostics open as separate, explicitly
+labelled placeholder windows; neither persists settings nor exposes operational diagnostics. Until
+F2, Toggle Notch Surface and Show Demo State remain safe, visible recovery intents that report the
+surface as unavailable rather than creating an `NSPanel`. Restart App Shell only restarts F1-owned
+in-memory coordination; it is not the F7 `ModuleRuntime` restart.
 
 ### Exit criteria
 
@@ -164,6 +172,13 @@ The app launches as a menu-bar utility. Settings and Diagnostics windows can be 
 - Relaunch does not create duplicate state/instances.
 - Sleep/wake does not crash the application.
 - Settings and Diagnostics remain reachable independently of the Notch UI.
+
+### Explicit non-goals
+
+- No `NSPanel`, `NotchPanelController`, surface state machine, or display geometry (F2).
+- No full Settings information architecture, typed persistence, or preference UI (F3/F4).
+- No operational diagnostics store, export, or module/runtime inspection (F7/F9).
+- No custom interprocess single-instance lock, local IPC listener, or second-launch handoff (F8).
 
 ---
 
@@ -697,15 +712,14 @@ A feature is not done merely because it appears visually correct in one happy-pa
 
 ## 10. Next execution step
 
-The immediate next step is **F0 — Bootstrap and architecture**:
+The immediate next step is **F1 — App shell and lifecycle**:
 
-1. Initialize repository and macOS 14+ Swift app target.
-2. Create the six package boundaries.
-3. Add docs structure and initial product/architecture documents.
-4. Add ADR template and the initial architecture ADR set.
-5. Add CI build/test workflow.
-6. Implement pure `NotchDomain` identifiers, base states, event envelope, action IDs, and module protocol.
-7. Add basic unit tests for domain contracts.
-8. Create development setup guide with exact build/test commands.
+1. Implement `AppCoordinator` as the idempotent F1 composition/lifecycle owner.
+2. Create the menu-bar-first App Shell and independent placeholder Settings/Diagnostics scenes.
+3. Route later-phase menu intents to explicit unavailable outcomes; do not create an `NSPanel` or runtime.
+4. Add the fakeable `SMAppService` launch-at-login abstraction, without preference UI or persistence.
+5. Add automated coordinator/menu/lifecycle tests and record physical macOS evidence in
+   [`f1-evidence.md`](../quality/f1-evidence.md).
 
-No Xiaozhi integration, `NSPanel`, global shortcut, audio, media, calendar, files, or system-control code should be started until F0 exit criteria pass.
+No `NSPanel`, global shortcut, typed settings persistence, module runtime, IPC, audio, media,
+calendar, files, or system-control code belongs in F1.

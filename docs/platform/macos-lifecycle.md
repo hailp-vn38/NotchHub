@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Platform / Architecture / Quality  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Location:** `docs/platform/macos-lifecycle.md`  
 **Related documents:** [Architecture Overview](../architecture/overview.md), [Notch Surface](../architecture/notch-surface.md), [State Management](../architecture/state-management.md), [Module System](../architecture/module-system.md), [Permissions](permissions.md), [Testing Strategy](../quality/testing-strategy.md), [Performance](../architecture/performance.md), [Apple APIs](../references/apple-apis.md)
 
@@ -106,6 +106,19 @@ See [`module-system.md`](../architecture/module-system.md).
 
 ## 4. Startup architecture
 
+### F1 app-shell contract
+
+F1 is intentionally narrower than the full lifecycle target described below. `AppCoordinator`
+owns menu-bar creation, placeholder Settings/Diagnostics scenes, observation of app
+activation/deactivation and sleep/wake notifications, and orderly teardown of only those owned
+resources. The coordinator starts idempotently in one process and keeps the menu bar reachable if
+an optional placeholder scene fails.
+
+F1 does **not** load or persist settings, initialize a diagnostics store, create a Notch panel,
+start modules or IPC, request permissions, or claim surface recovery. A menu intent for a
+later-phase component must resolve to an explicit unavailable state, never bootstrap that component
+early. `Restart App Shell` restarts only F1-owned in-memory coordination.
+
 ### 4.1 Startup sequence
 
 ```mermaid
@@ -166,30 +179,30 @@ sequenceDiagram
 
 ## 5. Single-instance and launch behavior
 
-### Requirements
+### F1 requirements
 
-- Only one active NotchHub instance may own the Notch panel and local IPC endpoint.
-- A second launch should focus/notify the existing instance or exit safely.
-- A second instance must not delete or replace a live IPC socket.
-- Duplicate launch diagnostics must not reveal secrets or internal paths unnecessarily.
-- Launch-at-login, if implemented, must be user-controlled and use the app’s documented signing/entitlement configuration.
+- F1 relies on the normal macOS app-bundle/LaunchServices launch path; `AppCoordinator` must make
+  repeated lifecycle delivery in its process harmless.
+- F1 does not create a custom process lock, local IPC endpoint, or cross-process handoff.
+- A future owner of a panel or IPC endpoint must add endpoint-specific duplicate-instance handling
+  in its own phase; it must not silently repurpose the F1 coordinator.
+- The F1 launch-at-login adapter uses `SMAppService`; its preference UI and durable preference are
+  deferred to F3/F4.
 
 ### Single-instance flow
 
 ```text
-New process starts
+macOS launches app bundle through LaunchServices
       ↓
-Acquire app instance lock/identity
+AppCoordinator receives startup/lifecycle delivery
       ↓
-If existing instance:
-   send safe “activate/open” request
-   exit new process
-Else:
-   become owner
-   initialize app
+Start F1 resources once; repeated delivery is a no-op
+      ↓
+Keep menu bar available; optional scenes may fail independently
 ```
 
-The exact mechanism is an implementation decision, but it must be tested with rapid double-launch and stale-process scenarios.
+Rapid relaunch remains a manual F1 test. A custom lock/stale-endpoint scenario begins only when F2/F8
+introduces an owned panel or IPC endpoint.
 
 ---
 
@@ -559,14 +572,15 @@ A forced termination may prevent cleanup. Therefore:
 
 ## 15. Launch at login
 
-If implemented:
+F1 implementation boundary:
 
-- User-controlled setting.
-- No hidden helper/background process.
-- Use documented ServiceManagement/login-item APIs.
-- App launch must remain safe if Settings, panel, IPC, or optional modules fail.
-- Do not auto-enable sensitive modules solely because the app launched at login.
-- Test uninstall/update/disable behavior.
+- Provide a small `LaunchAtLoginControlling` abstraction backed by `SMAppService`.
+- Do not add a toggle, persistence, or hidden helper/background process in F1.
+- The adapter must be safe to query when its future Settings scene is unavailable.
+
+Later phases add user-controlled preference, persistence, signing/release validation, and
+uninstall/update/disable coverage. No sensitive module is auto-enabled merely because the app is
+launched at login.
 
 See [`apple-apis.md`](../references/apple-apis.md) and release documentation for signing/entitlement implications.
 

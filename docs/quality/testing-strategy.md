@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Quality / Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Location:** `docs/quality/testing-strategy.md`  
 **Related documents:** [Requirements](../product/requirements.md), [Roadmap](../product/roadmap.md), [Architecture Overview](../architecture/overview.md), [State Management](../architecture/state-management.md), [Event Protocol](../architecture/event-protocol.md), [Action Platform](../architecture/action-platform.md), [IPC](../architecture/ipc.md), [Permissions](../platform/permissions.md), [Performance](../architecture/performance.md), [Boring Notch Reference](../references/boring-notch.md)
 
@@ -145,6 +145,28 @@ No test double may weaken a security contract. For example, an IPC fake must sti
 ---
 
 ## 6. Unit testing requirements
+
+## 6.0 F1 app-shell and lifecycle
+
+Required automated coverage:
+
+- `AppCoordinator` startup is idempotent and tears down F1-owned observers/tasks in reverse order.
+- Each menu intent routes to its designated outcome: Settings/Diagnostics open their placeholder
+  scenes; surface/demo intents report unavailable; Restart App Shell does not create a module runtime.
+- Activation, deactivation, sleep, and wake are observable without creating an `NSPanel` or
+  requesting a permission.
+- The `SMAppService` launch-at-login adapter is behind a fakeable protocol; no test changes the
+  machine’s actual login-item registration.
+
+Required manual macOS evidence:
+
+- Cold launch, quit, and relaunch leave one reachable menu-bar item and no hung process.
+- Settings and Diagnostics placeholders remain reachable if the other scene is closed or fails.
+- Sleep/wake and activation/deactivation preserve a usable menu bar and do not show a panel or
+  permission prompt.
+
+F1 does not claim the panel, persistent settings, ModuleRuntime, IPC, or full diagnostics cases
+listed in later sections; those remain phase-specific gates.
 
 ## 6.1 `NotchDomain`
 

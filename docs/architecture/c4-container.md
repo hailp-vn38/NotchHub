@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Related documents:** [Architecture Overview](overview.md), [C4 Context](c4-context.md), [Module System](module-system.md), [Notch Surface](notch-surface.md), [Event Protocol](event-protocol.md), [Action Platform](action-platform.md), [IPC](ipc.md), [Performance](performance.md)
 
 ---
@@ -84,10 +84,14 @@ C4Container
 | Attribute | Description |
 |---|---|
 | Technology | Swift, AppKit + SwiftUI |
-| Responsibility | Menu-bar entry point, `AppCoordinator` startup/shutdown ordering, composition root wiring, Settings and Diagnostics scenes |
-| Depends on | `NotchSurface`, `NotchCore`, `NotchDomain` |
-| Must not do | Contain module-specific business logic, parse external protocols, or bypass `NotchPanelController` |
+| Responsibility | Menu-bar entry point, `AppCoordinator` startup/shutdown ordering, composition root wiring, and independent Settings/Diagnostics scenes |
+| Depends on | F1: `NotchDomain` and ServiceManagement only; later phases compose `NotchSurface` and `NotchCore` |
+| Must not do | Contain module-specific business logic, parse external protocols, persist Settings, or instantiate later-phase containers early |
 | Delivered in phase | F1 |
+
+In F1, Settings and Diagnostics are labelled placeholder scenes. Menu intents targeting the surface,
+demo state, or module runtime return an explicit unavailable outcome; they do not create an
+`NSPanel`, `ModuleRuntime`, IPC listener, Settings store, or Diagnostics store.
 
 ### 4.2 NotchSurface
 
@@ -184,6 +188,27 @@ C4Container
 ## 5. Container interaction patterns
 
 ### 5.1 Startup sequence across containers
+
+#### F1 implemented sequence
+
+```mermaid
+sequenceDiagram
+    participant OS as macOS
+    participant Shell as App Shell
+    participant Coordinator as AppCoordinator
+    participant Menu as Menu Bar
+    participant Scene as Placeholder Scene
+
+    OS->>Shell: Launch app bundle
+    Shell->>Coordinator: Start idempotently
+    Coordinator->>Menu: Create recovery menu
+    Menu->>Scene: Open Settings or Diagnostics on request
+    Coordinator-->>Menu: Report later-phase intents unavailable
+    OS->>Coordinator: Quit, sleep/wake, activation events
+    Coordinator->>Menu: Preserve or tear down F1 resources safely
+```
+
+#### Full foundation target (F4–F9)
 
 ```mermaid
 sequenceDiagram

@@ -4,6 +4,10 @@ NotchHub is a single-context, local-first macOS application platform for a calm 
 
 ## Product and presentation
 
+**App shell**:
+The menu-bar-first application host that composes platform dependencies and remains reachable when the Notch surface is unavailable.
+_Avoid_: Notch app, panel host
+
 **Notch surface**:
 The short-form, native panel presented around the MacBook camera housing or its safe fallback geometry.
 _Avoid_: notch window, widget, dashboard

@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.2  
 **Owner:** Product / Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-14
 **Related documents:** [README](../../README.md), [Vision](vision.md), [Roadmap](roadmap.md), [Architecture Overview](../architecture/overview.md), [Notch Surface](../architecture/notch-surface.md), [Action Platform](../architecture/action-platform.md), [Performance](../architecture/performance.md), [Threat Model](../security/threat-model.md)
 
 ---
@@ -213,11 +213,11 @@ The user shall be able to interact with core UI through keyboard and accessibili
 |---|---|---|
 | FR-APP-001 | The app shall run as a menu-bar-first macOS utility. | Must |
 | FR-APP-002 | The app shall provide a menu-bar recovery/control path independent of the Notch surface. | Must |
-| FR-APP-003 | The menu shall provide actions to toggle the surface, open Settings, open Diagnostics, restart runtime, and quit. | Must |
+| FR-APP-003 | The menu shall provide actions to toggle the surface, open Settings, open Diagnostics, restart the app shell, and quit. Before F2/F7, unavailable surface/runtime actions shall report their status safely rather than instantiate later-phase infrastructure. | Must |
 | FR-APP-004 | The app shall maintain a defined startup and shutdown sequence. | Must |
-| FR-APP-005 | The app shall prevent or safely handle duplicate instances. | Must |
-| FR-APP-006 | The app shall safely respond to sleep/wake and application activation changes. | Must |
-| FR-APP-007 | The app shall expose launch-at-login as a configurable capability after its implementation is ready. | Should |
+| FR-APP-005 | The app shall use normal macOS app-bundle/LaunchServices behavior and idempotent `AppCoordinator` startup to safely handle duplicate launch delivery. A custom lock or IPC handoff is deferred until an owned endpoint exists. | Must |
+| FR-APP-006 | The app shall safely respond to sleep/wake and application activation changes without creating a surface or requesting permissions in F1. | Must |
+| FR-APP-007 | The app shall provide an `SMAppService`-backed launch-at-login abstraction. Its user-facing preference and persistence are deferred until F3/F4. | Should |
 | FR-APP-008 | The app shall retain enough state to recover safely after a temporary display/panel invalidation. | Must |
 
 ## 5.2 Notch surface and windowing

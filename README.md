@@ -8,9 +8,9 @@ The first intended AI integration is Xiaozhi, but Xiaozhi is deliberately **not 
 
 ## Status
 
-**Project phase:** F0 bootstrap complete. The architecture baseline, glossary, initial ADR set,
-Swift/Xcode scaffold, local composite checks, and a green pull-request workflow are recorded in
-[F0 evidence](docs/quality/f0-evidence.md). F1 app-shell work has not started.
+**Project phase:** F1 app shell and lifecycle, ready to implement. The completed F0 architecture
+baseline, glossary, initial ADR set, Swift/Xcode scaffold, local composite checks, and green
+pull-request workflow are recorded in [F0 evidence](docs/quality/f0-evidence.md).
 
 F0 delivers only the foundation:
 
