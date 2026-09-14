@@ -8,18 +8,21 @@ The first intended AI integration is Xiaozhi, but Xiaozhi is deliberately **not 
 
 ## Status
 
-**Project phase:** F0 bootstrap. The architecture baseline, glossary, initial ADR set, Swift/Xcode scaffold, pinned-toolchain verification, and pull-request quality seam are present; F0 exit evidence remains to be recorded before the gate closes.
+**Project phase:** F0 bootstrap, in verification. The architecture baseline, glossary, initial ADR
+set, Swift/Xcode scaffold, and local composite checks are recorded in
+[F0 evidence](docs/quality/f0-evidence.md). F0 remains open until the configured pull-request
+workflow has a recorded green run; F1 app-shell work has not started.
 
-The first implementation milestone is the foundation app:
+F0 delivers only the foundation:
 
-- macOS menu-bar utility and recovery path
-- Notch surface implemented with AppKit `NSPanel` and SwiftUI
-- Settings, permissions, shortcuts, and action system
-- Module runtime and a test-only `DemoModule`
-- Local IPC for safe localhost integrations and future Xiaozhi relay
-- Diagnostics, resource budgets, performance profiling, and tests
+- Six Swift package targets and pure `NotchDomain` contracts
+- A macOS application host that displays a Foundation scaffold placeholder
+- A pinned Xcode toolchain, formatter, import-boundary check, Markdown-link check, secret scan,
+  and pull-request verification workflow
 
-No production Xiaozhi, audio, media, clipboard, file-shelf, calendar, or system-control module is planned before the Foundation Completion Gate is passed.
+No menu-bar recovery path, Notch `NSPanel`, settings, permissions, module runtime, IPC,
+diagnostics, production Xiaozhi, audio, media, clipboard, file-shelf, calendar, or system-control
+module is implemented in F0.
 
 ## Goals
 

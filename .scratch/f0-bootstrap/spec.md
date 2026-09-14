@@ -1,6 +1,6 @@
 # F0 Bootstrap and Architecture
 
-**Status:** ready-for-agent  
+**Status:** ready-for-agent
 **Phase:** F0  
 **Owner:** Foundation / Architecture
 
@@ -66,4 +66,4 @@ Hoàn thành F0 bằng một foundation scaffold chạy được trên macOS 14+
 
 - The current documentation/ADR baseline is already accepted. This spec turns that baseline into implementation evidence; it does not reopen settled architecture decisions.
 - The issue tracker status is `ready-for-agent`; implementation work may begin without additional design discovery. Any scope change to package topology, trust boundary, or platform policy requires the corresponding ADR review.
-- F0 closes only after the spec’s clean-build, unit-test, import-boundary, CI, formatting, and documentation evidence is recorded. A documentation-only or local-only scaffold is insufficient.
+- F0 closes only after the spec’s clean-build, unit-test, import-boundary, CI, formatting, and documentation evidence is recorded. A documentation-only or local-only scaffold is insufficient. The local result is recorded in [F0 evidence](../../docs/quality/f0-evidence.md); it remains open until a green pull-request workflow run is recorded.
