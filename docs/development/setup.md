@@ -135,7 +135,7 @@ Select the `NotchHub` scheme and a macOS destination.
 
 ### 6.2 Command-line build
 
-The exact scheme/project names must match the repository. Intended command shape:
+The checked-in app host uses the `NotchHub` scheme:
 
 ```bash
 xcodebuild \
@@ -146,18 +146,13 @@ xcodebuild \
   build
 ```
 
-### 6.3 Run tests
+### 6.3 Run package tests
 
 ```bash
-xcodebuild \
-  -project NotchHub.xcodeproj \
-  -scheme NotchHub \
-  -configuration Debug \
-  -destination 'platform=macOS' \
-  test
+swift test
 ```
 
-If the project uses a workspace or package-only tests, replace the command with the checked-in CI command. CI is the source of truth for required build/test arguments.
+F0 has no app-level test bundle yet. The package test target verifies the public package boundary; CI will become the source of truth for the complete verification workflow in issue 03.
 
 ### 6.4 Swift Package Manager commands
 
@@ -167,6 +162,28 @@ For package-only development, use the package commands documented by the reposit
 swift package resolve
 swift build
 swift test
+```
+
+### 6.5 Format Swift sources
+
+The pinned Xcode toolchain provides `swift-format`. Check formatting before committing:
+
+```bash
+./Scripts/lint-format.sh
+```
+
+To apply formatting:
+
+```bash
+./Scripts/format.sh
+```
+
+### 6.6 Verify the scaffold
+
+Run the same local scaffold checks in one command:
+
+```bash
+./Scripts/verify.sh
 ```
 
 Do not use `swift run` to launch the macOS app unless the project explicitly supports that target; the native app target normally runs through Xcode/xcodebuild.
