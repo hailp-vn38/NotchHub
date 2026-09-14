@@ -772,7 +772,7 @@ At that point, a Xiaozhi adapter/module can be added as an edge integration with
 2. Module UI contributions use declarative, testable descriptors/snapshots rather than raw module-owned window references.
 3. Long-form `detail` content opens through a separate `DetailWindowCoordinator`; `detail` is not a Notch `SurfaceState`.
 
-These decisions must be captured in their corresponding ADR files during F0.
+These decisions are captured by ADR-0005, ADR-0003, and ADR-0002 respectively.
 
 ### Decisions still open
 

@@ -13,7 +13,9 @@
 
 This document defines the reproducible development environment and workflow for NotchHub.
 
-The goal is that a developer—or an AI coding agent operating under the repository instructions—can clone the project, build it, run unit/integration tests, launch the macOS app, inspect diagnostics, and perform the foundation quality checks without undocumented local steps.
+The goal is that a developer—or an AI coding agent operating under the repository instructions—can
+clone the project, build it, run the F0 pure-domain tests, and perform the foundation quality
+checks without undocumented local steps.
 
 NotchHub is a macOS application. UI/window/lifecycle behavior must be tested on macOS, not only in a generic CI environment. The foundation targets macOS 14+ and uses SwiftUI, AppKit, Swift Concurrency, Observation, Keychain, OSLog, and local IPC.
 
@@ -21,15 +23,16 @@ NotchHub is a macOS application. UI/window/lifecycle behavior must be tested on 
 
 ## 2. Development scope
 
-This setup covers:
+This setup covers the implemented F0 foundation:
 
 - Swift/Xcode development for the NotchHub macOS app.
 - Swift Package Manager package development.
-- Unit and package integration tests.
-- Local IPC and `notchctl` development.
-- macOS UI/lifecycle/manual QA.
-- Instruments performance profiling.
+- Pure-domain unit tests.
+- The placeholder macOS application-host build.
 - Documentation/ADR workflow.
+
+Local IPC, `notchctl`, lifecycle QA, and performance profiling are later-phase work, not F0 setup
+requirements.
 
 ## 3. Required environment
 
@@ -49,20 +52,21 @@ Minimum development environment:
 
 ### 3.3 Toolchain
 
-- Xcode with Swift 6 support.
+- Xcode 26.0.1, pinned in [`.xcode-version`](../../.xcode-version) and selected by the matching
+  pull-request workflow. It provides Swift 6 and Swift Package Manager.
 - Swift Package Manager (bundled with Swift/Xcode).
 - Git.
 - Terminal shell available through macOS.
 - Apple Developer account only when signing, entitlements, device testing, or notarization requires it.
 
-The exact Xcode version will be pinned in the repository once the initial scaffold is created. Do not assume that the latest Xcode is always the supported version; check the project configuration and CI workflow.
+The F0 scaffold must pin one Xcode version and use the matching CI image. Do not assume that the latest Xcode is supported; the pin and CI workflow are the source of truth.
 
 ### 3.4 Optional tools
 
 Use only tools declared by repository policy:
 
-- SwiftFormat.
-- SwiftLint.
+- One checked-in formatter selected by the F0 scaffold.
+- Optional SwiftLint only after a small checked-in rule set is adopted.
 - Markdown link checker.
 - Secret scanner.
 - Instruments/Xcode Organizer.
@@ -96,30 +100,16 @@ Do not begin work with uncommitted changes from another task unless they are doc
 
 ```text
 NotchHub/
-├── README.md
-├── LICENSE
-├── CONTRIBUTING.md
-├── SECURITY.md
 ├── Package.swift
 ├── NotchHub.xcodeproj/
-├── Apps/
-│   └── NotchHubApp/
+├── Apps/NotchHubApp/
 ├── Packages/
-│   ├── NotchDomain/
-│   ├── NotchCore/
-│   ├── NotchSurface/
-│   ├── NotchUI/
-│   ├── NotchActions/
-│   └── NotchIPC/
-├── Modules/
-│   └── DemoModule/
-├── Tools/
-│   └── notchctl/
 ├── Tests/
+├── Scripts/
 └── docs/
 ```
 
-If implementation structure changes, update this document and the architecture overview in the same pull request.
+`Modules/`, `Tools/notchctl`, a menu-bar shell, and a Notch surface are not part of the F0 checkout.
 
 ---
 
@@ -135,7 +125,7 @@ Select the `NotchHub` scheme and a macOS destination.
 
 ### 6.2 Command-line build
 
-The exact scheme/project names must match the repository. Intended command shape:
+The checked-in app host uses the `NotchHub` scheme:
 
 ```bash
 xcodebuild \
@@ -146,18 +136,13 @@ xcodebuild \
   build
 ```
 
-### 6.3 Run tests
+### 6.3 Run package tests
 
 ```bash
-xcodebuild \
-  -project NotchHub.xcodeproj \
-  -scheme NotchHub \
-  -configuration Debug \
-  -destination 'platform=macOS' \
-  test
+swift test
 ```
 
-If the project uses a workspace or package-only tests, replace the command with the checked-in CI command. CI is the source of truth for required build/test arguments.
+F0 has no app-level test bundle yet. The package test target verifies the public package boundary; pull-request CI runs the complete repository verification workflow.
 
 ### 6.4 Swift Package Manager commands
 
@@ -169,30 +154,55 @@ swift build
 swift test
 ```
 
+### 6.5 Format Swift sources
+
+The pinned Xcode toolchain provides `swift-format`. Check formatting before committing:
+
+```bash
+./Scripts/lint-format.sh
+```
+
+To apply formatting:
+
+```bash
+./Scripts/format.sh
+```
+
+### 6.6 Verify the F0 foundation
+
+Run the same composite verification seam that pull-request CI runs. Set `VERIFY_BASE_REF` to the commit, branch, or remote-tracking branch that your work will merge into; the secret check scans only content changed from that base.
+
+```bash
+VERIFY_BASE_REF=main ./Scripts/verify.sh
+```
+
+The command checks the pinned Xcode version, Swift formatting, the pure-domain import boundary,
+package dependency resolution/build/tests, the placeholder app build, local Markdown links, and
+secret-like values added in changed files. CI invokes this exact command with the pull-request base
+commit as `VERIFY_BASE_REF`. See the recorded [F0 evidence](../quality/f0-evidence.md) for the
+passing gate and its scope.
+
 Do not use `swift run` to launch the macOS app unless the project explicitly supports that target; the native app target normally runs through Xcode/xcodebuild.
 
 ---
 
 ## 7. Initial app run
 
-On first run, the expected foundation behavior is:
+On first run, the expected F0 behavior is:
 
-- The app starts as a menu-bar utility.
-- The menu bar exposes Settings, Diagnostics, surface toggle, runtime restart, and quit.
-- No sensitive permission prompt appears merely because the app launched.
-- The Notch surface uses deterministic placeholder/Demo content.
-- Diagnostics can show app version/build, surface state, runtime status, and IPC readiness where implemented.
+- The app opens a normal window titled `NotchHub`.
+- The window shows the `Foundation scaffold` placeholder.
+- No menu-bar utility, Notch surface, Settings, Diagnostics, permission request, module registration,
+  or IPC listener is present.
 
 ### First-run checks
 
-1. Open the menu bar item.
-2. Open Settings.
-3. Open Diagnostics.
-4. Toggle the surface.
-5. Test Escape/click-outside/timeout where implemented.
-6. Confirm the app can quit and relaunch.
-7. Confirm no unexpected permission prompt appears.
-8. Check logs for startup failures without exposing secrets.
+1. Launch the `NotchHub` scheme from Xcode.
+2. Confirm the `Foundation scaffold` placeholder appears.
+3. Quit and relaunch the application.
+
+Menu-bar, Notch-surface, lifecycle, permission, and IPC checks begin in their respective later
+phases.
 
 ---
 

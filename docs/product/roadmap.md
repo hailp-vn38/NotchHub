@@ -93,6 +93,9 @@ The first implementation supports the built-in MacBook display only. Multi-displ
 
 Create a codebase with explicit boundaries, repeatable builds, baseline documentation, and decisions that prevent early architectural drift.
 
+**Status:** Complete. The local repository checks and green pull-request workflow are recorded in
+[F0 evidence](../quality/f0-evidence.md). F1 has not started.
+
 ### Scope
 
 - Create Git repository and base branch/PR policy.

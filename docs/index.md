@@ -7,7 +7,9 @@
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
-**Current execution phase:** F0 — Not started. This directory currently contains planning documents only; the Git repository metadata, Swift/Xcode scaffold, CI, tests, and ADR files required by the F0 exit gate are not yet present.
+**Current execution phase:** F0 — Bootstrap complete. The documented
+[F0 evidence](quality/f0-evidence.md) records passing local and pull-request verification seams.
+F1 has not started.
 
 ---
 
@@ -122,11 +124,11 @@ docs/
 ├── quality/
 │   ├── testing-strategy.md
 │   ├── manual-qa.md                      # F2/F10
-│   └── performance-test-plan.md          # F0/F10; may link performance.md
+│   └── performance-test-plan.md          # F10; may link performance.md
 │
 ├── operations/
 │   ├── logging-diagnostics.md             # F9
-│   ├── privacy.md                         # F0/beta
+│   ├── privacy.md                         # F4/beta
 │   └── release.md                         # pre-beta/release
 │
 ├── development/
@@ -192,6 +194,7 @@ Create a buildable repository with a shared vocabulary, product boundary, archit
 | `docs/architecture/performance.md` | Required | Initial CPU/RAM/energy/event/buffer budgets |
 | `docs/security/threat-model.md` | Required | Assets, actors, trust boundaries, baseline threats |
 | `docs/quality/testing-strategy.md` | Required | Test pyramid, test doubles, lifecycle/security/performance tests |
+| `docs/quality/f0-evidence.md` | Required | Recorded F0 composite verification evidence and its limits |
 | `docs/development/setup.md` | Required | Clone/build/test prerequisites and commands |
 | `docs/development/contributing.md` | Required | Branch/PR/code/review rules |
 | `docs/development/agent-instructions.md` | Required | AI coding-agent boundaries and verification rules |
@@ -205,6 +208,8 @@ Create a buildable repository with a shared vocabulary, product boundary, archit
 - Links between core documents resolve.
 - Product scope is consistent everywhere.
 - ADRs record minimum OS, SwiftUI/AppKit, static modules, local IPC, event/action contracts, permission coordinator, performance budgets, public API policy, and docs-as-code.
+- The composite verification seam and a green CI invocation are recorded in
+  [F0 evidence](quality/f0-evidence.md) before F0 is closed.
 
 ---
 
@@ -801,8 +806,9 @@ The documentation set is ready for real module work only when:
 ## 11. Documentation completion checklist by phase
 
 ```text
-F0  [ ] product docs       [ ] architecture docs       [ ] ADRs
-    [ ] security baseline  [ ] quality baseline        [ ] setup/contributing
+F0  [x] product docs       [x] architecture docs       [x] ADRs
+    [x] security baseline  [x] quality baseline        [x] setup/contributing
+    [x] recorded green pull-request verification run
 
 F1  [ ] lifecycle          [ ] app shell requirements  [ ] startup/quit tests
 
@@ -900,7 +906,6 @@ This order minimizes rework: product boundaries come before architecture, contra
 
 ### Still to create when relevant
 
-- Initial architecture ADR files.
 - `docs/design/design-system.md`.
 - `docs/design/notch-interaction.md`.
 - `docs/design/settings-information-architecture.md`.
