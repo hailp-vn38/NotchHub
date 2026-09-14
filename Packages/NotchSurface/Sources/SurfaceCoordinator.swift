@@ -24,6 +24,8 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
     public private(set) var snapshot = SurfaceSnapshot()
     private let panel: any SurfacePanelPresenting
     private let input: (any SurfaceInputMonitoring)?
+    private let detailInput: (any DetailNavigationInput)?
+    private let detailNavigator: (any DetailNavigating)?
     private let scheduler: any SurfaceInteractionScheduling
     private let configuration: SurfaceInteractionConfiguration
     private var hoverTask: (any SurfaceInteractionTask)?
@@ -36,14 +38,20 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
         panel: any SurfacePanelPresenting,
         scheduler: (any SurfaceInteractionScheduling)? = nil,
         configuration: SurfaceInteractionConfiguration = .init(),
-        input: (any SurfaceInputMonitoring)? = nil
+        input: (any SurfaceInputMonitoring)? = nil,
+        detailNavigator: (any DetailNavigating)? = nil
     ) {
         self.panel = panel
         self.input = input ?? (panel as? any SurfaceInputMonitoring)
+        self.detailInput = self.input as? any DetailNavigationInput
+        self.detailNavigator = detailNavigator
         self.scheduler = scheduler ?? MainQueueSurfaceScheduler()
         self.configuration = configuration
         self.input?.setInteractionHandler { [weak self] intent in
             _ = self?.handle(intent)
+        }
+        self.detailInput?.setDetailNavigationHandler { [weak detailNavigator] request in
+            _ = detailNavigator?.open(request)
         }
     }
 

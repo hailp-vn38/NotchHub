@@ -62,7 +62,11 @@ struct NotchHubApp: App {
 @MainActor
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
-    private lazy var notchSurface = SurfaceCoordinator(panel: NotchPanelController())
+    private lazy var detailWindow = DetailWindowCoordinator()
+    private lazy var notchSurface = SurfaceCoordinator(
+        panel: NotchPanelController(),
+        detailNavigator: detailWindow
+    )
     private lazy var coordinator = AppCoordinator(
         scenePresenter: self,
         lifecycleObserver: lifecycleObserver,

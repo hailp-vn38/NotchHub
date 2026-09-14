@@ -191,6 +191,44 @@ func receivesInputThroughMonitorSeam() {
     #expect(coordinator.snapshot.state == .expanded)
 }
 
+@Test("Expanded placeholder routes only its explicit detail action without changing surface state")
+@MainActor
+func routesExplicitDetailNavigationOutsideSurfaceState() {
+    let panel = RecordingSurfacePanel()
+    let input = RecordingSurfaceInput()
+    let detailWindow = RecordingDetailWindow()
+    let detail = DetailWindowCoordinator(window: detailWindow)
+    let coordinator = SurfaceCoordinator(panel: panel, input: input, detailNavigator: detail)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.clicked)
+    input.sendDetail(.placeholder)
+
+    #expect(detailWindow.presentedRequests == [.placeholder])
+    #expect(coordinator.snapshot.state == .expanded)
+    detailWindow.simulateUserClose()
+    #expect(coordinator.snapshot.state == .expanded)
+    #expect(SurfaceState.allCases.contains(coordinator.snapshot.state))
+}
+
+@Test("Detail coordinator reuses the matching window and closes independently")
+@MainActor
+func reusesAndClosesDetailWindowIndependently() {
+    let window = RecordingDetailWindow()
+    let coordinator = DetailWindowCoordinator(window: window)
+
+    #expect(coordinator.open(.placeholder) == .opened)
+    #expect(coordinator.open(.placeholder) == .focused)
+    #expect(window.presentedRequests == [.placeholder])
+    #expect(window.focusCount == 2)
+    window.simulateUserClose()
+    #expect(coordinator.open(.placeholder) == .opened)
+    #expect(window.presentedRequests == [.placeholder, .placeholder])
+    #expect(coordinator.close() == .closed)
+    #expect(coordinator.close() == .alreadyClosed)
+    #expect(window.closeCount == 1)
+}
+
 @Test("App shell requests independent placeholder scenes")
 @MainActor
 func requestsIndependentPlaceholderScenes() {
@@ -439,15 +477,52 @@ private final class RecordingSurfaceTask: SurfaceInteractionTask {
 }
 
 @MainActor
-private final class RecordingSurfaceInput: SurfaceInputMonitoring {
+private final class RecordingSurfaceInput: SurfaceInputMonitoring, DetailNavigationInput {
     private var handler: (@MainActor (SurfaceIntent) -> Void)?
+    private var detailHandler: (@MainActor (DetailNavigationRequest) -> Void)?
 
     func setInteractionHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
         self.handler = handler
     }
 
+    func setDetailNavigationHandler(_ handler: @escaping @MainActor (DetailNavigationRequest) -> Void) {
+        detailHandler = handler
+    }
+
     func send(_ intent: SurfaceIntent) {
         handler?(intent)
+    }
+
+    func sendDetail(_ request: DetailNavigationRequest) {
+        detailHandler?(request)
+    }
+}
+
+@MainActor
+private final class RecordingDetailWindow: DetailWindowPresenting {
+    private(set) var presentedRequests: [DetailNavigationRequest] = []
+    private(set) var focusCount = 0
+    private(set) var closeCount = 0
+    private var closeHandler: (@MainActor @Sendable () -> Void)?
+
+    func present(_ request: DetailNavigationRequest) {
+        presentedRequests.append(request)
+    }
+
+    func focus() {
+        focusCount += 1
+    }
+
+    func close() {
+        closeCount += 1
+    }
+
+    func setCloseHandler(_ handler: @escaping @MainActor @Sendable () -> Void) {
+        closeHandler = handler
+    }
+
+    func simulateUserClose() {
+        closeHandler?()
     }
 }
 

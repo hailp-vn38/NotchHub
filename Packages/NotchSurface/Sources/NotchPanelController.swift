@@ -3,9 +3,10 @@ import SwiftUI
 
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
-public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring {
+public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring, DetailNavigationInput {
     private var panel: NSPanel?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
+    private var detailNavigationHandler: (@MainActor (DetailNavigationRequest) -> Void)?
     private var eventMonitors: [Any] = []
     private weak var priorKeyWindow: NSWindow?
 
@@ -32,6 +33,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     public func setInteractionHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
         interactionHandler = handler
+    }
+
+    public func setDetailNavigationHandler(_ handler: @escaping @MainActor (DetailNavigationRequest) -> Void) {
+        detailNavigationHandler = handler
     }
 
     private func showCollapsed() -> Bool {
@@ -76,6 +81,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         panel.contentView = NSHostingView(
             rootView: ExpandedNotchSurfaceView { [weak self] intent in
                 self?.interactionHandler?(intent)
+            } openDetail: { [weak self] in
+                self?.detailNavigationHandler?(.placeholder)
             })
         installExpandedEventMonitors()
         if focus {
@@ -196,6 +203,7 @@ private struct CollapsedNotchSurfaceView: View {
 
 private struct ExpandedNotchSurfaceView: View {
     let send: (SurfaceIntent) -> Void
+    let openDetail: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -204,6 +212,7 @@ private struct ExpandedNotchSurfaceView: View {
             Text("Surface ready")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Button("View detail", action: openDetail)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
