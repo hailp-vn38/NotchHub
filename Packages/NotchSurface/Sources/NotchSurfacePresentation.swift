@@ -133,6 +133,7 @@ struct NotchSurfaceRootView: View {
     @Bindable var model: NotchSurfacePresentationModel
     let send: (SurfaceIntent) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AccessibilityFocusState private var isAccessibilityFocused: Bool
 
     private var isExpanded: Bool { model.isExpandedGeometry }
 
@@ -190,6 +191,19 @@ struct NotchSurfaceRootView: View {
         .shadow(color: isExpanded || model.isHovering ? .black.opacity(0.7) : .clear, radius: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityLabel("NotchHub \(accessibilityState) surface")
+        .accessibilityValue(Text(accessibilityState.capitalized))
+        .accessibilityHint(
+            Text(
+                isExpanded
+                    ? "Use Tab to move through controls. Press Escape to collapse." : "Not interactive while collapsed."
+            )
+        )
+        .accessibilityHidden(!isExpanded)
+        .accessibilityElement(children: isExpanded ? .contain : .ignore)
+        .accessibilityFocused($isAccessibilityFocused)
+        .onChange(of: isAccessibilityFocused) { _, focused in
+            send(focused ? .accessibilityInteractionBegan : .accessibilityInteractionEnded)
+        }
         .animation(surfaceAnimation, value: model.visibleSurfaceSize)
     }
 

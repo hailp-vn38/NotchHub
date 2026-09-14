@@ -43,6 +43,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     private var expandedOrigin: SurfaceExpansionOrigin?
     private var interactionSessionGeneration: UInt64 = 0
     private var interactionHolds: [UUID: SurfaceInteractionHoldKind] = [:]
+    private var accessibilityInteractionHold: SurfaceInteractionHoldLease?
     private var recoveryTask: (any SurfaceInteractionTask)?
     private var recoveryGeneration = 0
     private var sessionResumeState: SurfaceState?
@@ -88,6 +89,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         cancelAutoCollapse()
         cancelRecovery()
         interactionHolds.removeAll()
+        accessibilityInteractionHold = nil
         _ = panel.apply(.hide)
         snapshot.state = .hidden
         snapshot.isInteractionPaused = false
@@ -133,6 +135,13 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
             scheduleCloseForCurrentOrigin()
         case .interaction where snapshot.state == .expanded:
             if !isHoveringExpanded { scheduleCloseForCurrentOrigin() }
+        case .accessibilityInteractionBegan where snapshot.state == .expanded:
+            if accessibilityInteractionHold == nil {
+                accessibilityInteractionHold = acquireInteractionHold(.accessibilityInteraction)
+            }
+        case .accessibilityInteractionEnded:
+            accessibilityInteractionHold?.release()
+            accessibilityInteractionHold = nil
         case .autoCollapseElapsed where snapshot.state == .expanded:
             guard interactionHolds.isEmpty, !isHoveringExpanded else { return snapshot.state }
             guard let state = apply(intent) else { return snapshot.state }
@@ -212,12 +221,14 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         if transition.state == .expanded, !wasExpanded {
             interactionSessionGeneration &+= 1
             interactionHolds.removeAll()
-            expandedOrigin = switch intent {
-            case .hoverDelayElapsed: .hover
-            default: .deliberate
-            }
+            expandedOrigin =
+                switch intent {
+                case .hoverDelayElapsed: .hover
+                default: .deliberate
+                }
         } else if wasExpanded, transition.state != .expanded {
             invalidateInteractionSession()
+            (panel as? any SurfaceFocusRestoring)?.restoreFocusAfterSurfaceInteraction()
         }
         return snapshot.state
     }
@@ -262,7 +273,11 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         if state != .collapsed { cancelHoverExpansion() }
         if state == .expanded {
             if intent != .hoverDelayElapsed { scheduleAutoCollapse() }
-        } else if state == .compact { scheduleAutoCollapse() } else { cancelAutoCollapse() }
+        } else if state == .compact {
+            scheduleAutoCollapse()
+        } else {
+            cancelAutoCollapse()
+        }
         if intent == .hide || intent == .suppressed { cancelHoverExpansion() }
     }
 
@@ -406,6 +421,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     private func invalidateInteractionSession() {
         interactionSessionGeneration &+= 1
         interactionHolds.removeAll()
+        accessibilityInteractionHold = nil
         expandedOrigin = nil
         isHoveringExpanded = false
         cancelAutoCollapse()
@@ -498,6 +514,7 @@ public enum SurfaceIntent: Equatable, Sendable {
     case escapePressed, clickedOutside, autoCollapseElapsed, suppressed, showCompact
     case fullScreenPolicyEngaged, fullScreenPolicyCleared
     case willSleep, didWake, sessionLocked, sessionUnlocked, displayInvalidated
+    case accessibilityInteractionBegan, accessibilityInteractionEnded
 }
 
 public enum SurfacePanelEffect: Equatable, Sendable {
@@ -512,6 +529,11 @@ public enum SurfacePanelEffect: Equatable, Sendable {
 @MainActor
 public protocol SurfacePanelPresenting: AnyObject {
     func apply(_ effect: SurfacePanelEffect) -> Bool
+}
+
+@MainActor
+public protocol SurfaceFocusRestoring: AnyObject {
+    func restoreFocusAfterSurfaceInteraction()
 }
 
 @MainActor

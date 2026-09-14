@@ -4,7 +4,8 @@ import SwiftUI
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
 public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring,
-    SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling, SurfaceExpansionAdmitting
+    SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling,
+    SurfaceExpansionAdmitting, SurfaceFocusRestoring
 {
     private var panel: NSPanel?
     private let presentationModel = NotchSurfacePresentationModel()
@@ -59,6 +60,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             nativeMouseCaptureDepth = 0
             panel?.ignoresMouseEvents = true
             panel?.orderOut(nil)
+            restoreFocusAfterSurfaceInteraction()
             return true
         }
     }
@@ -108,6 +110,15 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         guard nativeMouseCaptureDepth > 0 else { return }
         nativeMouseCaptureDepth -= 1
         refreshNativeHitTesting()
+    }
+
+    public func restoreFocusAfterSurfaceInteraction() {
+        guard let priorKeyWindow else {
+            panel?.resignKey()
+            return
+        }
+        priorKeyWindow.makeKeyAndOrderFront(nil)
+        self.priorKeyWindow = nil
     }
 
     public func toggleDebugOverlay() -> Bool {

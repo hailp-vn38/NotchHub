@@ -482,6 +482,42 @@ func cancelsHoverAndCollapsesThroughSafeExits() {
         ])
 }
 
+@Test("Focused expansion restores prior focus on collapse")
+@MainActor
+func focusedExpansionRestoresPriorFocusOnCollapse() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(coordinator.handle(.escapePressed) == .collapsed)
+    #expect(panel.focusRestorationCount == 1)
+}
+
+@Test("Surface accessibility holds defer close and stale lifecycle events cannot retain them")
+@MainActor
+func accessibilityHoldFollowsExpandedSessionLifecycle() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverDelayElapsed)
+    #expect(coordinator.handle(.accessibilityInteractionBegan) == .expanded)
+    _ = coordinator.handle(.expandedHoverExited)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+
+    _ = coordinator.handle(.accessibilityInteractionEnded)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+
+    _ = coordinator.handle(.displayInvalidated)
+    _ = coordinator.handle(.accessibilityInteractionEnded)
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
 @Test("Surface interaction resets but does not persist the F2 auto-collapse default")
 @MainActor
 func resetsAutoCollapseAfterExpandedInteraction() {
@@ -854,13 +890,14 @@ private final class RecordingSurfaceLifecycleController: NotchSurfaceLifecycleCo
 
 @MainActor
 private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeometryRevalidating,
-    SurfaceDebugOverlayPresenting
+    SurfaceDebugOverlayPresenting, SurfaceFocusRestoring
 {
     private let succeeds: Bool
     private var revalidationSucceeds: Bool
     private(set) var effects: [SurfacePanelEffect] = []
     private(set) var revalidationCount = 0
     private(set) var debugSnapshots: [SurfaceSnapshot] = []
+    private(set) var focusRestorationCount = 0
     private var displayChangeHandler: (@MainActor () -> Void)?
 
     init(succeeds: Bool = true, revalidationSucceeds: Bool = true) {
@@ -884,6 +921,10 @@ private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeomet
 
     func setDebugSnapshot(_ snapshot: SurfaceSnapshot) {
         debugSnapshots.append(snapshot)
+    }
+
+    func restoreFocusAfterSurfaceInteraction() {
+        focusRestorationCount += 1
     }
 
     func setRevalidationSucceeds(_ succeeds: Bool) {
