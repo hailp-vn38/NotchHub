@@ -1,6 +1,6 @@
 # F1 Evidence
 
-**Status:** Template — implementation not started
+**Status:** In progress — ticket 02 automated evidence recorded; remaining F1 work and manual macOS verification are pending
 **Phase:** F1 — App shell and lifecycle
 **Owner:** Platform / Quality
 **Recorded:** —
@@ -14,8 +14,8 @@ surface recovery, persistent Settings, ModuleRuntime, IPC, or operational Diagno
 
 | Gate | Command/test target | Result | Evidence link or commit |
 |---|---|---|---|
-| F1 coordinator/menu tests | To be defined with implementation | Pending | — |
-| Package/app build | `./Scripts/verify.sh` | Pending | — |
+| F1 coordinator/menu tests | `swift test` | Passed | `849d33c`; 6 Swift Testing tests, including independent placeholder scene requests and isolation after a scene-presentation failure |
+| Package/app build | `./Scripts/verify.sh` | Passed | `849d33c`; includes format, boundary, package/app build, tests, Markdown links, and changed-file secret checks |
 
 ## Manual macOS verification
 
