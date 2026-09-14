@@ -7,9 +7,9 @@
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
-**Current execution phase:** F0 — Bootstrap in verification. The documented
-[F0 evidence](quality/f0-evidence.md) records a passing local composite seam; a green
-pull-request workflow run is still required to close F0. F1 has not started.
+**Current execution phase:** F0 — Bootstrap complete. The documented
+[F0 evidence](quality/f0-evidence.md) records passing local and pull-request verification seams.
+F1 has not started.
 
 ---
 
@@ -808,7 +808,7 @@ The documentation set is ready for real module work only when:
 ```text
 F0  [x] product docs       [x] architecture docs       [x] ADRs
     [x] security baseline  [x] quality baseline        [x] setup/contributing
-    [ ] recorded green pull-request verification run
+    [x] recorded green pull-request verification run
 
 F1  [ ] lifecycle          [ ] app shell requirements  [ ] startup/quit tests
 

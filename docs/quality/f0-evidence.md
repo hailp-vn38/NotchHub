@@ -1,6 +1,6 @@
 # F0 Evidence
 
-**Status:** Local checks passed; pull-request CI run pending
+**Status:** Passed
 **Phase:** F0 — Bootstrap and architecture
 **Recorded:** 2026-09-14
 **Scope:** Repository verification seam on the F0 foundation checkout
@@ -8,8 +8,8 @@
 ## Local verification result
 
 The local composite command below completed with exit status 0 on 2026-09-14 with Xcode 26.0.1,
-matching [`.xcode-version`](../../.xcode-version). It is necessary evidence for F0, but it does
-not close the F0 gate until the configured pull-request workflow has a recorded green run.
+matching [`.xcode-version`](../../.xcode-version). The matching pull-request workflow run below
+is green, so the F0 gate is closed.
 
 ```bash
 VERIFY_BASE_REF=HEAD^ ./Scripts/verify.sh
@@ -41,8 +41,11 @@ the recorded clean-build evidence; it is independent of the developer worktree.
 
 [`pull-request-verification.yml`](../../.github/workflows/pull-request-verification.yml) runs the
 same `./Scripts/verify.sh` seam for every pull request, after selecting Xcode 26.0.1 and setting
-`VERIFY_BASE_REF` to the pull-request base SHA. A green pull-request run (with its URL or run ID)
-must be added here before F0 is closed. No external GitHub run has been observed for this record.
+`VERIFY_BASE_REF` to the pull-request base SHA.
+
+- Pull request: [#1](https://github.com/hailp-vn38/NotchHub/pull/1)
+- Workflow run: [34806909974](https://github.com/hailp-vn38/NotchHub/actions/runs/34806909974)
+- Result: `verify` passed on 2026-09-14 in 47 seconds.
 
 ## F0 boundary retained
 
