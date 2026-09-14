@@ -265,6 +265,7 @@ Notes:
 
 - Collapsed content is minimal/quiet.
 - Hit-test region is limited; unrelated menu-bar items remain clickable.
+- Transparent corners and shadow envelope click through, including after native mouse events have been ignored and then re-enabled by pointer movement.
 - No full-screen transparent overlay intercepts clicks.
 - No continuous animation or high CPU while idle.
 
@@ -278,6 +279,7 @@ Notes:
 - Incidental pointer movement does not cause excessive expansion.
 - Expansion is smooth and bounded.
 - Hover can be disabled in Settings; menu/shortcut still works.
+- Hover-origin close observes the 100 ms grace, re-entry cancellation, and active interaction holds.
 
 ## QA-SUR-003 — Click expansion
 

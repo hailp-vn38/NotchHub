@@ -194,6 +194,9 @@ Required cases:
 - Recovery success/failure convergence.
 - User disable behavior.
 - Detail navigation requires explicit user action, opens a separate view/window, and does not add a `detail` state to the Notch surface state machine.
+- Hover-origin exit closes only after the 100 ms grace, cancels on re-entry, and is held by active keyboard/popover/drag/confirmation/accessibility leases.
+- Expanded admission distinguishes insufficient safe geometry from invalid topology/native panel failure; only the latter enters recovery.
+- `expandedAvailability` expires on topology invalidation and is refreshed by topology revision; historical admission rejection is asserted through bounded Diagnostics events.
 - Duplicate events and idempotent commands.
 
 Use a fake clock and fake panel controller. Do not create a real `NSPanel` for these tests.

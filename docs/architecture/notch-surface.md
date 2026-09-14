@@ -67,7 +67,7 @@ NotchSurface/
 ├── Interaction/
 │   ├── SurfaceStateMachine.swift       # The state machine defined in §5
 │   ├── SurfaceCoordinator.swift        # Translates intents/policy into state-machine events
-│   ├── PointerMonitor.swift            # Hover detection over the trigger region
+│   ├── SurfacePointerMonitor.swift     # Native shape hit-testing and hover detection
 │   ├── ClickOutsideMonitor.swift       # Detects clicks outside the expanded panel
 │   ├── AutoCollapseController.swift    # Timeout-driven auto-collapse
 │   └── GlobalHotkeyService.swift       # Maps a registered shortcut to a toggle intent
@@ -90,7 +90,7 @@ NotchSurface/
 | `hidden` | No panel visible at all | 0×0 |
 | `collapsed` | Minimal/no visible content around the notch | Small, near-notch size |
 | `compact` | Brief 1–3 line status, auto-dismissing | Small width, short height |
-| `expanded` | User-triggered quick interaction | Moderate size, seconds-long interaction |
+| `expanded` | User-triggered quick interaction | Fixed 640 × 190 pt visible surface in a 640 × 210 pt host |
 | `suppressed` | Temporarily forced non-visible due to policy (e.g., full-screen app, screen sharing) | 0×0 or collapsed-equivalent |
 | `recovering` | Transient state after an invalidated panel/screen change, converging back to a stable state | N/A (transitional only) |
 
@@ -125,6 +125,7 @@ stateDiagram-v2
 - **User interaction takes priority over auto-collapse.** If the user is actively hovering/interacting with an `expanded` panel, the `AutoCollapseController`'s timeout must not fire until interaction stops.
 - **`suppressed` is policy-driven, not module-driven.** Only `SurfaceCoordinator`, informed by system-level signals (full-screen app detection, screen-sharing detection if available, or explicit user setting), may trigger `suppressed`. A module cannot request suppression or force visibility during suppression.
 - **`recovering` must converge.** The state machine must not remain in `recovering` indefinitely; it has a bounded number of recovery attempts before falling back to `hidden` and reporting a diagnostics warning.
+- **Expanded admission is capability, not recovery.** A valid topology that cannot contain the fixed expanded host rejects expansion without entering `recovering`; only invalid topology or native panel failure begins recovery.
 - **Detail views require explicit navigation.** No automatic event or module contribution may open a detail window. A user action such as tapping "View full transcript" sends a typed detail-navigation request to `DetailWindowCoordinator`; it does not mutate `SurfaceState` to a detail state.
 
 ### 5.4 State machine interface
@@ -199,6 +200,7 @@ public struct NotchGeometry: Sendable {
 - On a MacBook with a physical notch, the panel is anchored to align with `notchFrame`, with `collapsed`/`compact`/`expanded` sizes computed relative to it.
 - On a MacBook without a physical notch (or in the no-notch fallback case), `fallbackTopCenterFrame` provides a safe, centered position near the top of the screen, sized similarly to the notch-anchored layout for visual consistency.
 - Geometry recalculation must occur on every relevant `NSApplication.didChangeScreenParametersNotification` and must never leave the panel positioned off-screen or overlapping the menu bar's own content.
+- Expanded admission validates that the built-in display or top-center fallback can contain a `640 × 210 pt` host. The `640 × 190 pt` visible surface is not scaled or cropped to fit; unavailable capacity remains a collapsed/compact capability result.
 
 ### 7.3 Window level and collection behavior
 
@@ -214,8 +216,9 @@ public struct NotchGeometry: Sendable {
 
 ### 8.1 Hover
 
-- `PointerMonitor` observes mouse position relative to a defined trigger region (approximately the collapsed/compact panel bounds plus a small margin).
-- F2 uses a 150 ms hover delay and an 8 pt trigger margin around the visible collapsed surface. Both values are dependency-injected test defaults, not persisted settings.
+- `SurfacePointerMonitor` observes local and global mouse movement against the visible shape in screen coordinates; it does not rely solely on SwiftUI hover callbacks.
+- F2 uses a 300 ms hover delay and an 8 pt trigger margin around the visible collapsed surface. Both values are dependency-injected test defaults, not persisted settings.
+- A hover-origin expansion gets a 100 ms close grace only after the pointer exits and no Surface interaction hold is active. Keyboard focus, popovers, drag/control tracking, confirmation, and assistive interaction all hold the surface open; ending the final hold restarts the grace if the pointer remains outside.
 - F3/F4 may expose validated hover settings; until then, the menu-bar toggle remains available.
 
 ### 8.2 Click
@@ -240,6 +243,7 @@ public struct NotchGeometry: Sendable {
 
 ### 8.6 Click-through when collapsed
 
+- `NotchPanelController` owns native click-through. It sets `NSPanel.ignoresMouseEvents` whenever the pointer lies outside the visible `NotchSurfaceShape`, including transparent corners and shadow envelope, except during an active native mouse-capture lease. It recalculates synchronously after geometry, state, or capture changes.
 - While `collapsed` (and especially `hidden`), the panel's hit-testable region must be as small as the visible indicator itself (or zero, if nothing is rendered).
 - The panel must never install a full-screen-sized transparent click-catching layer merely to detect hover; hover/hit-testing must be scoped to the actual visible/trigger bounds, per [Requirements FR-SUR-007](../product/requirements.md#52-notch-surface-and-windowing).
 

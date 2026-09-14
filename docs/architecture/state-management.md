@@ -80,7 +80,7 @@ The UI is the final consumer. It is not the event router, permission owner, proc
 
 | Store | Owner/concurrency | Holds | Does not hold |
 |---|---|---|---|
-| `SurfaceStore` | `@MainActor` or surface coordinator | `SurfaceState`, selected presentation, suppression reason, transition metadata | Raw events, module protocol state, window API implementation |
+| `SurfaceStore` | `@MainActor` or surface coordinator | `SurfaceState`, selected presentation, suppression reason, transition metadata, current expanded-admission capability | Raw events, module protocol state, window API implementation |
 | `SettingsStore` | Storage actor/service | Typed `AppSettings`, schema/migration state, validation errors | Secrets, live UI animation state |
 | `RuntimeStore` | `ModuleRuntime` actor | Module lifecycle/health/enabled status | Module-specific view details |
 | `PermissionStore` | Permission coordinator actor/main-facing projection | Current capability statuses and last refresh | Permission request implementation details in views |
@@ -209,7 +209,7 @@ Every long-lived `Task`, timer, observer, subscription, socket, and stream has a
 ModuleRuntime owns module task group
 Module owns its module subscriptions/tasks
 Event adapter owns connection/retry tasks
-SurfaceCoordinator owns hover/auto-collapse tasks
+SurfaceCoordinator owns the authoritative surface snapshot, interaction-session holds, hover/auto-collapse tasks, and expanded-admission capability
 DiagnosticsStore owns retention/flush tasks
 ```
 

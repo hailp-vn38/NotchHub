@@ -244,11 +244,11 @@ Hover is optional. F2 uses a non-persisted, dependency-injected default; F3/F4 m
 
 | Behavior | Requirement |
 |---|---|
-| Hover delay | 150 ms default to prevent accidental expansion |
+| Hover delay | 300 ms default to prevent accidental expansion |
 | Trigger margin | 8 pt around the visible collapsed surface |
 | Enter trigger | Start delay; do not expand instantly unless user selects immediate behavior |
 | Exit before delay | Cancel expansion |
-| Exit after expand | Start/continue auto-collapse timer according to activity policy |
+| Exit after hover-origin expand | Start 100 ms close grace only when no Surface interaction hold is active; otherwise defer until the final hold ends |
 | Disabled hover | Surface remains accessible through click, menu, and shortcut |
 
 ### 9.2 Click
@@ -267,6 +267,20 @@ Auto-collapse reduces obstruction and limits exposure of transient content.
 - Do not collapse while a confirmation dialog is active or keyboard focus is inside an active control.
 - Do not collapse solely because a high-rate status update arrives.
 - Use restrained animation or immediate transition when Reduced Motion is enabled.
+
+For an expansion opened by hover, pointer exit uses the shorter 100 ms grace instead of the
+3-second inactivity policy when no interaction hold is active. Click/shortcut-origin expansion
+continues to use the inactivity policy. Holds are scoped to the current expanded interaction
+session and include keyboard focus, popover, drag/control tracking, confirmation, and assistive
+interaction; leaving `expanded` invalidates all outstanding holds.
+
+### 9.3.1 Fixed expanded admission
+
+Expanded presentation has a fixed `640 × 190 pt` visible contract and requires a `640 × 210 pt`
+native host envelope. If current validated topology cannot contain that envelope, NotchHub does
+not scale/crop the surface and does not enter recovery: hover stays silent, while click or keyboard
+gets bounded accessible feedback and may offer the explicit Detail route. The availability is a
+current-topology capability, not a persistent failure state.
 
 ### 9.4 Keyboard shortcut
 

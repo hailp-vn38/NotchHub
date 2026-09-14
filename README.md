@@ -225,6 +225,7 @@ Documentation is part of the repository and must evolve with code. High-priority
 | 0010 | Support the built-in display first |
 | 0011 | Use public macOS APIs first; isolate any future privileged helper |
 | 0012 | Keep documentation as code in the repository |
+| 0013 | Admit the fixed expanded surface and own native shaped hit-testing |
 
 ## Security principles
 

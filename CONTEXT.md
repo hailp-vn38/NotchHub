@@ -12,6 +12,14 @@ _Avoid_: Notch app, panel host
 The short-form, native panel presented around the MacBook camera housing or its safe fallback geometry.
 _Avoid_: notch window, widget, dashboard
 
+**Surface interaction hold**:
+A scoped condition that keeps an expanded Notch surface open while an active user or assistive interaction still requires it.
+_Avoid_: hover exception, sticky panel
+
+**Surface interaction session**:
+The bounded expanded interaction lifetime to which Surface interaction holds belong; it ends on every authoritative departure from the expanded state.
+_Avoid_: panel lifetime, hover session
+
 **Detail view**:
 A separately opened, user-requested window or scene for long-form content. It is not a Notch surface state.
 _Avoid_: detail state, expanded detail

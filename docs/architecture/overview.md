@@ -746,6 +746,7 @@ The following ADRs are foundational:
 | 0010 | Support the built-in display first |
 | 0011 | Use public macOS APIs first; isolate any future privileged helper |
 | 0012 | Keep documentation as code in the repository |
+| 0013 | Admit the fixed expanded surface and own native shaped hit-testing |
 
 Any change to the package graph, panel ownership, module model, action safety model, IPC trust boundary, permission model, performance budget, or permanently excluded scope requires an ADR review.
 

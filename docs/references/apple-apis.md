@@ -243,7 +243,7 @@ NotchHub uses `NSScreen` for:
 - Local event monitor for click-outside behavior.
 - Global shortcut/event support if the selected implementation requires it.
 - Keyboard/Escape handling.
-- Pointer/hover detection within a narrowly scoped region.
+- Local/global pointer monitoring for native shape hit-testing and hover detection.
 
 Apple's [`NSEvent`](https://developer.apple.com/documentation/appkit/nsevent) API provides local and global event monitors. Global monitoring receives copies of events posted to other applications; key-related global events require Accessibility trust, so NotchHub must prefer narrowly scoped mouse monitoring and document any permission impact.
 
@@ -252,6 +252,7 @@ Apple's [`NSEvent`](https://developer.apple.com/documentation/appkit/nsevent) AP
 - Prefer the narrowest event mechanism that satisfies the feature.
 - Remove monitors when the owning surface/service stops.
 - Do not install a full-screen transparent event-catching layer.
+- Recalculate shape hit-testing synchronously after a panel geometry, state, or mouse-capture change; do not wait for a future pointer event to restore click-through.
 - Do not collect or log unrelated keystrokes/mouse events.
 - Never place raw event data in diagnostics.
 - Document whether the chosen shortcut approach requires Accessibility.

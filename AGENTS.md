@@ -1,3 +1,4 @@
+Trả lời bằng tiếng việt
 ## Agent skills
 
 ### Issue tracker
