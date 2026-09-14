@@ -109,6 +109,27 @@ struct NotchSurfaceShape: Shape {
     }
 }
 
+/// Native hit-testing for the visible surface, excluding its host and shadow envelope.
+public enum NotchSurfaceHitTesting {
+    public static func contains(
+        point: CGPoint,
+        hostSize: CGSize,
+        surfaceSize: CGSize,
+        topShoulderRadius: CGFloat,
+        bottomCornerRadius: CGFloat
+    ) -> Bool {
+        guard hostSize.width >= surfaceSize.width, hostSize.height >= surfaceSize.height else { return false }
+        let surfaceRect = CGRect(
+            x: (hostSize.width - surfaceSize.width) / 2, y: 0,
+            width: surfaceSize.width, height: surfaceSize.height)
+        guard surfaceRect.contains(point) else { return false }
+        return NotchSurfaceShape(
+            topShoulderRadius: topShoulderRadius,
+            bottomCornerRadius: bottomCornerRadius
+        ).path(in: surfaceRect).contains(point)
+    }
+}
+
 struct NotchSurfaceRootView: View {
     @Bindable var model: NotchSurfacePresentationModel
     let send: (SurfaceIntent) -> Void

@@ -79,6 +79,25 @@ func derivesCollapsedSizeAndExposesFixedExpandedSurfaceSizes() {
     #expect(SurfaceExpansionContract.hostSize == CGSize(width: 640, height: 210))
 }
 
+@Test("Native hit testing excludes the transparent shape envelope")
+func nativeHitTestingFollowsVisibleSurfaceShape() {
+    let hostSize = SurfaceExpansionContract.hostSize
+    let surfaceSize = SurfaceExpansionContract.surfaceSize
+
+    #expect(
+        NotchSurfaceHitTesting.contains(
+            point: CGPoint(x: 320, y: 80), hostSize: hostSize, surfaceSize: surfaceSize,
+            topShoulderRadius: 19, bottomCornerRadius: 24))
+    #expect(
+        !NotchSurfaceHitTesting.contains(
+            point: CGPoint(x: 2, y: 2), hostSize: hostSize, surfaceSize: surfaceSize,
+            topShoulderRadius: 19, bottomCornerRadius: 24))
+    #expect(
+        !NotchSurfaceHitTesting.contains(
+            point: CGPoint(x: 320, y: 202), hostSize: hostSize, surfaceSize: surfaceSize,
+            topShoulderRadius: 19, bottomCornerRadius: 24))
+}
+
 @Test("Geometry suppresses unavailable or invalid built-in displays and reframes changed topology")
 func suppressesInvalidTopologiesAndReframesAfterScaleChange() {
     let externalOnly = ScreenTopology.Screen(

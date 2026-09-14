@@ -23,6 +23,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private var debugSnapshot = SurfaceSnapshot()
     private var debugOverlayEnabled = false
     private var topologyRevision: UInt64 = 0
+    private var nativeMouseCaptureDepth = 0
 
     public init() {
         let observer = NotificationCenter.default.addObserver(
@@ -63,6 +64,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             cancelCloseHostSettle()
             cancelPendingProjection()
             removeEventMonitors()
+            nativeMouseCaptureDepth = 0
+            panel?.ignoresMouseEvents = true
             panel?.orderOut(nil)
             return true
         }
@@ -88,6 +91,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             return false
         }
         panel.setFrame(frame, display: true)
+        refreshNativeHitTesting()
         return true
     }
 
@@ -100,6 +104,19 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         debugSnapshot = snapshot
         presentationModel.apply(snapshot, collapsedSize: collapsedSize())
         refreshDebugOverlay()
+    }
+
+    /// Keeps the native panel interactive while a control owns a mouse gesture.
+    public func beginNativeMouseCapture() {
+        nativeMouseCaptureDepth += 1
+        refreshNativeHitTesting()
+    }
+
+    /// Ends one native mouse gesture and restores shape-aware click-through.
+    public func endNativeMouseCapture() {
+        guard nativeMouseCaptureDepth > 0 else { return }
+        nativeMouseCaptureDepth -= 1
+        refreshNativeHitTesting()
     }
 
     public func toggleDebugOverlay() -> Bool {
@@ -118,18 +135,21 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         cancelPendingProjection()
         guard let collapsedSize = collapsedSize(), let frame = surfaceFrame(for: collapsedSize) else { return false }
         let panel = panel ?? makePanel()
+        self.panel = panel
         ensurePresentation(on: panel)
         presentationModel.projectCollapsed(collapsedSize: collapsedSize)
+        installPointerMonitors()
+        refreshNativeHitTesting()
         if panel.frame.size == SurfaceExpansionContract.hostSize {
             scheduleCollapsedHostSettle(for: panel, collapsedSize: collapsedSize)
         } else {
             panel.setFrame(frame, display: true)
+            refreshNativeHitTesting()
         }
         panel.orderFrontRegardless()
         panel.resignKey()
         priorKeyWindow?.makeKeyAndOrderFront(nil)
         priorKeyWindow = nil
-        self.panel = panel
         return true
     }
 
@@ -139,12 +159,14 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         cancelPendingProjection()
         guard let frame = surfaceFrame(for: NotchSurfaceMetrics.compactSize) else { return false }
         let panel = panel ?? makePanel()
+        self.panel = panel
         ensurePresentation(on: panel)
         panel.setFrame(frame, display: true)
         presentationModel.projectCompact()
+        installPointerMonitors()
+        refreshNativeHitTesting()
         panel.orderFrontRegardless()
         panel.resignKey()
-        self.panel = panel
         return true
     }
 
@@ -153,17 +175,19 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         cancelPendingProjection()
         guard let frame = surfaceFrame(for: SurfaceExpansionContract.hostSize) else { return false }
         let panel = panel ?? makePanel()
+        self.panel = panel
         ensurePresentation(on: panel)
         panel.setFrame(frame, display: true)
-        projectExpandedOnNextRunLoop()
+        presentationModel.projectExpanded(collapsedSize: collapsedSize())
         installExpandedEventMonitors()
+        refreshNativeHitTesting()
+        projectExpandedOnNextRunLoop()
         if focus {
             priorKeyWindow = NSApp.keyWindow
             panel.makeKeyAndOrderFront(nil)
         } else {
             panel.orderFrontRegardless()
         }
-        self.panel = panel
         return true
     }
 
@@ -186,6 +210,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             await Task.yield()
             guard let self, !Task.isCancelled, self.projectionGeneration == generation else { return }
             self.presentationModel.projectExpanded(collapsedSize: self.collapsedSize())
+            self.refreshNativeHitTesting()
             self.projectionTask = nil
         }
     }
@@ -201,6 +226,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
                 let frame = self.surfaceFrame(for: collapsedSize)
             else { return }
             panel.setFrame(frame, display: false)
+            self.refreshNativeHitTesting()
             self.closeHostSettleTask = nil
         }
     }
@@ -229,10 +255,27 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         return panel
     }
 
+    private func installPointerMonitors() {
+        removeEventMonitors()
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
+            return event
+        }
+        let global = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
+        }
+        eventMonitors = [local, global].compactMap { $0 }
+    }
+
     private func installExpandedEventMonitors() {
         removeEventMonitors()
-        let local = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) {
+        let panel = self.panel
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .mouseMoved]) {
             [weak self, weak panel] event in
+            if event.type == .mouseMoved {
+                self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
+                return event
+            }
             if event.type == .keyDown, event.keyCode == 53 {
                 self?.interactionHandler?(.escapePressed)
                 return nil
@@ -240,10 +283,27 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             if event.type == .leftMouseDown, event.window !== panel { self?.interactionHandler?(.clickedOutside) }
             return event
         }
-        let global = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
-            self?.interactionHandler?(.clickedOutside)
+        let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown]) { [weak self] event in
+            if event.type == .mouseMoved {
+                self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
+            } else {
+                self?.interactionHandler?(.clickedOutside)
+            }
         }
         eventMonitors = [local, global].compactMap { $0 }
+    }
+
+    private func refreshNativeHitTesting(pointerLocation: NSPoint = NSEvent.mouseLocation) {
+        guard let panel else { return }
+        let point = CGPoint(x: pointerLocation.x - panel.frame.minX, y: panel.frame.maxY - pointerLocation.y)
+        let surfaceSize = presentationModel.visibleSurfaceSize
+        let inside = NotchSurfaceHitTesting.contains(
+            point: point,
+            hostSize: panel.frame.size,
+            surfaceSize: surfaceSize,
+            topShoulderRadius: presentationModel.topShoulderRadius,
+            bottomCornerRadius: presentationModel.bottomCornerRadius)
+        panel.ignoresMouseEvents = nativeMouseCaptureDepth == 0 && !inside
     }
 
     private func removeEventMonitors() {
