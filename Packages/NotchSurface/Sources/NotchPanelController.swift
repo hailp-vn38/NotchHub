@@ -4,7 +4,7 @@ import SwiftUI
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
 public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring, DetailNavigationInput,
-    SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling
+    SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling, SurfaceExpansionAdmitting
 {
     private var panel: NSPanel?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
@@ -17,6 +17,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private var contextChangeHandler: (@MainActor (SurfaceIntent) -> Void)?
     private var debugSnapshot = SurfaceSnapshot()
     private var debugOverlayEnabled = false
+    private var topologyRevision: UInt64 = 0
 
     public init() {
         let observer = NotificationCenter.default.addObserver(
@@ -25,6 +26,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
+                self?.topologyRevision &+= 1
                 if let handler = self?.displayChangeHandler {
                     handler()
                 } else {
@@ -104,6 +106,14 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         }
         panel.setFrame(frame, display: true)
         return true
+    }
+
+    public func expandedAvailability() -> SurfaceExpandedAvailability {
+        let topology = ScreenTopology(screens: NSScreen.screens.map(screenTopology))
+        return NotchSurfaceGeometry.expandedAvailability(
+            in: topology,
+            topologyRevision: topologyRevision
+        )
     }
 
     public func setDebugSnapshot(_ snapshot: SurfaceSnapshot) {

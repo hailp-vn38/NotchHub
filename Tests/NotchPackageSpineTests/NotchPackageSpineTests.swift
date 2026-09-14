@@ -419,6 +419,86 @@ func receivesInputThroughMonitorSeam() {
     #expect(coordinator.snapshot.state == .expanded)
 }
 
+@Test("Expansion admission keeps undersized valid topology out of recovery")
+@MainActor
+func rejectsUnsupportedExpandedCapacityWithoutRecovery() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let admission = RecordingExpansionAdmission(
+        availability: .unsupportedCapacity(topologyRevision: 7)
+    )
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, admission: admission)
+
+    _ = coordinator.handle(.showCollapsed)
+    #expect(coordinator.handle(.hoverDelayElapsed) == .collapsed)
+    #expect(coordinator.snapshot.expandedAvailability == .unsupportedCapacity(topologyRevision: 7))
+    #expect(coordinator.snapshot.admissionFeedback == nil)
+    #expect(coordinator.diagnostics.events == [.unsupportedExpandedCapacity(topologyRevision: 7)])
+
+    #expect(coordinator.handle(.clicked) == .collapsed)
+    #expect(coordinator.snapshot.admissionFeedback == .expandedUnavailable(topologyRevision: 7))
+    #expect(coordinator.snapshot.state != .recovering)
+    #expect(panel.effects == [.showCollapsed])
+    #expect(scheduler.scheduledDelays == [SurfaceInteractionDefaults.admissionFeedbackDuration])
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.admissionFeedback == nil)
+}
+
+@Test("Topology revision refreshes admission feedback and permits a later fixed host")
+@MainActor
+func refreshesExpandedAvailabilityForTheCurrentTopologyRevision() {
+    let panel = RecordingSurfacePanel()
+    let admission = RecordingExpansionAdmission(
+        availability: .unsupportedCapacity(topologyRevision: 3)
+    )
+    let coordinator = SurfaceCoordinator(panel: panel, admission: admission)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.clicked)
+    #expect(coordinator.snapshot.admissionFeedback == .expandedUnavailable(topologyRevision: 3))
+
+    admission.availability = .available(topologyRevision: 4)
+    _ = coordinator.handle(.displayInvalidated)
+    #expect(coordinator.snapshot.expandedAvailability == .available(topologyRevision: 4))
+    #expect(coordinator.snapshot.admissionFeedback == nil)
+
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .expanded)
+    #expect(coordinator.snapshot.expandedAvailability == .available(topologyRevision: 4))
+    #expect(coordinator.snapshot.admissionFeedback == nil)
+    #expect(panel.effects == [.showCollapsed, .suppress, .showCollapsed, .showExpanded(focus: true)])
+}
+
+@Test("Invalid topology enters F2 recovery instead of becoming an admission rejection")
+@MainActor
+func recoversFromInvalidExpandedTopology() {
+    let panel = RecordingSurfacePanel(revalidationSucceeds: false)
+    let scheduler = RecordingSurfaceScheduler()
+    let admission = RecordingExpansionAdmission(availability: .invalidTopology(topologyRevision: 9))
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, admission: admission)
+
+    _ = coordinator.handle(.showCollapsed)
+    #expect(coordinator.handle(.clicked) == .recovering)
+    #expect(coordinator.snapshot.expandedAvailability == .invalidTopology(topologyRevision: 9))
+    #expect(coordinator.snapshot.admissionFeedback == nil)
+    #expect(coordinator.diagnostics.events == [.invalidExpandedTopology(topologyRevision: 9)])
+    #expect(panel.effects == [.showCollapsed, .suppress])
+}
+
+@Test("Native expanded-panel failure enters F2 recovery after successful admission")
+@MainActor
+func recoversWhenNativeExpandedPanelApplyFails() {
+    let panel = FailingExpandedSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let admission = RecordingExpansionAdmission(availability: .available(topologyRevision: 5))
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, admission: admission)
+
+    _ = coordinator.handle(.showCollapsed)
+    #expect(coordinator.handle(.clicked) == .recovering)
+    #expect(coordinator.snapshot.expandedAvailability == .available(topologyRevision: 5))
+    #expect(coordinator.diagnostics.events == [.nativeExpandedPanelFailure])
+    #expect(panel.effects == [.showCollapsed, .showExpanded(focus: true), .suppress])
+}
+
 @Test("Expanded placeholder routes only its explicit detail action without changing surface state")
 @MainActor
 func routesExplicitDetailNavigationOutsideSurfaceState() {
@@ -739,6 +819,34 @@ private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeomet
     func sendDisplayChange() {
         displayChangeHandler?()
     }
+}
+
+@MainActor
+private final class RecordingExpansionAdmission: SurfaceExpansionAdmitting {
+    var availability: SurfaceExpandedAvailability
+
+    init(availability: SurfaceExpandedAvailability) {
+        self.availability = availability
+    }
+
+    func expandedAvailability() -> SurfaceExpandedAvailability {
+        availability
+    }
+}
+
+@MainActor
+private final class FailingExpandedSurfacePanel: SurfacePanelPresenting, SurfaceGeometryRevalidating {
+    private(set) var effects: [SurfacePanelEffect] = []
+
+    func apply(_ effect: SurfacePanelEffect) -> Bool {
+        effects.append(effect)
+        if case .showExpanded = effect { return false }
+        return true
+    }
+
+    func setDisplayChangeHandler(_ handler: @escaping @MainActor () -> Void) {}
+
+    func revalidateGeometry() -> Bool { false }
 }
 
 @MainActor

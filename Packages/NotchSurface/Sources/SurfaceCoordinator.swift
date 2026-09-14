@@ -1,9 +1,11 @@
+import Foundation
 import NotchCore
 import NotchDomain
 
 public enum SurfaceInteractionDefaults {
     public static let hoverDelay: Duration = .milliseconds(150)
     public static let autoCollapseDelay: Duration = .seconds(3)
+    public static let admissionFeedbackDuration: Duration = .seconds(3)
     public static let recoveryBackoff: Duration = .milliseconds(250)
 }
 
@@ -31,6 +33,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
     private let contextInput: (any SurfaceContextObserving)?
     private let detailInput: (any DetailNavigationInput)?
     private let detailNavigator: (any DetailNavigating)?
+    private let admission: (any SurfaceExpansionAdmitting)?
     private let scheduler: any SurfaceInteractionScheduling
     private let configuration: SurfaceInteractionConfiguration
     private var hoverTask: (any SurfaceInteractionTask)?
@@ -41,13 +44,17 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
     private var recoveryTask: (any SurfaceInteractionTask)?
     private var recoveryGeneration = 0
     private var sessionResumeState: SurfaceState?
+    private var admissionFeedbackTask: (any SurfaceInteractionTask)?
+    private var admissionFeedbackGeneration = 0
+    public private(set) var diagnostics = SurfaceDiagnostics()
 
     public init(
         panel: any SurfacePanelPresenting,
         scheduler: (any SurfaceInteractionScheduling)? = nil,
         configuration: SurfaceInteractionConfiguration = .init(),
         input: (any SurfaceInputMonitoring)? = nil,
-        detailNavigator: (any DetailNavigating)? = nil
+        detailNavigator: (any DetailNavigating)? = nil,
+        admission: (any SurfaceExpansionAdmitting)? = nil
     ) {
         self.panel = panel
         self.input = input ?? (panel as? any SurfaceInputMonitoring)
@@ -55,6 +62,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         self.contextInput = panel as? any SurfaceContextObserving
         self.detailInput = self.input as? any DetailNavigationInput
         self.detailNavigator = detailNavigator
+        self.admission = admission ?? (panel as? any SurfaceExpansionAdmitting)
         self.scheduler = scheduler ?? MainQueueSurfaceScheduler()
         self.configuration = configuration
         self.input?.setInteractionHandler { [weak self] intent in
@@ -90,7 +98,11 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         case .sessionLocked:
             sessionResumeState = snapshot.state
             pauseInteraction()
-        case .didWake, .displayInvalidated:
+        case .didWake:
+            resumeAndRecover()
+        case .displayInvalidated:
+            invalidateExpandedAvailability()
+            _ = expandedAdmission()
             resumeAndRecover()
         case .sessionUnlocked:
             resumeAndRecover(restoring: sessionResumeState)
@@ -144,11 +156,71 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
     }
 
     private func apply(_ intent: SurfaceIntent) -> SurfaceState? {
-        guard let transition = SurfaceStateMachine.transition(from: snapshot.state, for: intent),
-            panel.apply(transition.effect)
-        else { return nil }
+        guard let transition = SurfaceStateMachine.transition(from: snapshot.state, for: intent) else { return nil }
+        if case .showExpanded = transition.effect {
+            switch expandedAdmission() {
+            case .available:
+                clearAdmissionFeedback()
+            case .unsupportedCapacity(let topologyRevision):
+                recordDiagnostic(.unsupportedExpandedCapacity(topologyRevision: topologyRevision))
+                if intent != .hoverDelayElapsed {
+                    showAdmissionFeedback(for: topologyRevision)
+                }
+                return snapshot.state
+            case .invalidTopology(let topologyRevision):
+                recordDiagnostic(.invalidExpandedTopology(topologyRevision: topologyRevision))
+                beginRecovery()
+                return snapshot.state
+            case .unknown:
+                beginRecovery()
+                return snapshot.state
+            }
+        }
+        guard panel.apply(transition.effect) else {
+            if case .showExpanded = transition.effect {
+                recordDiagnostic(.nativeExpandedPanelFailure)
+                beginRecovery()
+                return snapshot.state
+            }
+            return nil
+        }
         snapshot.state = transition.state
         return snapshot.state
+    }
+
+    private func expandedAdmission() -> SurfaceExpandedAvailability {
+        let availability = admission?.expandedAvailability() ?? .available(topologyRevision: 0)
+        snapshot.expandedAvailability = availability
+        return availability
+    }
+
+    private func invalidateExpandedAvailability() {
+        snapshot.expandedAvailability = .unknown
+        clearAdmissionFeedback()
+    }
+
+    private func showAdmissionFeedback(for topologyRevision: UInt64) {
+        clearAdmissionFeedback()
+        snapshot.admissionFeedback = .expandedUnavailable(topologyRevision: topologyRevision)
+        admissionFeedbackGeneration += 1
+        let generation = admissionFeedbackGeneration
+        admissionFeedbackTask = scheduler.schedule(after: SurfaceInteractionDefaults.admissionFeedbackDuration) { [weak self] in
+            guard let self, self.admissionFeedbackGeneration == generation else { return }
+            self.admissionFeedbackTask = nil
+            self.snapshot.admissionFeedback = nil
+            self.publishDebugSnapshot()
+        }
+    }
+
+    private func clearAdmissionFeedback() {
+        admissionFeedbackGeneration += 1
+        admissionFeedbackTask?.cancel()
+        admissionFeedbackTask = nil
+        snapshot.admissionFeedback = nil
+    }
+
+    private func recordDiagnostic(_ event: SurfaceDiagnosticEvent) {
+        diagnostics.record(event)
     }
 
     private func updateTimers(after intent: SurfaceIntent, state: SurfaceState) {
@@ -180,6 +252,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         guard snapshot.state != .hidden, snapshot.state != .recovering else { return }
         cancelHoverExpansion()
         cancelAutoCollapse()
+        clearAdmissionFeedback()
         snapshot.state = .recovering
         snapshot.recoveryAttemptCount = 0
         snapshot.recoveryOutcome = .pending
@@ -280,7 +353,44 @@ public struct SurfaceSnapshot: Equatable, Sendable {
     public fileprivate(set) var recoveryOutcome: SurfaceRecoveryOutcome?
     public fileprivate(set) var warning: SurfaceWarning?
     public fileprivate(set) var isInteractionPaused = false
+    public fileprivate(set) var expandedAvailability: SurfaceExpandedAvailability = .unknown
+    public fileprivate(set) var admissionFeedback: SurfaceAdmissionFeedback?
     public init() {}
+}
+
+public enum SurfaceExpandedAvailability: Equatable, Sendable {
+    case unknown
+    case available(topologyRevision: UInt64)
+    case unsupportedCapacity(topologyRevision: UInt64)
+    case invalidTopology(topologyRevision: UInt64)
+}
+
+public enum SurfaceExpansionContract {
+    public static let hostSize = CGSize(width: 640, height: 210)
+}
+
+public enum SurfaceAdmissionFeedback: Equatable, Sendable {
+    case expandedUnavailable(topologyRevision: UInt64)
+}
+
+public enum SurfaceDiagnosticEvent: Equatable, Sendable {
+    case unsupportedExpandedCapacity(topologyRevision: UInt64)
+    case invalidExpandedTopology(topologyRevision: UInt64)
+    case nativeExpandedPanelFailure
+}
+
+public struct SurfaceDiagnostics: Equatable, Sendable {
+    public private(set) var events: [SurfaceDiagnosticEvent] = []
+    private static let maximumEvents = 20
+
+    public init() {}
+
+    fileprivate mutating func record(_ event: SurfaceDiagnosticEvent) {
+        events.append(event)
+        if events.count > Self.maximumEvents {
+            events.removeFirst(events.count - Self.maximumEvents)
+        }
+    }
 }
 
 public enum SurfaceSuppressionReason: Equatable, Sendable { case fullScreen }
@@ -289,7 +399,7 @@ public enum SurfaceWarning: Equatable, Sendable { case recoveryFailed }
 
 public enum SurfaceIntent: Equatable, Sendable {
     case toggle, showCollapsed, hide, hoverEntered, hoverExited, hoverDelayElapsed
-    case expandedHoverEntered, expandedHoverExited, clicked, interaction
+    case expandedHoverEntered, expandedHoverExited, clicked, keyboardRequestedExpansion, interaction
     case escapePressed, clickedOutside, autoCollapseElapsed, suppressed, showCompact
     case fullScreenPolicyEngaged, fullScreenPolicyCleared
     case willSleep, didWake, sessionLocked, sessionUnlocked, displayInvalidated
@@ -307,6 +417,11 @@ public enum SurfacePanelEffect: Equatable, Sendable {
 @MainActor
 public protocol SurfacePanelPresenting: AnyObject {
     func apply(_ effect: SurfacePanelEffect) -> Bool
+}
+
+@MainActor
+public protocol SurfaceExpansionAdmitting: AnyObject {
+    func expandedAvailability() -> SurfaceExpandedAvailability
 }
 
 @MainActor
@@ -385,9 +500,13 @@ public enum SurfaceStateMachine {
             (.expanded, .showExpanded(focus: false))
         case (.collapsed, .clicked):
             (.expanded, .showExpanded(focus: true))
+        case (.collapsed, .keyboardRequestedExpansion):
+            (.expanded, .showExpanded(focus: true))
         case (.collapsed, .showCompact):
             (.compact, .showCompact)
         case (.compact, .clicked):
+            (.expanded, .showExpanded(focus: true))
+        case (.compact, .keyboardRequestedExpansion):
             (.expanded, .showExpanded(focus: true))
         case (.compact, .autoCollapseElapsed),
             (.expanded, .escapePressed), (.expanded, .clickedOutside), (.expanded, .autoCollapseElapsed):
