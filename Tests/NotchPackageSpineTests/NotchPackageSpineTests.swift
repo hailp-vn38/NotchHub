@@ -41,6 +41,57 @@ func isolatesPlaceholderScenePresentationFailures() {
     #expect(presenter.requestedScenes == [.settings, .diagnostics])
 }
 
+@Test("App shell keeps its menu-bar resources safe through lifecycle delivery and termination")
+@MainActor
+func handlesLifecycleWithoutStartingLaterPhaseInfrastructure() {
+    let lifecycle = RecordingLifecycleObserver()
+    let coordinator = AppCoordinator(lifecycleObserver: lifecycle)
+
+    #expect(coordinator.start() == .started)
+    #expect(lifecycle.startCount == 1)
+
+    lifecycle.send(.activated)
+    #expect(coordinator.snapshot.lifecycleState == .running)
+    lifecycle.send(.deactivated)
+    #expect(coordinator.snapshot.lifecycleState == .inactive)
+    lifecycle.send(.willSleep)
+    #expect(coordinator.snapshot.lifecycleState == .sleeping)
+    lifecycle.send(.didWake)
+    #expect(coordinator.snapshot.lifecycleState == .running)
+    lifecycle.send(.locked)
+    #expect(coordinator.snapshot.lifecycleState == .locked)
+    lifecycle.send(.unlocked)
+    #expect(coordinator.snapshot.lifecycleState == .running)
+    #expect(coordinator.snapshot.isRunning)
+
+    lifecycle.send(.willTerminate)
+    #expect(coordinator.snapshot.isRunning == false)
+    #expect(coordinator.snapshot.lifecycleState == .stopped)
+    #expect(lifecycle.stopCount == 1)
+    let deliveredEventCount = lifecycle.deliveredEvents.count
+    lifecycle.send(.activated)
+    #expect(lifecycle.deliveredEvents.count == deliveredEventCount)
+
+    #expect(coordinator.start() == .started)
+    #expect(lifecycle.startCount == 2)
+    #expect(coordinator.perform(.restartAppShell) == .restarted)
+    #expect(lifecycle.stopCount == 2)
+    #expect(lifecycle.startCount == 3)
+    #expect(coordinator.perform(.quit) == .quitRequested)
+    #expect(lifecycle.stopCount == 3)
+}
+
+@Test("App shell snapshots launch-at-login status through an injected adapter")
+@MainActor
+func snapshotsLaunchAtLoginStatusWithoutRegistration() {
+    for status in LaunchAtLoginStatus.allCases {
+        let coordinator = AppCoordinator(launchAtLoginController: FixedLaunchAtLoginController(value: status))
+
+        #expect(coordinator.start() == .started)
+        #expect(coordinator.snapshot.launchAtLoginStatus == status)
+    }
+}
+
 @Test("NotchDomain encodes a typed Action, Module, and Event envelope")
 func encodesPureDomainContracts() throws {
     let action = try #require(ActionID("app.openSettings"))
@@ -125,6 +176,38 @@ private final class SelectiveScenePresenter: AppShellScenePresenter {
     func present(_ scene: AppShellPlaceholderScene) -> AppShellScenePresentationResult {
         requestedScenes.append(scene)
         return unavailableScenes.contains(scene) ? .unavailable : .presented
+    }
+}
+
+@MainActor
+private final class RecordingLifecycleObserver: AppShellLifecycleObserving {
+    private var handler: (@MainActor (AppShellLifecycleEvent) -> Void)?
+    private(set) var deliveredEvents: [AppShellLifecycleEvent] = []
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start(observing handler: @escaping @MainActor (AppShellLifecycleEvent) -> Void) {
+        startCount += 1
+        self.handler = handler
+    }
+
+    func stop() {
+        stopCount += 1
+        handler = nil
+    }
+
+    func send(_ event: AppShellLifecycleEvent) {
+        guard let handler else { return }
+        deliveredEvents.append(event)
+        handler(event)
+    }
+}
+
+private struct FixedLaunchAtLoginController: LaunchAtLoginControlling {
+    let value: LaunchAtLoginStatus
+
+    func status() -> LaunchAtLoginStatus {
+        value
     }
 }
 

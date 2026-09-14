@@ -110,9 +110,14 @@ See [`module-system.md`](../architecture/module-system.md).
 
 F1 is intentionally narrower than the full lifecycle target described below. `AppCoordinator`
 owns menu-bar creation, placeholder Settings/Diagnostics scenes, observation of app
-activation/deactivation and sleep/wake notifications, and orderly teardown of only those owned
+activation/deactivation, sleep/wake, and session lock/unlock notifications, and orderly teardown of only those owned
 resources. The coordinator starts idempotently in one process and keeps the menu bar reachable if
 an optional placeholder scene fails.
+
+The production observer maps AppKit and `NSWorkspace` notifications to a small coordinator event
+set. Those events only update the App shell's lifecycle snapshot; they never create a panel, start
+future infrastructure, request a permission, or present a scene. On termination, the coordinator
+removes its F1 notification observers before marking the App shell stopped.
 
 F1 does **not** load or persist settings, initialize a diagnostics store, create a Notch panel,
 start modules or IPC, request permissions, or claim surface recovery. A menu intent for a
@@ -577,6 +582,7 @@ F1 implementation boundary:
 - Provide a small `LaunchAtLoginControlling` abstraction backed by `SMAppService`.
 - Do not add a toggle, persistence, or hidden helper/background process in F1.
 - The adapter must be safe to query when its future Settings scene is unavailable.
+- F1 reads `SMAppService.mainApp.status` only; it never calls registration APIs.
 
 Later phases add user-controlled preference, persistence, signing/release validation, and
 uninstall/update/disable coverage. No sensitive module is auto-enabled merely because the app is

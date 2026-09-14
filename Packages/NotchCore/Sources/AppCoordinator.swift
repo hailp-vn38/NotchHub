@@ -3,9 +3,17 @@
 public final class AppCoordinator {
     public private(set) var snapshot = AppShellSnapshot()
     private let scenePresenter: any AppShellScenePresenter
+    private let lifecycleObserver: any AppShellLifecycleObserving
+    private let launchAtLoginController: any LaunchAtLoginControlling
 
-    public init(scenePresenter: (any AppShellScenePresenter)? = nil) {
+    public init(
+        scenePresenter: (any AppShellScenePresenter)? = nil,
+        lifecycleObserver: (any AppShellLifecycleObserving)? = nil,
+        launchAtLoginController: (any LaunchAtLoginControlling)? = nil
+    ) {
         self.scenePresenter = scenePresenter ?? NoopScenePresenter()
+        self.lifecycleObserver = lifecycleObserver ?? NoopLifecycleObserver()
+        self.launchAtLoginController = launchAtLoginController ?? UnavailableLaunchAtLoginController()
     }
 
     @discardableResult
@@ -13,6 +21,11 @@ public final class AppCoordinator {
         guard !snapshot.isRunning else { return .alreadyRunning }
         snapshot.isRunning = true
         snapshot.startCount += 1
+        snapshot.lifecycleState = .running
+        snapshot.launchAtLoginStatus = launchAtLoginController.status()
+        lifecycleObserver.start { [weak self] event in
+            self?.handleLifecycleEvent(event)
+        }
         return .started
     }
 
@@ -41,8 +54,30 @@ public final class AppCoordinator {
         stop()
     }
 
+    private func handleLifecycleEvent(_ event: AppShellLifecycleEvent) {
+        switch event {
+        case .activated, .didWake, .unlocked:
+            guard snapshot.isRunning else { return }
+            snapshot.lifecycleState = .running
+        case .deactivated:
+            guard snapshot.isRunning else { return }
+            snapshot.lifecycleState = .inactive
+        case .willSleep:
+            guard snapshot.isRunning else { return }
+            snapshot.lifecycleState = .sleeping
+        case .locked:
+            guard snapshot.isRunning else { return }
+            snapshot.lifecycleState = .locked
+        case .willTerminate:
+            stop()
+        }
+    }
+
     private func stop() {
+        guard snapshot.isRunning else { return }
+        lifecycleObserver.stop()
         snapshot.isRunning = false
+        snapshot.lifecycleState = .stopped
     }
 
     private func presentPlaceholderScene(_ scene: AppShellPlaceholderScene) -> AppShellMenuOutcome {
@@ -55,8 +90,47 @@ public final class AppCoordinator {
 public struct AppShellSnapshot: Equatable, Sendable {
     public fileprivate(set) var isRunning = false
     public fileprivate(set) var startCount = 0
+    public fileprivate(set) var lifecycleState: AppShellLifecycleState = .stopped
+    public fileprivate(set) var launchAtLoginStatus: LaunchAtLoginStatus = .unavailable
 
     public init() {}
+}
+
+public enum AppShellLifecycleState: Equatable, Sendable {
+    case running
+    case inactive
+    case sleeping
+    case locked
+    case stopped
+}
+
+public enum AppShellLifecycleEvent: Sendable {
+    case activated
+    case deactivated
+    case willSleep
+    case didWake
+    case locked
+    case unlocked
+    case willTerminate
+}
+
+@MainActor
+public protocol AppShellLifecycleObserving: AnyObject {
+    func start(observing handler: @escaping @MainActor (AppShellLifecycleEvent) -> Void)
+    func stop()
+}
+
+public enum LaunchAtLoginStatus: CaseIterable, Equatable, Sendable {
+    case notRegistered
+    case enabled
+    case requiresApproval
+    case notFound
+    case unavailable
+}
+
+@MainActor
+public protocol LaunchAtLoginControlling {
+    func status() -> LaunchAtLoginStatus
 }
 
 public enum AppShellStartResult: Equatable, Sendable {
@@ -134,6 +208,17 @@ private final class NoopScenePresenter: AppShellScenePresenter {
     func present(_: AppShellPlaceholderScene) -> AppShellScenePresentationResult {
         .unavailable
     }
+}
+
+@MainActor
+private final class NoopLifecycleObserver: AppShellLifecycleObserving {
+    func start(observing _: @escaping @MainActor (AppShellLifecycleEvent) -> Void) {}
+    func stop() {}
+}
+
+@MainActor
+private final class UnavailableLaunchAtLoginController: LaunchAtLoginControlling {
+    func status() -> LaunchAtLoginStatus { .unavailable }
 }
 
 public enum AppShellUnavailableFeature: Equatable, Sendable {

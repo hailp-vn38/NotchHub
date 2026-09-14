@@ -153,7 +153,7 @@ Required automated coverage:
 - `AppCoordinator` startup is idempotent and tears down F1-owned observers/tasks in reverse order.
 - Each menu intent routes to its designated outcome: Settings/Diagnostics open their placeholder
   scenes; surface/demo intents report unavailable; Restart App Shell does not create a module runtime.
-- Activation, deactivation, sleep, and wake are observable without creating an `NSPanel` or
+- Activation, deactivation, sleep, wake, lock, and unlock are observable without creating an `NSPanel` or
   requesting a permission.
 - The `SMAppService` launch-at-login adapter is behind a fakeable protocol; no test changes the
   machine’s actual login-item registration.

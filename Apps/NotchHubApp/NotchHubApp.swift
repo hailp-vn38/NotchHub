@@ -1,5 +1,6 @@
 import AppKit
 import NotchCore
+import ServiceManagement
 import SwiftUI
 
 @main
@@ -59,7 +60,12 @@ struct NotchHubApp: App {
 
 @MainActor
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
-    private lazy var coordinator = AppCoordinator(scenePresenter: self)
+    private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
+    private lazy var coordinator = AppCoordinator(
+        scenePresenter: self,
+        lifecycleObserver: lifecycleObserver,
+        launchAtLoginController: SMAppServiceLaunchAtLoginController()
+    )
     private var openScene: ((AppShellPlaceholderScene) -> Void)?
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -90,6 +96,69 @@ extension AppShellDelegate: AppShellScenePresenter {
         guard let openScene else { return .unavailable }
         openScene(scene)
         return .presented
+    }
+}
+
+@MainActor
+private final class MacOSAppShellLifecycleObserver: AppShellLifecycleObserving {
+    private var observerRemovals: [() -> Void] = []
+
+    func start(observing handler: @escaping @MainActor (AppShellLifecycleEvent) -> Void) {
+        guard observerRemovals.isEmpty else { return }
+
+        let appNotifications = NotificationCenter.default
+        let workspaceNotifications = NSWorkspace.shared.notificationCenter
+        func observe(
+            _ center: NotificationCenter,
+            named name: Notification.Name,
+            as event: AppShellLifecycleEvent
+        ) -> () -> Void {
+            let registration = center.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { _ in
+                MainActor.assumeIsolated {
+                    handler(event)
+                }
+            }
+            return { center.removeObserver(registration) }
+        }
+
+        observerRemovals = [
+            observe(appNotifications, named: NSApplication.didBecomeActiveNotification, as: .activated),
+            observe(appNotifications, named: NSApplication.didResignActiveNotification, as: .deactivated),
+            observe(appNotifications, named: NSApplication.willTerminateNotification, as: .willTerminate),
+            observe(workspaceNotifications, named: NSWorkspace.willSleepNotification, as: .willSleep),
+            observe(workspaceNotifications, named: NSWorkspace.didWakeNotification, as: .didWake),
+            observe(workspaceNotifications, named: NSWorkspace.sessionDidResignActiveNotification, as: .locked),
+            observe(workspaceNotifications, named: NSWorkspace.sessionDidBecomeActiveNotification, as: .unlocked),
+        ]
+    }
+
+    func stop() {
+        for removeObserver in observerRemovals.reversed() {
+            removeObserver()
+        }
+        observerRemovals.removeAll()
+    }
+}
+
+@MainActor
+private struct SMAppServiceLaunchAtLoginController: LaunchAtLoginControlling {
+    func status() -> LaunchAtLoginStatus {
+        switch SMAppService.mainApp.status {
+        case .notRegistered:
+            .notRegistered
+        case .enabled:
+            .enabled
+        case .requiresApproval:
+            .requiresApproval
+        case .notFound:
+            .notFound
+        @unknown default:
+            .unavailable
+        }
     }
 }
 
