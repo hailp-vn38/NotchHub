@@ -8,6 +8,8 @@ public final class AppCoordinator {
     private let lifecycleObserver: any AppShellLifecycleObserving
     private let launchAtLoginController: any LaunchAtLoginControlling
     private let surfaceController: any NotchSurfaceToggling
+    private let surfaceLifecycleHandler: (any NotchSurfaceLifecycleHandling)?
+    private let surfaceDebugController: (any NotchSurfaceDebugToggling)?
 
     public init(
         scenePresenter: (any AppShellScenePresenter)? = nil,
@@ -19,6 +21,8 @@ public final class AppCoordinator {
         self.lifecycleObserver = lifecycleObserver ?? NoopLifecycleObserver()
         self.launchAtLoginController = launchAtLoginController ?? UnavailableLaunchAtLoginController()
         self.surfaceController = surfaceController ?? UnavailableNotchSurfaceController()
+        self.surfaceLifecycleHandler = surfaceController as? any NotchSurfaceLifecycleHandling
+        self.surfaceDebugController = surfaceController as? any NotchSurfaceDebugToggling
     }
 
     @discardableResult
@@ -48,6 +52,10 @@ public final class AppCoordinator {
             }
         case .showDemoState:
             return .unavailable(.demoState)
+        case .toggleSurfaceDebugOverlay:
+            return surfaceDebugController?.toggleDebugOverlay() == true
+                ? .surfaceDebugOverlayToggled
+                : .unavailable(.notchSurface)
         case .openSettings:
             return presentPlaceholderScene(.settings)
         case .openDiagnostics:
@@ -67,6 +75,7 @@ public final class AppCoordinator {
     }
 
     private func handleLifecycleEvent(_ event: AppShellLifecycleEvent) {
+        surfaceLifecycleHandler?.handleAppShellLifecycle(event)
         switch event {
         case .activated, .didWake, .unlocked:
             guard snapshot.isRunning else { return }
@@ -152,6 +161,7 @@ public enum AppShellStartResult: Equatable, Sendable {
 
 public enum AppShellMenuIntent: Sendable {
     case toggleNotchSurface
+    case toggleSurfaceDebugOverlay
     case showDemoState
     case openSettings
     case openDiagnostics
@@ -162,6 +172,7 @@ public enum AppShellMenuIntent: Sendable {
 public enum AppShellMenuOutcome: Equatable, Sendable {
     case unavailable(AppShellUnavailableFeature)
     case notchSurfaceToggled(SurfaceState)
+    case surfaceDebugOverlayToggled
     case placeholderSceneRequested(AppShellPlaceholderScene)
     case placeholderSceneUnavailable(AppShellPlaceholderScene)
     case restarted
@@ -177,6 +188,8 @@ public enum AppShellMenuOutcome: Equatable, Sendable {
             "Notch surface hidden."
         case .notchSurfaceToggled:
             "Notch surface updated."
+        case .surfaceDebugOverlayToggled:
+            "Notch surface debug overlay toggled."
         case .placeholderSceneRequested(let scene):
             "Opening \(scene.title) placeholder."
         case .placeholderSceneUnavailable(let scene):
@@ -243,6 +256,16 @@ private final class UnavailableLaunchAtLoginController: LaunchAtLoginControlling
 @MainActor
 public protocol NotchSurfaceToggling: AnyObject {
     func toggleNotchSurface() -> NotchSurfaceToggleResult
+}
+
+@MainActor
+public protocol NotchSurfaceLifecycleHandling: AnyObject {
+    func handleAppShellLifecycle(_ event: AppShellLifecycleEvent)
+}
+
+@MainActor
+public protocol NotchSurfaceDebugToggling: AnyObject {
+    func toggleDebugOverlay() -> Bool
 }
 
 public enum NotchSurfaceToggleResult: Equatable, Sendable {

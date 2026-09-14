@@ -107,16 +107,95 @@ func revalidatesDisplayGeometryThroughTheCoordinatorSeam() {
     #expect(validCoordinator.snapshot.state == .collapsed)
 
     let detachedPanel = RecordingSurfacePanel(revalidationSucceeds: false)
-    let detachedCoordinator = SurfaceCoordinator(panel: detachedPanel)
+    let detachedScheduler = RecordingSurfaceScheduler()
+    let detachedCoordinator = SurfaceCoordinator(panel: detachedPanel, scheduler: detachedScheduler)
     _ = detachedCoordinator.handle(.showCollapsed)
     detachedPanel.sendDisplayChange()
     #expect(detachedPanel.revalidationCount == 1)
-    #expect(detachedCoordinator.snapshot.state == .suppressed)
+    #expect(detachedCoordinator.snapshot.state == .recovering)
     #expect(detachedPanel.effects == [.showCollapsed, .suppress])
     detachedPanel.setRevalidationSucceeds(true)
-    detachedPanel.sendDisplayChange()
+    detachedScheduler.fireLatest()
     #expect(detachedCoordinator.snapshot.state == .collapsed)
     #expect(detachedPanel.effects == [.showCollapsed, .suppress, .showCollapsed])
+}
+
+@Test("Context policy suppresses full-screen work and always returns to collapsed")
+@MainActor
+func suppressesFullScreenWithoutRestoringExpandedState() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: RecordingSurfaceScheduler())
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.clicked)
+    #expect(coordinator.snapshot.state == .expanded)
+
+    _ = coordinator.handle(.fullScreenPolicyEngaged)
+    #expect(coordinator.snapshot.state == .suppressed)
+    #expect(coordinator.snapshot.suppressionReason == .fullScreen)
+
+    _ = coordinator.handle(.fullScreenPolicyCleared)
+    #expect(coordinator.snapshot.state == .collapsed)
+    #expect(coordinator.snapshot.suppressionReason == nil)
+    #expect(panel.effects == [.showCollapsed, .showExpanded(focus: true), .suppress, .showCollapsed])
+}
+
+@Test("A Space policy update never opens a user-hidden surface")
+@MainActor
+func keepsHiddenSurfaceHiddenWhenFullScreenContextClears() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel)
+
+    _ = coordinator.handle(.fullScreenPolicyEngaged)
+    _ = coordinator.handle(.fullScreenPolicyCleared)
+
+    #expect(coordinator.snapshot.state == .hidden)
+    #expect(panel.effects == [])
+}
+
+@Test("Wake recovery retries once after the F2 backoff then hides with a warning")
+@MainActor
+func boundsRecoveryAndKeepsTheMenuBarRecoverySeamAvailable() {
+    let panel = RecordingSurfacePanel(revalidationSucceeds: false)
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.willSleep)
+    #expect(coordinator.snapshot.isInteractionPaused)
+    _ = coordinator.handle(.didWake)
+    #expect(coordinator.snapshot.state == .recovering)
+    #expect(coordinator.snapshot.recoveryAttemptCount == 1)
+    #expect(scheduler.scheduledDelays == [.milliseconds(250)])
+
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .hidden)
+    #expect(coordinator.snapshot.recoveryAttemptCount == 2)
+    #expect(coordinator.snapshot.recoveryOutcome == .failed)
+    #expect(coordinator.snapshot.warning == .recoveryFailed)
+    #expect(panel.effects == [.showCollapsed, .pauseInteraction, .suppress, .hide])
+
+    let appShell = AppCoordinator(surfaceController: coordinator)
+    #expect(appShell.perform(.openDiagnostics) == .placeholderSceneUnavailable(.diagnostics))
+}
+
+@Test("Unlock and display invalidation share one recovery without duplicate work")
+@MainActor
+func coalescesContextRecoveryAndPublishesF2DebugState() {
+    let panel = RecordingSurfacePanel(revalidationSucceeds: false)
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.sessionLocked)
+    _ = coordinator.handle(.sessionUnlocked)
+    _ = coordinator.handle(.displayInvalidated)
+
+    #expect(coordinator.snapshot.state == .recovering)
+    #expect(coordinator.snapshot.recoveryAttemptCount == 1)
+    #expect(scheduler.scheduledDelays == [.milliseconds(250)])
+    #expect(panel.debugSnapshots.last?.state == .recovering)
+    #expect(panel.debugSnapshots.last?.isInteractionPaused == false)
 }
 
 @Test("App shell exposes safe menu-bar recovery outcomes")
@@ -406,6 +485,21 @@ func handlesLifecycleWithoutStartingLaterPhaseInfrastructure() {
     #expect(lifecycle.stopCount == 3)
 }
 
+@Test("App shell forwards lifecycle and F2 debug requests only to an available Notch surface")
+@MainActor
+func forwardsF2ContextAndDebugControlsThroughTheAppShellSeam() {
+    let lifecycle = RecordingLifecycleObserver()
+    let surface = RecordingSurfaceLifecycleController()
+    let coordinator = AppCoordinator(lifecycleObserver: lifecycle, surfaceController: surface)
+
+    _ = coordinator.start()
+    lifecycle.send(.willSleep)
+    lifecycle.send(.didWake)
+    #expect(surface.lifecycleEvents == [.willSleep, .didWake])
+    #expect(coordinator.perform(.toggleSurfaceDebugOverlay) == .surfaceDebugOverlayToggled)
+    #expect(surface.debugToggleCount == 1)
+}
+
 @Test("App shell snapshots launch-at-login status through an injected adapter")
 @MainActor
 func snapshotsLaunchAtLoginStatusWithoutRegistration() {
@@ -552,11 +646,33 @@ private final class RecordingSurfaceToggleController: NotchSurfaceToggling {
 }
 
 @MainActor
-private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeometryRevalidating {
+private final class RecordingSurfaceLifecycleController: NotchSurfaceToggling, NotchSurfaceLifecycleHandling,
+    NotchSurfaceDebugToggling
+{
+    private(set) var lifecycleEvents: [AppShellLifecycleEvent] = []
+    private(set) var debugToggleCount = 0
+
+    func toggleNotchSurface() -> NotchSurfaceToggleResult { .shownCollapsed }
+
+    func handleAppShellLifecycle(_ event: AppShellLifecycleEvent) {
+        lifecycleEvents.append(event)
+    }
+
+    func toggleDebugOverlay() -> Bool {
+        debugToggleCount += 1
+        return true
+    }
+}
+
+@MainActor
+private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeometryRevalidating,
+    SurfaceDebugOverlayPresenting
+{
     private let succeeds: Bool
     private var revalidationSucceeds: Bool
     private(set) var effects: [SurfacePanelEffect] = []
     private(set) var revalidationCount = 0
+    private(set) var debugSnapshots: [SurfaceSnapshot] = []
     private var displayChangeHandler: (@MainActor () -> Void)?
 
     init(succeeds: Bool = true, revalidationSucceeds: Bool = true) {
@@ -576,6 +692,10 @@ private final class RecordingSurfacePanel: SurfacePanelPresenting, SurfaceGeomet
     func revalidateGeometry() -> Bool {
         revalidationCount += 1
         return revalidationSucceeds
+    }
+
+    func setDebugSnapshot(_ snapshot: SurfaceSnapshot) {
+        debugSnapshots.append(snapshot)
     }
 
     func setRevalidationSucceeds(_ succeeds: Bool) {

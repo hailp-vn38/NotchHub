@@ -4,6 +4,7 @@ import NotchDomain
 public enum SurfaceInteractionDefaults {
     public static let hoverDelay: Duration = .milliseconds(150)
     public static let autoCollapseDelay: Duration = .seconds(3)
+    public static let recoveryBackoff: Duration = .milliseconds(250)
 }
 
 public struct SurfaceInteractionConfiguration: Equatable, Sendable {
@@ -20,11 +21,14 @@ public struct SurfaceInteractionConfiguration: Equatable, Sendable {
 }
 
 @MainActor
-public final class SurfaceCoordinator: NotchSurfaceToggling {
+public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecycleHandling,
+    NotchSurfaceDebugToggling
+{
     public private(set) var snapshot = SurfaceSnapshot()
     private let panel: any SurfacePanelPresenting
     private let input: (any SurfaceInputMonitoring)?
     private let geometryInput: (any SurfaceGeometryRevalidating)?
+    private let contextInput: (any SurfaceContextObserving)?
     private let detailInput: (any DetailNavigationInput)?
     private let detailNavigator: (any DetailNavigating)?
     private let scheduler: any SurfaceInteractionScheduling
@@ -34,6 +38,8 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
     private var hoverGeneration = 0
     private var collapseGeneration = 0
     private var isHoveringExpanded = false
+    private var recoveryTask: (any SurfaceInteractionTask)?
+    private var recoveryGeneration = 0
 
     public init(
         panel: any SurfacePanelPresenting,
@@ -45,6 +51,7 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
         self.panel = panel
         self.input = input ?? (panel as? any SurfaceInputMonitoring)
         self.geometryInput = panel as? any SurfaceGeometryRevalidating
+        self.contextInput = panel as? any SurfaceContextObserving
         self.detailInput = self.input as? any DetailNavigationInput
         self.detailNavigator = detailNavigator
         self.scheduler = scheduler ?? MainQueueSurfaceScheduler()
@@ -55,14 +62,31 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
         self.geometryInput?.setDisplayChangeHandler { [weak self] in
             self?.revalidateDisplayGeometry()
         }
+        self.contextInput?.setContextChangeHandler { [weak self] intent in
+            _ = self?.handle(intent)
+        }
         self.detailInput?.setDetailNavigationHandler { [weak detailNavigator] request in
             _ = detailNavigator?.open(request)
         }
+        publishDebugSnapshot()
     }
 
     @discardableResult
     public func handle(_ intent: SurfaceIntent) -> SurfaceState {
+        defer { publishDebugSnapshot() }
         switch intent {
+        case .fullScreenPolicyEngaged where snapshot.state != .hidden:
+            snapshot.suppressionReason = .fullScreen
+            _ = apply(.suppressed)
+            updateTimers(after: .suppressed, state: snapshot.state)
+        case .fullScreenPolicyCleared where snapshot.state == .suppressed:
+            snapshot.suppressionReason = nil
+            _ = apply(.showCollapsed)
+            updateTimers(after: .showCollapsed, state: snapshot.state)
+        case .willSleep, .sessionLocked:
+            pauseInteraction()
+        case .didWake, .sessionUnlocked, .displayInvalidated:
+            resumeAndRecover()
         case .hoverEntered where snapshot.state == .collapsed:
             scheduleHoverExpansion()
         case .hoverExited:
@@ -93,6 +117,24 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
         }
     }
 
+    public func handleAppShellLifecycle(_ event: AppShellLifecycleEvent) {
+        switch event {
+        case .willSleep: _ = handle(.willSleep)
+        case .didWake: _ = handle(.didWake)
+        case .locked: _ = handle(.sessionLocked)
+        case .unlocked: _ = handle(.sessionUnlocked)
+        case .activated: _ = handle(.displayInvalidated)
+        case .deactivated, .willTerminate: break
+        }
+    }
+
+    public func toggleDebugOverlay() -> Bool {
+        guard let overlay = panel as? any SurfaceDebugOverlayToggling else { return false }
+        overlay.toggleDebugOverlay()
+        publishDebugSnapshot()
+        return true
+    }
+
     private func apply(_ intent: SurfaceIntent) -> SurfaceState? {
         guard let transition = SurfaceStateMachine.transition(from: snapshot.state, for: intent),
             panel.apply(transition.effect)
@@ -108,14 +150,68 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
     }
 
     private func revalidateDisplayGeometry() {
+        _ = handle(.displayInvalidated)
+    }
+
+    private func pauseInteraction() {
         guard snapshot.state != .hidden else { return }
-        guard geometryInput?.revalidateGeometry() == true else {
-            _ = handle(.suppressed)
+        cancelHoverExpansion()
+        cancelAutoCollapse()
+        cancelRecovery()
+        snapshot.isInteractionPaused = true
+        _ = panel.apply(.pauseInteraction)
+    }
+
+    private func resumeAndRecover() {
+        guard snapshot.state != .hidden else { return }
+        snapshot.isInteractionPaused = false
+        beginRecovery()
+    }
+
+    private func beginRecovery() {
+        guard snapshot.state != .hidden, snapshot.state != .recovering else { return }
+        cancelHoverExpansion()
+        cancelAutoCollapse()
+        snapshot.state = .recovering
+        snapshot.recoveryAttemptCount = 0
+        snapshot.recoveryOutcome = .pending
+        snapshot.warning = nil
+        _ = panel.apply(.suppress)
+        attemptRecovery()
+    }
+
+    private func attemptRecovery() {
+        snapshot.recoveryAttemptCount += 1
+        if geometryInput?.revalidateGeometry() == true, panel.apply(.showCollapsed) {
+            snapshot.state = .collapsed
+            snapshot.recoveryOutcome = .recovered
             return
         }
-        if snapshot.state == .suppressed {
-            _ = handle(.showCollapsed)
+        guard snapshot.recoveryAttemptCount < 2 else {
+            snapshot.state = .hidden
+            snapshot.recoveryOutcome = .failed
+            snapshot.warning = .recoveryFailed
+            _ = panel.apply(.hide)
+            return
         }
+        recoveryGeneration += 1
+        let generation = recoveryGeneration
+        recoveryTask = scheduler.schedule(after: SurfaceInteractionDefaults.recoveryBackoff) { [weak self] in
+            guard let self, self.recoveryGeneration == generation else { return }
+            self.recoveryTask = nil
+            self.attemptRecovery()
+            self.publishDebugSnapshot()
+        }
+    }
+
+    private func cancelRecovery() {
+        recoveryGeneration += 1
+        recoveryTask?.cancel()
+        recoveryTask = nil
+    }
+
+    private func publishDebugSnapshot() {
+        (panel as? any SurfaceDebugOverlayPresenting)?.setDebugSnapshot(snapshot)
     }
 
     private func scheduleHoverExpansion() {
@@ -155,13 +251,24 @@ public final class SurfaceCoordinator: NotchSurfaceToggling {
 
 public struct SurfaceSnapshot: Equatable, Sendable {
     public fileprivate(set) var state: SurfaceState = .hidden
+    public fileprivate(set) var suppressionReason: SurfaceSuppressionReason?
+    public fileprivate(set) var recoveryAttemptCount = 0
+    public fileprivate(set) var recoveryOutcome: SurfaceRecoveryOutcome?
+    public fileprivate(set) var warning: SurfaceWarning?
+    public fileprivate(set) var isInteractionPaused = false
     public init() {}
 }
+
+public enum SurfaceSuppressionReason: Equatable, Sendable { case fullScreen }
+public enum SurfaceRecoveryOutcome: Equatable, Sendable { case pending, recovered, failed }
+public enum SurfaceWarning: Equatable, Sendable { case recoveryFailed }
 
 public enum SurfaceIntent: Equatable, Sendable {
     case toggle, showCollapsed, hide, hoverEntered, hoverExited, hoverDelayElapsed
     case expandedHoverEntered, expandedHoverExited, clicked, interaction
     case escapePressed, clickedOutside, autoCollapseElapsed, suppressed, showCompact
+    case fullScreenPolicyEngaged, fullScreenPolicyCleared
+    case willSleep, didWake, sessionLocked, sessionUnlocked, displayInvalidated
 }
 
 public enum SurfacePanelEffect: Equatable, Sendable {
@@ -170,11 +277,22 @@ public enum SurfacePanelEffect: Equatable, Sendable {
     case showExpanded(focus: Bool)
     case hide
     case suppress
+    case pauseInteraction
 }
 
 @MainActor
 public protocol SurfacePanelPresenting: AnyObject {
     func apply(_ effect: SurfacePanelEffect) -> Bool
+}
+
+@MainActor
+public protocol SurfaceDebugOverlayPresenting: AnyObject {
+    func setDebugSnapshot(_ snapshot: SurfaceSnapshot)
+}
+
+@MainActor
+public protocol SurfaceDebugOverlayToggling: SurfaceDebugOverlayPresenting {
+    func toggleDebugOverlay()
 }
 
 @MainActor
@@ -190,6 +308,11 @@ public protocol SurfaceDisplayObserving: AnyObject {
 @MainActor
 public protocol SurfaceGeometryRevalidating: SurfaceDisplayObserving {
     func revalidateGeometry() -> Bool
+}
+
+@MainActor
+public protocol SurfaceContextObserving: AnyObject {
+    func setContextChangeHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void)
 }
 
 @MainActor

@@ -20,6 +20,9 @@ struct NotchHubApp: App {
             Button("Toggle Notch Surface") {
                 perform(.toggleNotchSurface)
             }
+            Button("Toggle F2 Surface Debug Overlay") {
+                perform(.toggleSurfaceDebugOverlay)
+            }
             Button("Show Demo State") {
                 perform(.showDemoState)
             }

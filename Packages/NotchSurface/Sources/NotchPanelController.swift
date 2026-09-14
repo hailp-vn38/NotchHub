@@ -4,7 +4,7 @@ import SwiftUI
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
 public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring, DetailNavigationInput,
-    SurfaceGeometryRevalidating
+    SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling
 {
     private var panel: NSPanel?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
@@ -12,7 +12,11 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private var eventMonitors: [Any] = []
     private weak var priorKeyWindow: NSWindow?
     private var screenParametersObservation: ScreenParametersObservation?
+    private var activeSpaceObservation: ScreenParametersObservation?
     private var displayChangeHandler: (@MainActor () -> Void)?
+    private var contextChangeHandler: (@MainActor (SurfaceIntent) -> Void)?
+    private var debugSnapshot = SurfaceSnapshot()
+    private var debugOverlayEnabled = false
 
     public init() {
         let observer = NotificationCenter.default.addObserver(
@@ -29,10 +33,24 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             }
         }
         screenParametersObservation = ScreenParametersObservation(observer)
+        let activeSpaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.contextChangeHandler?(
+                    self?.anotherApplicationOwnsFullScreenSpace() == true
+                        ? .fullScreenPolicyEngaged
+                        : .fullScreenPolicyCleared)
+            }
+        }
+        activeSpaceObservation = ScreenParametersObservation(activeSpaceObserver)
     }
 
     deinit {
         screenParametersObservation?.cancel()
+        activeSpaceObservation?.cancel()
     }
 
     public func apply(_ effect: SurfacePanelEffect) -> Bool {
@@ -51,6 +69,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             removeEventMonitors()
             panel?.orderOut(nil)
             return true
+        case .pauseInteraction:
+            removeEventMonitors()
+            panel?.orderOut(nil)
+            return true
         }
     }
 
@@ -66,6 +88,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         displayChangeHandler = handler
     }
 
+    public func setContextChangeHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
+        contextChangeHandler = handler
+    }
+
     public func revalidateGeometry() -> Bool {
         guard let panel else { return false }
         guard let frame = surfaceFrame(for: panel.frame.size) else {
@@ -77,6 +103,15 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         return true
     }
 
+    public func setDebugSnapshot(_ snapshot: SurfaceSnapshot) {
+        debugSnapshot = snapshot
+    }
+
+    public func toggleDebugOverlay() {
+        debugOverlayEnabled.toggle()
+        refreshDebugOverlay()
+    }
+
     private func showCollapsed() -> Bool {
         guard let frame = surfaceFrame(for: NSSize(width: 136, height: 46)) else { return false }
 
@@ -86,7 +121,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         panel.contentView = NSHostingView(
             rootView: CollapsedNotchSurfaceView { [weak self] intent in
                 self?.interactionHandler?(intent)
-            })
+            }
+            .overlay(alignment: .bottomLeading) { debugOverlay(for: panel) })
         panel.orderFrontRegardless()
         panel.resignKey()
         priorKeyWindow?.makeKeyAndOrderFront(nil)
@@ -104,7 +140,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         panel.contentView = NSHostingView(
             rootView: CompactNotchSurfaceView { [weak self] in
                 self?.interactionHandler?(.clicked)
-            })
+            }
+            .overlay(alignment: .bottomLeading) { debugOverlay(for: panel) })
         panel.orderFrontRegardless()
         panel.resignKey()
         self.panel = panel
@@ -121,7 +158,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
                 self?.interactionHandler?(intent)
             } openDetail: { [weak self] in
                 self?.detailNavigationHandler?(.placeholder)
-            })
+            }
+            .overlay(alignment: .bottomLeading) { debugOverlay(for: panel) })
         installExpandedEventMonitors()
         if focus {
             priorKeyWindow = NSApp.keyWindow
@@ -144,6 +182,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.level = .statusBar
+        // This keeps the utility surface reachable across Spaces while policy suppression owns full-screen visibility.
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.isMovable = false
@@ -176,6 +215,24 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         eventMonitors.removeAll()
     }
 
+    private func refreshDebugOverlay() {
+        guard panel != nil else { return }
+        switch debugSnapshot.state {
+        case .collapsed: _ = showCollapsed()
+        case .compact: _ = showCompact()
+        case .expanded: _ = showExpanded(focus: false)
+        case .hidden, .suppressed, .recovering: break
+        }
+    }
+
+    @ViewBuilder
+    private func debugOverlay(for panel: NSPanel) -> some View {
+        if debugOverlayEnabled {
+            SurfaceDebugOverlay(
+                snapshot: debugSnapshot, frame: panel.frame, collectionBehavior: panel.collectionBehavior)
+        }
+    }
+
     private func surfaceFrame(for size: NSSize) -> NSRect? {
         let screens = NSScreen.screens
         let topology = ScreenTopology(screens: screens.map(screenTopology))
@@ -183,6 +240,26 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             screens.indices.contains(where: { screenIdentifier(for: screens[$0]) == geometry.screenIdentifier })
         else { return nil }
         return geometry.frame
+    }
+
+    private func anotherApplicationOwnsFullScreenSpace() -> Bool {
+        let ownProcessID = ProcessInfo.processInfo.processIdentifier
+        let screens = NSScreen.screens.map(\.frame)
+        guard !screens.isEmpty,
+            let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[CFString: Any]]
+        else { return false }
+        return windows.contains { window in
+            guard let ownerPID = window[kCGWindowOwnerPID] as? pid_t,
+                ownerPID != ownProcessID,
+                (window[kCGWindowLayer] as? Int) == 0
+            else { return false }
+            let bounds = window[kCGWindowBounds] as! CFDictionary  // CoreGraphics guarantees this window-list field.
+            guard let frame = CGRect(dictionaryRepresentation: bounds) else { return false }
+            return screens.contains { screen in
+                frame.width >= screen.width && frame.height >= screen.height
+            }
+        }
     }
 
     private func screenTopology(for screen: NSScreen) -> ScreenTopology.Screen {
@@ -218,6 +295,34 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
             height: min(left.height, right.height)
         )
         return screen.frame.contains(notch) && !notch.isEmpty ? notch : nil
+    }
+}
+
+private struct SurfaceDebugOverlay: View {
+    let snapshot: SurfaceSnapshot
+    let frame: NSRect
+    let collectionBehavior: NSWindow.CollectionBehavior
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(verbatim: "F2 DEBUG  state=\(snapshot.state.rawValue)  paused=\(snapshot.isInteractionPaused)")
+            Text(
+                verbatim: "frame=\(Int(frame.origin.x)),\(Int(frame.origin.y)) \(Int(frame.width))×\(Int(frame.height))"
+            )
+            Text(
+                verbatim:
+                    "flags=\(collectionBehavior.rawValue) suppress=\(snapshot.suppressionReason.map { String(describing: $0) } ?? "none")"
+            )
+            Text(
+                verbatim:
+                    "recovery=\(snapshot.recoveryAttemptCount) \(snapshot.recoveryOutcome.map { String(describing: $0) } ?? "none")"
+            )
+        }
+        .font(.system(size: 8, design: .monospaced))
+        .foregroundStyle(.green)
+        .padding(4)
+        .background(.black.opacity(0.85))
+        .accessibilityLabel("F2 surface debug overlay")
     }
 }
 
