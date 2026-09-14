@@ -8,7 +8,6 @@ enum NotchSurfaceMetrics {
     static let closedBottomCornerRadius: CGFloat = 14
     static let openedTopShoulderRadius: CGFloat = 19
     static let openedBottomCornerRadius: CGFloat = 24
-    static let closeHostSettleDelay: Duration = .milliseconds(500)
 }
 
 @MainActor

@@ -23,14 +23,17 @@ func anchorsGeometryToBuiltInPhysicalNotch() {
     )
 
     let geometry = NotchSurfaceGeometry.frame(
-        for: .init(width: 136, height: 46),
+        for: SurfaceExpansionContract.hostSize,
         in: .init(screens: [external, builtIn])
     )
 
     #expect(geometry?.screenIdentifier == builtIn.identifier)
     #expect(geometry?.frame.midX == builtIn.physicalNotchFrame?.midX)
-    #expect(geometry?.frame.maxY == min(builtIn.physicalNotchFrame!.minY, builtIn.visibleFrame.maxY))
-    #expect(geometry.map { builtIn.visibleFrame.contains($0.frame) } == true)
+    // The fixed native host reaches the real display top. The visible surface
+    // then morphs inside it without moving the host between states.
+    #expect(geometry?.frame.maxY == builtIn.frame.maxY)
+    #expect(geometry?.frame.size == SurfaceExpansionContract.hostSize)
+    #expect(geometry.map { builtIn.frame.contains($0.frame) } == true)
 }
 
 @Test("Geometry uses a contained top-center fallback for a built-in display without a valid notch")
@@ -50,7 +53,7 @@ func fallsBackSafelyWhenPhysicalNotchIsMissingOrInvalid() {
     )
 
     #expect(geometry?.screenIdentifier == builtIn.identifier)
-    #expect(geometry.map { builtIn.visibleFrame.contains($0.frame) } == true)
+    #expect(geometry.map { builtIn.frame.contains($0.frame) } == true)
     #expect(geometry?.frame.midX == builtIn.visibleFrame.midX)
 }
 
@@ -135,8 +138,8 @@ func suppressesInvalidTopologiesAndReframesAfterScaleChange() {
     let originalGeometry = NotchSurfaceGeometry.frame(for: size, in: .init(screens: [original]))
     let changedGeometry = NotchSurfaceGeometry.frame(for: size, in: .init(screens: [changed]))
 
-    #expect(originalGeometry.map { original.visibleFrame.contains($0.frame) } == true)
-    #expect(changedGeometry.map { changed.visibleFrame.contains($0.frame) } == true)
+    #expect(originalGeometry.map { original.frame.contains($0.frame) } == true)
+    #expect(changedGeometry.map { changed.frame.contains($0.frame) } == true)
     #expect(originalGeometry?.frame != changedGeometry?.frame)
 }
 
