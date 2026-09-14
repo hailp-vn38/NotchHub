@@ -1,0 +1,181 @@
+import NotchDomain
+import Observation
+import SwiftUI
+
+enum NotchSurfaceMetrics {
+    static let compactSize = CGSize(width: 220, height: 52)
+    static let closedTopShoulderRadius: CGFloat = 6
+    static let closedBottomCornerRadius: CGFloat = 14
+    static let openedTopShoulderRadius: CGFloat = 19
+    static let openedBottomCornerRadius: CGFloat = 24
+    static let closeHostSettleDelay: Duration = .milliseconds(500)
+}
+
+@MainActor
+@Observable
+final class NotchSurfacePresentationModel {
+    private(set) var snapshot = SurfaceSnapshot()
+    private(set) var collapsedSize = NotchSurfaceGeometry.fallbackCollapsedSize
+    private(set) var projectedState: SurfaceState = .hidden
+    var isHovering = false
+    var debugLabel: String?
+
+    func apply(_ snapshot: SurfaceSnapshot, collapsedSize: CGSize? = nil) {
+        self.snapshot = snapshot
+        if let collapsedSize { self.collapsedSize = collapsedSize }
+    }
+
+    func project(_ state: SurfaceState, collapsedSize: CGSize? = nil) {
+        projectedState = state
+        if let collapsedSize { self.collapsedSize = collapsedSize }
+    }
+
+    var visibleSurfaceSize: CGSize {
+        switch projectedState {
+        case .expanded: SurfaceExpansionContract.surfaceSize
+        case .compact: NotchSurfaceMetrics.compactSize
+        default: collapsedSize
+        }
+    }
+
+    var topShoulderRadius: CGFloat {
+        projectedState == .expanded
+            ? NotchSurfaceMetrics.openedTopShoulderRadius
+            : NotchSurfaceMetrics.closedTopShoulderRadius
+    }
+
+    var bottomCornerRadius: CGFloat {
+        projectedState == .expanded
+            ? NotchSurfaceMetrics.openedBottomCornerRadius
+            : NotchSurfaceMetrics.closedBottomCornerRadius
+    }
+}
+
+struct NotchSurfaceShape: Shape {
+    var topShoulderRadius: CGFloat
+    var bottomCornerRadius: CGFloat
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { .init(topShoulderRadius, bottomCornerRadius) }
+        set {
+            topShoulderRadius = newValue.first
+            bottomCornerRadius = newValue.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let shoulder = min(max(topShoulderRadius, 0), rect.height * 0.45)
+        let bottom = min(max(bottomCornerRadius, 0), rect.height * 0.45)
+        let leftWall = rect.minX + shoulder
+        let rightWall = rect.maxX - shoulder
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addCurve(
+            to: CGPoint(x: leftWall, y: rect.minY + shoulder),
+            control1: CGPoint(x: rect.minX + shoulder * 0.62, y: rect.minY),
+            control2: CGPoint(x: leftWall, y: rect.minY + shoulder * 0.38)
+        )
+        path.addLine(to: CGPoint(x: leftWall, y: rect.maxY - bottom))
+        path.addCurve(
+            to: CGPoint(x: leftWall + bottom, y: rect.maxY),
+            control1: CGPoint(x: leftWall, y: rect.maxY - bottom * 0.30),
+            control2: CGPoint(x: leftWall + bottom * 0.30, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: rightWall - bottom, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rightWall, y: rect.maxY - bottom),
+            control1: CGPoint(x: rightWall - bottom * 0.30, y: rect.maxY),
+            control2: CGPoint(x: rightWall, y: rect.maxY - bottom * 0.30)
+        )
+        path.addLine(to: CGPoint(x: rightWall, y: rect.minY + shoulder))
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control1: CGPoint(x: rightWall, y: rect.minY + shoulder * 0.38),
+            control2: CGPoint(x: rect.maxX - shoulder * 0.62, y: rect.minY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct NotchSurfaceTouchView<S: Shape>: View {
+    let shape: S
+    let onHoverChanged: (Bool) -> Void
+    let onTap: () -> Void
+
+    var body: some View {
+        shape
+            .fill(.clear)
+            .contentShape(shape)
+            .onHover(perform: onHoverChanged)
+            .onTapGesture(perform: onTap)
+    }
+}
+
+struct NotchSurfaceRootView: View {
+    @Bindable var model: NotchSurfacePresentationModel
+    let send: (SurfaceIntent) -> Void
+    let openDetail: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isExpanded: Bool { model.projectedState == .expanded }
+
+    var body: some View {
+        let shape = NotchSurfaceShape(
+            topShoulderRadius: model.topShoulderRadius,
+            bottomCornerRadius: model.bottomCornerRadius
+        )
+        ZStack(alignment: .top) {
+            shape.fill(.black)
+            if isExpanded {
+                VStack(spacing: 8) {
+                    Text("NotchHub").font(.headline)
+                    Text("Surface ready").font(.subheadline).foregroundStyle(.secondary)
+                    Button("View detail", action: openDetail)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(12)
+                .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
+            }
+            Rectangle()
+                .fill(.black)
+                .frame(height: 1)
+                .padding(.horizontal, model.topShoulderRadius)
+                .frame(maxHeight: .infinity, alignment: .top)
+            if let debugLabel = model.debugLabel {
+                Text(verbatim: debugLabel)
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.green)
+                    .padding(4)
+                    .background(.black.opacity(0.85))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .accessibilityLabel("F2 surface debug overlay")
+            }
+        }
+        .frame(width: model.visibleSurfaceSize.width, height: model.visibleSurfaceSize.height, alignment: .top)
+        .clipShape(shape)
+        .overlay {
+            NotchSurfaceTouchView(shape: shape, onHoverChanged: handleHover) { send(.clicked) }
+        }
+        .shadow(color: isExpanded || model.isHovering ? .black.opacity(0.7) : .clear, radius: 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(surfaceAnimation, value: model.projectedState)
+    }
+
+    private var surfaceAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.12)
+            : isExpanded
+                ? .spring(response: 0.42, dampingFraction: 0.80)
+                : .spring(response: 0.45, dampingFraction: 1.00)
+    }
+
+    private func handleHover(_ hovering: Bool) {
+        model.isHovering = hovering
+        send(
+            hovering
+                ? (isExpanded ? .expandedHoverEntered : .hoverEntered)
+                : (isExpanded ? .expandedHoverExited : .hoverExited))
+    }
+}

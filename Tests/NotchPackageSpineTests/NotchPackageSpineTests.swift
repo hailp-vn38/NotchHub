@@ -54,6 +54,31 @@ func fallsBackSafelyWhenPhysicalNotchIsMissingOrInvalid() {
     #expect(geometry?.frame.midX == builtIn.visibleFrame.midX)
 }
 
+@Test("Collapsed geometry follows the physical notch and preserves fixed expanded sizes")
+func derivesCollapsedSizeAndExposesFixedExpandedSurfaceSizes() {
+    let physicalNotch = CGRect(x: 648, y: 946, width: 216, height: 36)
+    let notchedDisplay = ScreenTopology.Screen(
+        identifier: "built-in",
+        isBuiltIn: true,
+        frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 942),
+        physicalNotchFrame: physicalNotch,
+        scale: 2
+    )
+    let noNotchDisplay = ScreenTopology.Screen(
+        identifier: "built-in",
+        isBuiltIn: true,
+        frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 942),
+        scale: 2
+    )
+
+    #expect(NotchSurfaceGeometry.collapsedSize(in: .init(screens: [notchedDisplay])) == CGSize(width: 220, height: 36))
+    #expect(NotchSurfaceGeometry.collapsedSize(in: .init(screens: [noNotchDisplay])) == CGSize(width: 185, height: 32))
+    #expect(SurfaceExpansionContract.surfaceSize == CGSize(width: 640, height: 190))
+    #expect(SurfaceExpansionContract.hostSize == CGSize(width: 640, height: 210))
+}
+
 @Test("Geometry suppresses unavailable or invalid built-in displays and reframes changed topology")
 func suppressesInvalidTopologiesAndReframesAfterScaleChange() {
     let externalOnly = ScreenTopology.Screen(

@@ -204,7 +204,8 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         snapshot.admissionFeedback = .expandedUnavailable(topologyRevision: topologyRevision)
         admissionFeedbackGeneration += 1
         let generation = admissionFeedbackGeneration
-        admissionFeedbackTask = scheduler.schedule(after: SurfaceInteractionDefaults.admissionFeedbackDuration) { [weak self] in
+        admissionFeedbackTask = scheduler.schedule(after: SurfaceInteractionDefaults.admissionFeedbackDuration) {
+            [weak self] in
             guard let self, self.admissionFeedbackGeneration == generation else { return }
             self.admissionFeedbackTask = nil
             self.snapshot.admissionFeedback = nil
@@ -366,6 +367,7 @@ public enum SurfaceExpandedAvailability: Equatable, Sendable {
 }
 
 public enum SurfaceExpansionContract {
+    public static let surfaceSize = CGSize(width: 640, height: 190)
     public static let hostSize = CGSize(width: 640, height: 210)
 }
 

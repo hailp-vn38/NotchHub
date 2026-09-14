@@ -46,6 +46,23 @@ public struct NotchSurfaceFrame: Equatable, Sendable {
 
 /// Selects only the built-in display and keeps every result below the menu bar.
 public enum NotchSurfaceGeometry {
+    public static let fallbackCollapsedSize = CGSize(width: 185, height: 32)
+    public static let physicalNotchWidthTolerance: CGFloat = 4
+
+    /// Uses the physical camera housing when it is valid, with a safe top-center fallback otherwise.
+    public static func collapsedSize(in topology: ScreenTopology) -> CGSize? {
+        guard let screen = topology.screens.first(where: { $0.isBuiltIn }), isValid(screen) else {
+            return nil
+        }
+        guard let notch = screen.physicalNotchFrame,
+            screen.frame.contains(notch),
+            !notch.isEmpty
+        else {
+            return fallbackCollapsedSize
+        }
+        return CGSize(width: notch.width + physicalNotchWidthTolerance, height: notch.height)
+    }
+
     public static func expandedAvailability(
         in topology: ScreenTopology,
         topologyRevision: UInt64
@@ -74,9 +91,7 @@ public enum NotchSurfaceGeometry {
         )
         guard size.width > 0, size.height > 0 else { return nil }
 
-        let validNotch = screen.physicalNotchFrame.flatMap { notch in
-            screen.frame.contains(notch) && !notch.isEmpty ? notch : nil
-        }
+        let validNotch = validPhysicalNotch(on: screen)
         let anchorX = validNotch?.midX ?? usableFrame.midX
         let originX = min(max(anchorX - size.width / 2, usableFrame.minX), usableFrame.maxX - size.width)
         let anchorTop = min(validNotch?.minY ?? usableFrame.maxY, usableFrame.maxY)
@@ -94,9 +109,7 @@ public enum NotchSurfaceGeometry {
         guard size.width > 0, size.height > 0 else { return nil }
         let usableFrame = screen.visibleFrame.intersection(screen.frame)
         guard usableFrame.width >= size.width, usableFrame.height >= size.height else { return nil }
-        let validNotch = screen.physicalNotchFrame.flatMap { notch in
-            screen.frame.contains(notch) && !notch.isEmpty ? notch : nil
-        }
+        let validNotch = validPhysicalNotch(on: screen)
         let anchorX = validNotch?.midX ?? usableFrame.midX
         let originX = anchorX - size.width / 2
         let anchorTop = min(validNotch?.minY ?? usableFrame.maxY, usableFrame.maxY)
@@ -108,5 +121,11 @@ public enum NotchSurfaceGeometry {
     private static func isValid(_ screen: ScreenTopology.Screen) -> Bool {
         !screen.identifier.isEmpty && screen.scale > 0 && !screen.frame.isEmpty && !screen.visibleFrame.isEmpty
             && screen.frame.intersects(screen.visibleFrame)
+    }
+
+    private static func validPhysicalNotch(on screen: ScreenTopology.Screen) -> CGRect? {
+        screen.physicalNotchFrame.flatMap { notch in
+            screen.frame.contains(notch) && !notch.isEmpty ? notch : nil
+        }
     }
 }
