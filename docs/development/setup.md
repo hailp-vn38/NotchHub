@@ -49,20 +49,20 @@ Minimum development environment:
 
 ### 3.3 Toolchain
 
-- Xcode with Swift 6 support.
+- The Xcode/Swift toolchain pinned by the checked-in F0 scaffold (for example, `.xcode-version` and the matching CI image); it must support Swift 6 strict concurrency checking.
 - Swift Package Manager (bundled with Swift/Xcode).
 - Git.
 - Terminal shell available through macOS.
 - Apple Developer account only when signing, entitlements, device testing, or notarization requires it.
 
-The exact Xcode version will be pinned in the repository once the initial scaffold is created. Do not assume that the latest Xcode is always the supported version; check the project configuration and CI workflow.
+The F0 scaffold must pin one Xcode version and use the matching CI image. Do not assume that the latest Xcode is supported; the pin and CI workflow are the source of truth.
 
 ### 3.4 Optional tools
 
 Use only tools declared by repository policy:
 
-- SwiftFormat.
-- SwiftLint.
+- One checked-in formatter selected by the F0 scaffold.
+- Optional SwiftLint only after a small checked-in rule set is adopted.
 - Markdown link checker.
 - Secret scanner.
 - Instruments/Xcode Organizer.

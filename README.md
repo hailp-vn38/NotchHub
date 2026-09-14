@@ -8,7 +8,7 @@ The first intended AI integration is Xiaozhi, but Xiaozhi is deliberately **not 
 
 ## Status
 
-**Project phase:** Architecture and foundation planning. F0 implementation has not started; the Swift/Xcode scaffold, Git/CI setup, tests, and ADR files required by the F0 exit gate are not yet present.
+**Project phase:** F0 bootstrap. The architecture baseline, glossary, and initial ADR set are present; the Swift/Xcode scaffold, pinned toolchain, Git/CI setup, and tests remain to be implemented before the F0 exit gate.
 
 The first implementation milestone is the foundation app:
 

@@ -7,7 +7,7 @@
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
-**Current execution phase:** F0 — Not started. This directory currently contains planning documents only; the Git repository metadata, Swift/Xcode scaffold, CI, tests, and ADR files required by the F0 exit gate are not yet present.
+**Current execution phase:** F0 — Bootstrap in progress. The documentation baseline, root glossary, and initial ADR set are present; the Swift/Xcode scaffold, pinned toolchain, CI, and tests remain required for the F0 exit gate.
 
 ---
 
@@ -122,11 +122,11 @@ docs/
 ├── quality/
 │   ├── testing-strategy.md
 │   ├── manual-qa.md                      # F2/F10
-│   └── performance-test-plan.md          # F0/F10; may link performance.md
+│   └── performance-test-plan.md          # F10; may link performance.md
 │
 ├── operations/
 │   ├── logging-diagnostics.md             # F9
-│   ├── privacy.md                         # F0/beta
+│   ├── privacy.md                         # F4/beta
 │   └── release.md                         # pre-beta/release
 │
 ├── development/
@@ -900,7 +900,6 @@ This order minimizes rework: product boundaries come before architecture, contra
 
 ### Still to create when relevant
 
-- Initial architecture ADR files.
 - `docs/design/design-system.md`.
 - `docs/design/notch-interaction.md`.
 - `docs/design/settings-information-architecture.md`.
