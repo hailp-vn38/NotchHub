@@ -8,7 +8,8 @@
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
 **Current execution phase:** F2 — Notch surface shell. F0 and F1 are complete; [F0 evidence](quality/f0-evidence.md)
-and [F1 evidence](quality/f1-evidence.md) record their passing gates.
+and [F1 evidence](quality/f1-evidence.md) record their passing gates. [F2 evidence](quality/f2-evidence.md)
+records passed automated verification and the remaining native manual gate.
 
 ---
 
@@ -122,7 +123,8 @@ docs/
 │
 ├── quality/
 │   ├── testing-strategy.md
-│   ├── f1-evidence.md                 # F1 evidence template
+│   ├── f1-evidence.md                 # F1 evidence
+│   ├── f2-evidence.md                 # F2 automated and manual evidence
 │   ├── manual-qa.md                      # F2/F10
 │   └── performance-test-plan.md          # F10; may link performance.md
 │
