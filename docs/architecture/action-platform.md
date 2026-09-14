@@ -85,7 +85,7 @@ public struct ActionInvocationID: RawRepresentable, Codable, Hashable, Sendable 
 Action IDs are stable namespaced strings:
 
 ```text
-app.toggleSurface
+
 app.openSettings
 app.openDiagnostics
 surface.showDemoStatus
@@ -401,7 +401,7 @@ Allow “Delete clipboard item” requested by the Notch?
 Allow “Run assistant action: …” requested by Xiaozhi relay?
 ```
 
-The Notch is suitable for short confirmation; complex details should open a dedicated confirmation/detail window.
+The Notch is suitable for short confirmation; complex details should open a dedicated confirmation/application scene.
 
 ---
 
@@ -430,13 +430,9 @@ public struct ShortcutBinding: Codable, Sendable {
 
 ### 10.3 Default foundation bindings
 
-A default toggle shortcut may be supplied, for example:
-
-```text
-⌥⌘Space → app.toggleSurface
-```
-
-The exact default is configurable and must be checked for conflict with the user's environment.
+No user-facing shortcut toggles Surface visibility. Shortcuts may still invoke
+registered expansion, collapse, or application-scene actions where explicitly
+defined by the owning feature.
 
 ---
 
@@ -545,9 +541,8 @@ IPC source policy is checked before registry lookup. Unknown clients cannot invo
 
 | Action ID | Category | Confirmation | Purpose |
 |---|---|---|---|
-| `app.toggleSurface` | App | Never | Toggle surface visibility/state |
 | `app.openSettings` | App | Never | Open Settings |
-| `app.openDiagnostics` | App | Never | Open Diagnostics |
+| `app.openDiagnostics` | App | Never | Diagnostics |
 | `app.restartRuntime` | Runtime | First use/always by setting | Restart module runtime |
 | `surface.showDemoStatus` | Surface | Never | Inject deterministic demo status |
 | `surface.toggleDebugOverlay` | Development | Never | Toggle development overlay |

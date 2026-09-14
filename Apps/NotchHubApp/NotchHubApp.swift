@@ -8,40 +8,15 @@ import SwiftUI
 struct NotchHubApp: App {
     @NSApplicationDelegateAdaptor(AppShellDelegate.self) private var appShell
     @Environment(\.openWindow) private var openWindow
-    @State private var statusMessage = "App shell ready."
-
     var body: some Scene {
         MenuBarExtra("NotchHub", systemImage: "menubar.rectangle") {
-            Text(statusMessage)
-                .disabled(true)
-
-            Divider()
-
-            Button("Toggle Notch Surface") {
-                perform(.toggleNotchSurface)
-            }
-            Button("Toggle F2 Surface Debug Overlay") {
-                perform(.toggleSurfaceDebugOverlay)
-            }
-            Button("Show Demo State") {
-                perform(.showDemoState)
-            }
-
-            Divider()
-
-            Button("Open Settings") {
+            Button("Settings") {
                 perform(.openSettings)
-            }
-            Button("Open Diagnostics") {
-                perform(.openDiagnostics)
             }
             Button("Restart App Shell") {
                 perform(.restartAppShell)
             }
-
-            Divider()
-
-            Button("Quit NotchHub") {
+            Button("Quit") {
                 perform(.quit)
             }
         }
@@ -58,18 +33,14 @@ struct NotchHubApp: App {
 
     private func perform(_ intent: AppShellMenuIntent) {
         appShell.setSceneOpener(openWindow)
-        statusMessage = appShell.perform(intent).message
+        _ = appShell.perform(intent)
     }
 }
 
 @MainActor
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
-    private lazy var detailWindow = DetailWindowCoordinator()
-    private lazy var notchSurface = SurfaceCoordinator(
-        panel: NotchPanelController(),
-        detailNavigator: detailWindow
-    )
+    private lazy var notchSurface = SurfaceCoordinator(panel: NotchPanelController())
     private lazy var coordinator = AppCoordinator(
         scenePresenter: self,
         lifecycleObserver: lifecycleObserver,

@@ -24,9 +24,9 @@ Accessibility is therefore a platform requirement, not a polish layer. Every cor
 1. **Equivalent access** — every important Notch action has a menu, keyboard, or Settings path; hover is never the only route.
 2. **Understandable state** — current status, errors, permission state, module state, and action outcome are announced/labelled in text, not conveyed only through color or animation.
 3. **Keyboard operability** — core controls are reachable by keyboard and have predictable focus behavior.
-4. **VoiceOver compatibility** — panels, controls, status changes, and detail routes have meaningful accessibility labels, values, hints, and grouping.
+4. **VoiceOver compatibility** — panels, controls, status changes, and application scenes have meaningful accessibility labels, values, hints, and grouping.
 5. **Motion safety** — reduced-motion preference reduces nonessential expansion, spring, visualizer, and continuous effects while retaining essential feedback.
-6. **Readable content** — compact content is short; detail windows support normal macOS text/readability preferences.
+6. **Readable content** — compact content is short; application scenes support normal macOS text/readability preferences.
 7. **No interaction traps** — the floating panel does not steal or trap focus when hidden/collapsed/suppressed.
 8. **Recoverable errors** — disabled, denied, failed, unavailable, and loading states explain cause and available next action.
 9. **Module accountability** — every module declares accessibility behavior and tests it before merge.
@@ -40,14 +40,14 @@ Accessibility is therefore a platform requirement, not a polish layer. Every cor
 
 | User task | Pointer/Notch path | Required alternate path |
 |---|---|---|
-| Show/hide Notch surface | Hover/click Notch | Menu bar action and configurable shortcut |
+| Interact with Notch surface | Hover/click Notch | Standard macOS interaction and Settings |
 | Open Settings | Notch action | Menu bar and `app.openSettings` action |
-| Open Diagnostics | Notch action | Menu bar and `app.openDiagnostics` action |
-| Collapse expanded surface | Click outside | Escape and surface toggle shortcut/action |
+| Diagnostics | Application scene | Settings or application navigation |
+| Collapse expanded surface | Click outside | Escape |
 | Enable/disable module | Settings switch | Keyboard focus/Space or Return activation |
 | Run action | Notch action button | Settings → Actions, menu/shortcut when registered |
 | Resolve permission | Inline Notch/module prompt | Settings → Permissions and System Settings route |
-| View long status/transcript/history | Notch detail affordance | Detail window/Settings route with keyboard navigation |
+| View long status/transcript/history | Application scene | Settings/application navigation with keyboard support |
 
 A user must never need to hover precisely around the camera/notch to reach an essential function.
 
@@ -59,7 +59,7 @@ A user must never need to hover precisely around the camera/notch to reach an es
 | Collapsed surface | Must not capture focus or obscure unrelated controls |
 | Compact status | Short text state; announce only meaningful/high-priority changes without notification spam |
 | Expanded panel | Focusable, grouped controls, Escape to collapse, predictable keyboard order |
-| Detail window | Standard accessible macOS window/scene with normal focus/navigation support |
+| Application scene | Standard accessible macOS window/scene with normal focus/navigation support |
 | Suppressed/hidden | Not focusable, not exposed as stale actionable UI |
 
 ---
@@ -103,11 +103,10 @@ No module can compensate for a broken panel focus model by adding custom event h
 | Expand/collapse button | Label: “Expand NotchHub” / “Collapse NotchHub” |
 | Status pill | Label: “Assistant status”. Value: “Thinking” |
 | Action button | Label: “Open Settings”. Hint: “Opens NotchHub settings.” |
-| Toggle | Label: “Enable Notch surface”. Value: “On”/“Off” |
-| Shortcut recorder | Label: “Shortcut for Toggle NotchHub”. Hint: “Press Return to record a new shortcut.” |
+| Toggle | Label: “Surface is always enabled”. Value: “On”/“Off” |
 | Permission row | Label: “Microphone permission”. Value: “Not enabled”. Hint: “Required only for Native Xiaozhi Voice.” |
 | Module row | Label: “Demo module”. Value: “Running”. Hint: “Press Return to open module settings.” |
-| Error state | Label: “Notch surface unavailable”. Value: “Built-in display is unavailable”. Hint: “Open Diagnostics for recovery options.” |
+| Error state | Label: “Notch surface unavailable”. Value: “Built-in display is unavailable”. Hint: “Diagnostics for recovery options.” |
 | Progress | Label: “Action progress”. Value: “60 percent complete” |
 
 Use current localized text in real implementation. The examples establish information content, not exact strings.
@@ -119,7 +118,7 @@ Announcements must be meaningful and rate-limited.
 | Event | VoiceOver behavior |
 |---|---|
 | User explicitly opens expanded surface | Move focus to panel heading/primary control; announce “NotchHub controls opened” |
-| User explicitly opens detail | Move focus to detail window heading |
+| User explicitly opens detail | Move focus to application scene heading |
 | Compact non-critical status | Do not automatically interrupt; make it discoverable when user navigates to the surface/menu |
 | Action started by user | Announce concise action start only if operation lasts long enough to matter |
 | Action completed/failed | Announce concise outcome; include recovery path for failure |
@@ -140,7 +139,7 @@ Use platform-appropriate accessibility notification APIs/SwiftUI accessibility m
 | Menu bar | Standard macOS menu navigation; all core actions reachable |
 | Collapsed/hidden surface | Does not steal focus; global shortcut/menu action can reveal it |
 | Expanded surface | Logical focus order; Tab/Shift-Tab through controls; Return/Space activates appropriate controls |
-| Detail window | Standard window focus behavior, Escape/back behavior documented |
+| Application scene | Standard window focus behavior and documented navigation |
 | Settings | Sidebar/page controls and rows navigable with keyboard |
 | Confirmation | Initial focus is safe default (usually Cancel); confirm action has clear label |
 | Shortcut recorder | Clearly enters/exits recording mode; Escape cancels recording without altering binding |
@@ -191,8 +190,8 @@ Settings focus order follows visual/top-to-bottom reading order within a page. A
 
 - Use legible system text styles/tokens.
 - Compact Notch content is intentionally short: one to three lines.
-- Do not force long user text into tiny Notch UI; truncate safely and provide “Open details.”
-- Detail windows and Settings must adapt to macOS text-size/accessibility preferences where available.
+- Do not force long user text into tiny Notch UI; truncate safely and provide an application-scene route.
+- Application scenes and Settings must adapt to macOS text-size/accessibility preferences where available.
 - Avoid fixed-height controls that clip larger text.
 - Never use all caps for essential status/instructions.
 
@@ -305,14 +304,14 @@ Example:
 ```text
 Notch surface is unavailable.
 The built-in display is currently not available.
-Use the menu bar to open Diagnostics or reconnect the display.
+Open Diagnostics through its application scene or Settings route, or reconnect the display through the owning recovery flow.
 ```
 
 ### 9.4 Time-sensitive/transient status
 
 - Auto-dismissing compact text must remain available in Diagnostics/recent action status when it represents a meaningful result/error.
 - Do not rely only on a toast/animation for critical completion/failure information.
-- Future assistant transcript should have a detail view/readout path and bounded history policy.
+- Future assistant transcript should have a application scene/readout path and bounded history policy.
 
 ---
 

@@ -20,7 +20,7 @@ Events are the integration boundary between:
 - Local scripts and `notchctl`.
 - Future external adapters such as a Xiaozhi relay.
 
-The protocol separates **what happened** from **how the Notch presents it**. A producer publishes an event; `EventRouter`, `EventBus`, and `PresentationPolicy` decide whether that event changes a module state, a compact status, a notification, or nothing visible. A separate detail view opens only after an explicit user-navigation action.
+The protocol separates **what happened** from **how the Notch presents it**. A producer publishes an event; `EventRouter`, `EventBus`, and `PresentationPolicy` decide whether that event changes a module state, a compact status, a notification, or nothing visible. A separate application scene opens only after an explicit user-navigation action.
 
 
 ---
@@ -76,7 +76,7 @@ flowchart LR
 5. **Validate** — version, required fields, payload size, timestamp, event type, and payload schema are checked.
 6. **Route** — valid events go to the typed EventBus; invalid events are rejected and recorded in sanitized diagnostics.
 7. **Project** — subscribed modules/stores update their domain/presentation projections.
-8. **Present** — `PresentationPolicy` decides whether the user sees a badge, compact status, expanded panel, notification, or nothing. It may expose a detail-navigation affordance, but cannot automatically open the detail window.
+8. **Present** — `PresentationPolicy` decides whether the user sees a badge, compact status, expanded panel, notification, or nothing. It may expose a application-scene navigation affordance, but cannot automatically open the application scene.
 9. **Observe** — counters, latency, drops, coalescing, and errors are recorded with bounded retention.
 
 ---
@@ -519,7 +519,7 @@ Presentation decision
 | Critical app/runtime error | Menu-bar badge/notification; avoid force-expanding over active work |
 | Future assistant state | Compact while allowed; store while suppressed |
 | Future transcript delta | Update existing compact/expanded session only; do not repeatedly force-expand |
-| Detail navigation event | Open detail only after explicit user action |
+| Application-scene navigation event | Open a dedicated application scene only after explicit user action |
 | Diagnostic/performance event | Diagnostics only by default |
 
 A module cannot bypass this policy by publishing `priority: critical`; priority is a hint subject to validation, authorization, and user suppression settings.

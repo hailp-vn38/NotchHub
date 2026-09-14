@@ -503,7 +503,7 @@ Risk levels:
 - Transcript classified user-content-sensitive.
 - No raw audio/binary frames in event history.
 - Explicit retention settings.
-- UI displays short tail; full transcript detail window only.
+- UI displays a short tail; full transcripts remain in dedicated application scenes only.
 - Tool events map to registered actions only.
 
 **Tests:** Fixture relay, raw-dump rejection, Unicode transcript, sequence/deduplication, redaction, memory cap.

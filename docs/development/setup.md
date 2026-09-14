@@ -408,7 +408,7 @@ If environment variables are required in the future:
 
 ### Notch surface is missing
 
-- Open Diagnostics from the menu bar.
+- Diagnostics from the menu bar.
 - Inspect surface state, selected display, calculated frame, suppression reason, and recovery count.
 - Confirm the built-in display is available.
 - Test with debug overlay enabled.
@@ -425,7 +425,7 @@ If environment variables are required in the future:
 
 ### Settings failed to load
 
-- Open Diagnostics.
+- Diagnostics.
 - Check schema version/migration error.
 - Preserve/copy the sanitized diagnostic report.
 - Use the scoped reset action if appropriate.

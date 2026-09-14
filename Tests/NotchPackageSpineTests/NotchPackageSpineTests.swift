@@ -256,8 +256,6 @@ func boundsRecoveryAndKeepsTheMenuBarRecoverySeamAvailable() {
     #expect(coordinator.snapshot.warning == .recoveryFailed)
     #expect(panel.effects == [.showCollapsed, .pauseInteraction, .suppress, .hide])
 
-    let appShell = AppCoordinator(surfaceController: coordinator)
-    #expect(appShell.perform(.openDiagnostics) == .placeholderSceneUnavailable(.diagnostics))
 }
 
 @Test("Unlock and display invalidation share one recovery without duplicate work")
@@ -287,48 +285,25 @@ func exposesSafeMenuBarRecoveryOutcomes() {
     #expect(coordinator.snapshot.isRunning == false)
     #expect(coordinator.start() == .started)
     #expect(coordinator.start() == .alreadyRunning)
-    #expect(coordinator.perform(.toggleNotchSurface) == .unavailable(.notchSurface))
-    #expect(coordinator.perform(.showDemoState) == .unavailable(.demoState))
     #expect(coordinator.perform(.restartAppShell) == .restarted)
     #expect(coordinator.perform(.quit) == .quitRequested)
     #expect(coordinator.snapshot.isRunning == false)
     #expect(coordinator.snapshot.startCount == 2)
 }
 
-@Test("App shell routes the menu toggle through the Notch surface seam")
+@Test("Surface coordinator starts automatically in collapsed state")
 @MainActor
-func routesMenuToggleThroughSurfaceSeam() {
-    let surface = RecordingSurfaceToggleController(results: [.shownCollapsed, .hidden])
-    let coordinator = AppCoordinator(surfaceController: surface)
-
-    #expect(coordinator.perform(.toggleNotchSurface) == .notchSurfaceToggled(.collapsed))
-    #expect(coordinator.perform(.toggleNotchSurface) == .notchSurfaceToggled(.hidden))
-    #expect(surface.toggleCount == 2)
-}
-
-@Test("App shell remains usable when the Notch surface cannot be created")
-@MainActor
-func retainsRecoveryPathWhenSurfaceIsUnavailable() {
-    let surface = RecordingSurfaceToggleController(results: [.unavailable])
-    let presenter = RecordingScenePresenter()
-    let coordinator = AppCoordinator(scenePresenter: presenter, surfaceController: surface)
-
-    #expect(coordinator.perform(.toggleNotchSurface) == .unavailable(.notchSurface))
-    #expect(coordinator.perform(.openDiagnostics) == .placeholderSceneRequested(.diagnostics))
-}
-
-@Test("Surface coordinator toggles only declared collapsed and hidden states")
-@MainActor
-func togglesCollapsedSurfaceThroughPanelEffects() {
+func startsCollapsedSurfaceThroughPanelEffects() {
     let panel = RecordingSurfacePanel()
     let coordinator = SurfaceCoordinator(panel: panel)
 
     #expect(coordinator.snapshot.state == .hidden)
-    #expect(coordinator.handle(.toggle) == .collapsed)
+    coordinator.start()
     #expect(coordinator.snapshot.state == .collapsed)
-    #expect(panel.effects == [.showCollapsed])
-    #expect(coordinator.handle(.toggle) == .hidden)
-    #expect(panel.effects == [.showCollapsed, .hide])
+    #expect(panel.effects == [.suppress, .showCollapsed])
+    coordinator.stop()
+    #expect(coordinator.snapshot.state == .hidden)
+    #expect(panel.effects == [.suppress, .showCollapsed, .hide])
 }
 
 @Test("Surface coordinator rejects an undeclared transition without panel effects")
@@ -348,9 +323,9 @@ func reportsUnavailablePanelCreation() {
     let panel = RecordingSurfacePanel(succeeds: false)
     let coordinator = SurfaceCoordinator(panel: panel)
 
-    #expect(coordinator.toggleNotchSurface() == .unavailable)
+    coordinator.start()
     #expect(coordinator.snapshot.state == .hidden)
-    #expect(panel.effects == [.showCollapsed])
+    #expect(panel.effects == [.suppress, .showCollapsed, .hide])
 }
 
 @Test("Surface interaction expands only after the F2 hover delay within its bounded trigger")
@@ -654,44 +629,6 @@ func recoversWhenNativeExpandedPanelApplyFails() {
     #expect(panel.effects == [.showCollapsed, .showExpanded(focus: true), .suppress])
 }
 
-@Test("Expanded placeholder routes only its explicit detail action without changing surface state")
-@MainActor
-func routesExplicitDetailNavigationOutsideSurfaceState() {
-    let panel = RecordingSurfacePanel()
-    let input = RecordingSurfaceInput()
-    let detailWindow = RecordingDetailWindow()
-    let detail = DetailWindowCoordinator(window: detailWindow)
-    let coordinator = SurfaceCoordinator(panel: panel, input: input, detailNavigator: detail)
-
-    _ = coordinator.handle(.showCollapsed)
-    _ = coordinator.handle(.clicked)
-    input.sendDetail(.placeholder)
-
-    #expect(detailWindow.presentedRequests == [.placeholder])
-    #expect(coordinator.snapshot.state == .expanded)
-    detailWindow.simulateUserClose()
-    #expect(coordinator.snapshot.state == .expanded)
-    #expect(SurfaceState.allCases.contains(coordinator.snapshot.state))
-}
-
-@Test("Detail coordinator reuses the matching window and closes independently")
-@MainActor
-func reusesAndClosesDetailWindowIndependently() {
-    let window = RecordingDetailWindow()
-    let coordinator = DetailWindowCoordinator(window: window)
-
-    #expect(coordinator.open(.placeholder) == .opened)
-    #expect(coordinator.open(.placeholder) == .focused)
-    #expect(window.presentedRequests == [.placeholder])
-    #expect(window.focusCount == 2)
-    window.simulateUserClose()
-    #expect(coordinator.open(.placeholder) == .opened)
-    #expect(window.presentedRequests == [.placeholder, .placeholder])
-    #expect(coordinator.close() == .closed)
-    #expect(coordinator.close() == .alreadyClosed)
-    #expect(window.closeCount == 1)
-}
-
 @Test("App shell requests independent placeholder scenes")
 @MainActor
 func requestsIndependentPlaceholderScenes() {
@@ -699,8 +636,7 @@ func requestsIndependentPlaceholderScenes() {
     let coordinator = AppCoordinator(scenePresenter: presenter)
 
     #expect(coordinator.perform(.openSettings) == .placeholderSceneRequested(.settings))
-    #expect(coordinator.perform(.openDiagnostics) == .placeholderSceneRequested(.diagnostics))
-    #expect(presenter.presentedScenes == [.settings, .diagnostics])
+    #expect(presenter.presentedScenes == [.settings])
 }
 
 @Test("A failed placeholder scene request does not block the other scene")
@@ -710,8 +646,7 @@ func isolatesPlaceholderScenePresentationFailures() {
     let coordinator = AppCoordinator(scenePresenter: presenter)
 
     #expect(coordinator.perform(.openSettings) == .placeholderSceneUnavailable(.settings))
-    #expect(coordinator.perform(.openDiagnostics) == .placeholderSceneRequested(.diagnostics))
-    #expect(presenter.requestedScenes == [.settings, .diagnostics])
+    #expect(presenter.requestedScenes == [.settings])
 }
 
 @Test("App shell keeps its menu-bar resources safe through lifecycle delivery and termination")
@@ -765,8 +700,6 @@ func forwardsF2ContextAndDebugControlsThroughTheAppShellSeam() {
     lifecycle.send(.willSleep)
     lifecycle.send(.didWake)
     #expect(surface.lifecycleEvents == [.willSleep, .didWake])
-    #expect(coordinator.perform(.toggleSurfaceDebugOverlay) == .surfaceDebugOverlayToggled)
-    #expect(surface.debugToggleCount == 1)
 }
 
 @Test("App shell snapshots launch-at-login status through an injected adapter")
@@ -900,28 +833,14 @@ private struct FixedLaunchAtLoginController: LaunchAtLoginControlling {
 }
 
 @MainActor
-private final class RecordingSurfaceToggleController: NotchSurfaceToggling {
-    private var results: [NotchSurfaceToggleResult]
-    private(set) var toggleCount = 0
-
-    init(results: [NotchSurfaceToggleResult]) {
-        self.results = results
-    }
-
-    func toggleNotchSurface() -> NotchSurfaceToggleResult {
-        toggleCount += 1
-        return results.removeFirst()
-    }
-}
-
-@MainActor
-private final class RecordingSurfaceLifecycleController: NotchSurfaceToggling, NotchSurfaceLifecycleHandling,
+private final class RecordingSurfaceLifecycleController: NotchSurfaceLifecycleControlling,
     NotchSurfaceDebugToggling
 {
     private(set) var lifecycleEvents: [AppShellLifecycleEvent] = []
     private(set) var debugToggleCount = 0
 
-    func toggleNotchSurface() -> NotchSurfaceToggleResult { .shownCollapsed }
+    func start() {}
+    func stop() {}
 
     func handleAppShellLifecycle(_ event: AppShellLifecycleEvent) {
         lifecycleEvents.append(event)
@@ -1030,53 +949,17 @@ private final class RecordingSurfaceTask: SurfaceInteractionTask {
 }
 
 @MainActor
-private final class RecordingSurfaceInput: SurfaceInputMonitoring, DetailNavigationInput {
+private final class RecordingSurfaceInput: SurfaceInputMonitoring {
     private var handler: (@MainActor (SurfaceIntent) -> Void)?
-    private var detailHandler: (@MainActor (DetailNavigationRequest) -> Void)?
 
     func setInteractionHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
         self.handler = handler
-    }
-
-    func setDetailNavigationHandler(_ handler: @escaping @MainActor (DetailNavigationRequest) -> Void) {
-        detailHandler = handler
     }
 
     func send(_ intent: SurfaceIntent) {
         handler?(intent)
     }
 
-    func sendDetail(_ request: DetailNavigationRequest) {
-        detailHandler?(request)
-    }
-}
-
-@MainActor
-private final class RecordingDetailWindow: DetailWindowPresenting {
-    private(set) var presentedRequests: [DetailNavigationRequest] = []
-    private(set) var focusCount = 0
-    private(set) var closeCount = 0
-    private var closeHandler: (@MainActor @Sendable () -> Void)?
-
-    func present(_ request: DetailNavigationRequest) {
-        presentedRequests.append(request)
-    }
-
-    func focus() {
-        focusCount += 1
-    }
-
-    func close() {
-        closeCount += 1
-    }
-
-    func setCloseHandler(_ handler: @escaping @MainActor @Sendable () -> Void) {
-        closeHandler = handler
-    }
-
-    func simulateUserClose() {
-        closeHandler?()
-    }
 }
 
 private struct DemoModule: NotchModule {

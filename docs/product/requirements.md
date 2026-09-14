@@ -78,7 +78,7 @@ Every module remains subject to the same requirements for lifecycle, settings, p
 | Term | Definition |
 |---|---|
 | Notch surface | The `NSPanel` rendered around the MacBook camera housing/notch, including collapsed, compact, and expanded presentation. |
-| Detail view | A separate user-requested window/scene for long-form module content, history, transcripts, or configuration; it is not a Notch surface state. |
+| application scene | A separate user-requested window/scene for long-form module content, history, transcripts, or configuration; it is not a Notch surface state. |
 | Base platform / Foundation | The reusable application infrastructure built before real business modules. |
 | Module | A compile-time feature unit implementing the `NotchModule` contract and using platform capabilities. |
 | Module runtime | The component that registers, starts, stops, enables, disables, isolates, and reports health for modules. |
@@ -101,13 +101,14 @@ The user shall be able to keep NotchHub running without a permanently expanded d
 
 **Acceptance criteria**
 
-- With no active interaction or high-priority event, the surface is collapsed, hidden, or minimally indicated according to user settings.
+- With no active interaction or high-priority event, the always-on surface is collapsed or minimally indicated; lifecycle policy may suppress or hide it operationally.
 - The app does not play sounds, open windows, or request permissions at launch without an explicit user action.
 - Low-priority events do not automatically obscure active work.
 
 ### UR-002 — Fast access to the surface
 
-The user shall be able to reveal the Notch surface via hover, click, menu-bar control, and configurable keyboard shortcut.
+The always-on Notch surface shall respond to hover and click interaction when
+available; menu bar and shortcuts do not control its visibility.
 
 **Acceptance criteria**
 
@@ -213,7 +214,7 @@ The user shall be able to interact with core UI through keyboard and accessibili
 |---|---|---|
 | FR-APP-001 | The app shall run as a menu-bar-first macOS utility. | Must |
 | FR-APP-002 | The app shall provide a menu-bar recovery/control path independent of the Notch surface. | Must |
-| FR-APP-003 | The menu shall provide actions to toggle the surface, open Settings, open Diagnostics, restart the app shell, and quit. Before F2/F7, unavailable surface/runtime actions shall report their status safely rather than instantiate later-phase infrastructure. | Must |
+| FR-APP-003 | The menu shall provide exactly Settings, Restart App Shell, and Quit. Diagnostics and development actions are not exposed in the menu bar. | Must |
 | FR-APP-004 | The app shall maintain a defined startup and shutdown sequence. | Must |
 | FR-APP-005 | The app shall use normal macOS app-bundle/LaunchServices behavior and idempotent `AppCoordinator` startup to safely handle duplicate launch delivery. A custom lock or IPC handoff is deferred until an owned endpoint exists. | Must |
 | FR-APP-006 | The app shall safely respond to sleep/wake and application activation changes without creating a surface or requesting permissions in F1. | Must |
@@ -234,7 +235,6 @@ The user shall be able to interact with core UI through keyboard and accessibili
 | FR-SUR-008 | The app shall handle display topology changes, full-screen/Space changes, and sleep/wake without crash. | Must |
 | FR-SUR-009 | The app shall expose a development-only debug overlay with state, screen, frame, and window details. | Should |
 | FR-SUR-010 | The app shall not claim full multi-display placement support in the foundation release. | Must |
-| FR-SUR-011 | Long-form content shall open in a separate detail view/window after explicit user navigation; opening it shall not transition the Notch panel into a `detail` state. | Must |
 
 ### Surface transition requirements
 
@@ -292,7 +292,6 @@ The user shall be able to interact with core UI through keyboard and accessibili
 ### Minimum foundation actions
 
 ```text
-app.toggleSurface
 app.openSettings
 app.openDiagnostics
 app.restartRuntime
@@ -613,7 +612,7 @@ When a voice/AI module is added:
 - In-memory transcript data must have a count/byte limit.
 - Persistent transcript retention must be explicit and configurable.
 - The Notch surface only displays a short recent window of text.
-- Full content belongs in a detail view and must respect privacy settings.
+- Full content belongs in a application scene and must respect privacy settings.
 
 ---
 

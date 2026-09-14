@@ -104,7 +104,7 @@ Assistant session is thinking (future)
 ```text
 Compact Notch shows “Module unavailable”
 Expanded panel shows Settings action
-Detail window displays a selected history item
+Application scene displays a selected history item
 ```
 
 The two must not be conflated. For example, an assistant module may be `thinking` while the surface remains collapsed because the user is in a full-screen app and presentation policy suppresses expansion.
@@ -263,7 +263,7 @@ Event + Current Context + User Settings
                     ↓
           PresentationPolicy decision
                     ↓
-       none / badge / compact / expanded / detail-navigation
+       none / badge / compact / expanded / application-scene navigation
 ```
 
 Examples:
@@ -274,9 +274,9 @@ Examples:
 | User-triggered action result | Compact or expanded result |
 | Important error | Badge/compact + Diagnostics route; do not forcibly cover full-screen work |
 | Future assistant state while full-screen suppression is active | Store state; keep surface suppressed |
-| User explicitly opens module detail | Detail window |
+| User explicitly opens module detail | Dedicated application scene |
 
-`detail-navigation` is a user-authorized routing decision to a separate `DetailWindowCoordinator`. It is not a `SurfaceState`; the Notch panel remains independently collapsed or expanded according to surface policy.
+Application-scene navigation is a user-authorized routing decision to a dedicated application scene. It is not a `SurfaceState`; the Notch panel remains independently collapsed or expanded according to surface policy.
 
 ---
 

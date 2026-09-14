@@ -31,7 +31,7 @@ Information and controls appear in layers. A user sees only what is needed for t
 
 ### Deliberate interaction
 
-Hover is a convenience, not a requirement. Every important control must also be reachable through menu bar, keyboard shortcut, Settings, or a standard detail window.
+Hover is a convenience, not a requirement. Every important control must also be reachable through menu bar, keyboard shortcut, Settings, or a standard application scene.
 
 ### Attention follows urgency
 
@@ -43,13 +43,13 @@ The interface communicates state through concise labels, icons, and controls. An
 
 ### Safe exit and recovery
 
-The user can always collapse with Escape, click outside, or the surface toggle action. Errors point to a useful recovery route rather than leaving a stuck panel.
+The user can always collapse with Escape or click outside. Errors point to a useful recovery route rather than leaving a stuck panel.
 
 ---
 
 ## 3. Presentation model
 
-NotchHub uses four presentation layers.
+NotchHub uses three presentation layers.
 
 | Layer | User purpose | Visibility | Interaction |
 |---|---|---|---|
@@ -57,31 +57,31 @@ NotchHub uses four presentation layers.
 | Collapsed surface | Resting NotchHub state | Small/near-notch | Click or hover trigger; shortcut/menu alternative |
 | Compact status | Brief state, result, or progress | Time-limited | Click may expand for context |
 | Expanded panel | Quick action and short interaction | User-triggered or explicitly permitted | Buttons, controls, action grid, summary |
-| Detail window | Long content, history, configuration, diagnostics | Explicit user navigation | Standard macOS window interaction |
+| Application scene | Long content, history, configuration, diagnostics | Explicit application navigation | Standard macOS window interaction |
 
 `hidden` and `suppressed` are operational states, not interaction layers: content is not presented or is intentionally minimized due to context policy.
 
 ---
 
-## 4. Surface states and detail route
+## 4. Surface states
 
 ### 4.1 State catalogue
 
 | State | What the user sees | How it enters | How it exits |
 |---|---|---|---|
-| Hidden | Nothing from NotchHub | User disables surface; temporary recovery condition | Menu/shortcut/user enable returns to collapsed |
+| Hidden | Nothing from NotchHub | Recovery failure or unavailable display | Display recovery or app restart returns to collapsed |
 | Collapsed | Minimal near-notch shape or optional indicator | App ready; compact timeout; expanded collapse | Hover/click/shortcut expands; event may show compact |
 | Compact | One to three lines of short information | Allowed status/action result/progress event | Timeout collapses; click/shortcut expands |
-| Expanded | Short actions and current context | User hover/click/shortcut/action | Escape, click outside, timeout, detail navigation |
+| Expanded | Short actions and current context | User hover/click/shortcut/action | Escape, click outside, or timeout |
 | Suppressed | No visible or reduced surface due to context policy | Full-screen/privacy/focus policy | Context clears; returns safely to collapsed |
 | Recovering | Temporary transition while native surface revalidates | Display/session/panel change | Success returns collapsed/suppressed; failure hides and exposes diagnostics |
 
 ### 4.2 State design rules
 
-- A passive status event must not open a detail window.
+- A passive status event must not open a application scene.
 - `expanded` is primarily user initiated. Presentation policy may allow an explicit high-value action result to open an expanded context only when this behavior is enabled and non-disruptive.
-- A **detail window** is a separate route, never a `SurfaceState`, and always requires clear user navigation.
-- Recovery never restores a previously visible long/private detail window automatically; it returns the surface to a safe collapsed or suppressed state.
+- A **application scene** is a separate route, never a `SurfaceState`, and always requires clear user navigation.
+- Recovery never restores a previously visible long/private application scene automatically; it returns the surface to a safe collapsed or suppressed state.
 - Suppression takes precedence over automatic expansion.
 - Invalid or duplicate state transitions must produce no confusing animation; they are ignored or normalized by the state machine.
 
@@ -149,9 +149,8 @@ Not allowed:
 The following must always be available for essential access:
 
 ```text
-F2 → Menu bar → Toggle NotchHub
 F3/F4 → Settings → Notch Behavior
-F6 → Keyboard shortcut / registered `app.toggleSurface` action
+F6 → Keyboard shortcut / registered `` action
 ```
 
 ---
@@ -178,7 +177,7 @@ This order supports visual scanning, keyboard focus, and VoiceOver navigation.
 - Prefer 2–8 primary actions visible at once.
 - Prefer one primary module/context per expansion.
 - Keep text summary within roughly 2–4 lines or 250–350 characters.
-- If content requires a long list, form, transcript, history, or troubleshooting sequence, use a detail window.
+- If content requires a long list, form, transcript, history, or troubleshooting sequence, use a application scene.
 - Avoid nested scroll views in the expanded surface.
 - Avoid dense tables, multi-column configuration, and hidden gestures for core tasks.
 
@@ -190,8 +189,7 @@ This order supports visual scanning, keyboard focus, and VoiceOver navigation.
 | Hover within panel | Keeps auto-collapse paused/reset |
 | Click outside | Collapse to collapsed state |
 | Escape | Collapse to collapsed state |
-| Global surface shortcut | Toggle/collapse according to state |
-| Click detail affordance | Open explicit detail route |
+| Global surface shortcut | Expand or collapse according to the registered action |
 | Keyboard Tab/Shift-Tab | Move through logical focus order |
 | Return/Space | Activate focused control |
 
@@ -199,11 +197,9 @@ F2 placeholder controls send local user intents through platform owners. From F6
 
 ---
 
-## 8. Detail interaction
+## 8. Application scenes
 
-### 8.1 When to use detail
-
-Use detail for:
+Long-form content does not belong in the Surface. Dedicated application scenes may provide:
 
 - Long text/history.
 - Full transcript or conversation context.
@@ -213,26 +209,9 @@ Use detail for:
 - Action confirmation with substantial consequence/context.
 - Complex search/filter/navigation.
 
-### 8.2 Detail rules
-
-- Detail opens only after explicit user intent.
-- Detail uses a standard accessible macOS window/scene or other documented full-content presentation.
-- Detail has clear title, route context, close/back behavior, and keyboard focus.
-- Closing detail returns to expanded or collapsed according to the originating route; it must not leave stale panel focus.
-- Detail content is subject to privacy/retention rules; opening a detail route is not a reason to load unlimited history.
-
-### 8.3 Notch-to-detail affordance
-
-Use clear language:
-
-```text
-Open details
-View full history
-Open Settings
-View Diagnostics
-```
-
-Avoid ambiguous icon-only controls when an action affects navigation or sensitive content.
+Settings, diagnostics, history, and transcripts use standard accessible
+macOS scenes with bounded and privacy-aware content. The Surface has no route
+or affordance for opening a generic long-form window.
 
 ---
 
@@ -254,7 +233,7 @@ Hover is optional. F2 uses a non-persisted, dependency-injected default; F3/F4 m
 ### 9.2 Click
 
 - Click collapsed/compact surface to expand.
-- Click compact content to open relevant expanded context, not directly an unrelated detail route.
+- Click compact content to open relevant expanded context, not an unrelated application scene.
 - Click outside collapses only when the pointer target is clearly outside the active interactive panel.
 - Clicking a noninteractive status does not accidentally invoke a destructive action.
 
@@ -279,15 +258,15 @@ interaction; leaving `expanded` invalidates all outstanding holds.
 Expanded presentation has a fixed `640 × 190 pt` visible contract and requires a `640 × 210 pt`
 native host envelope. If current validated topology cannot contain that envelope, NotchHub does
 not scale/crop the surface and does not enter recovery: hover stays silent, while click or keyboard
-gets bounded accessible feedback and may offer the explicit Detail route. The availability is a
+gets bounded accessible feedback and may offer a dedicated application scene. The availability is a
 current-topology capability, not a persistent failure state.
 
 ### 9.4 Keyboard shortcut
 
-The global surface shortcut maps to `app.toggleSurface`.
+The global surface shortcut maps to ``.
 
 - If hidden/collapsed/compact: open expanded surface.
-- If expanded/detail window is active: collapse the surface or close the detail window according to route policy.
+- If expanded/application scene is active: collapse the surface or close the application scene according to route policy.
 - If suppressed: show a clear unavailable/suppressed indication through menu/settings rather than overriding suppression automatically.
 - Shortcut behavior obeys permission/capability availability and does not bypass confirmation or action policy.
 
@@ -416,7 +395,7 @@ Expose failure only through concise status/Diagnostics
 
 - Do not restore expanded/detail automatically after recovery.
 - Make at most two recovery attempts, with a 250 ms backoff; then hide the surface and expose a diagnostics warning.
-- If recovery fails, preserve menu-bar access and provide Diagnostics route.
+- If recovery fails, preserve menu-bar access and provide Diagnostics access.
 
 ### 12.3 Error presentation
 
@@ -476,14 +455,14 @@ Do not record pointer movement history, raw keystrokes, raw transcript, full con
 
 The Notch interaction design is ready for foundation completion when:
 
-1. The surface has explicit, tested states: hidden, collapsed, compact, expanded, suppressed, recovering. Detail is a separately tested window route.
-2. Hover is optional; F2 core interaction is available through the menu bar, with shortcut support added in F6.
+1. The surface has explicit, tested states: hidden, collapsed, compact, expanded, suppressed, recovering.
+2. Hover is optional; core Surface interaction does not depend on a menu visibility toggle.
 3. Collapsed/hidden surface does not block unrelated menu-bar/application input.
 4. Expanded surface supports click, keyboard navigation, Escape, click-outside, and predictable auto-collapse.
 5. Compact content remains concise and one primary status is visible at a time.
-6. Long content always has a detail route and is never forced into compact/expanded layout.
+6. Long content remains in dedicated application scenes and is never forced into compact/expanded layout.
 7. Presentation policy prevents low-priority events from repeatedly interrupting active work.
-8. Suppression/recovery return to a safe collapsed/hidden state without automatic restoration of private detail content.
+8. Suppression/recovery return to a safe collapsed/hidden state without automatic restoration of private application-scene content.
 9. Reduced Motion and accessibility requirements are met.
 10. State changes, queueing, and recovery are diagnosable without storing sensitive interaction content.
 11. Manual QA covers display, full-screen, Spaces, sleep/wake, focus, keyboard, and accessibility behavior.
@@ -508,6 +487,6 @@ A change that alters native window ownership, `NSPanel` implementation, new OS p
 
 ## 17. Summary
 
-NotchHub’s interaction model makes the Notch useful without making it demanding. It stays calm at rest, expands only for deliberate interaction or carefully selected status, keeps compact information short, moves long content to a detail view, and always provides keyboard/menu alternatives to hover.
+NotchHub’s interaction model makes the Notch useful without making it demanding. It stays calm at rest, expands only for deliberate interaction or carefully selected status, keeps compact information short, moves long content to a application scene, and always provides keyboard/menu alternatives to hover.
 
 The model depends on explicit state, attention policy, safe input handling, accessible focus behavior, bounded update rates, and reliable recovery. These rules give future modules a consistent surface without allowing them to turn the Notch into a distracting, inaccessible, or unpredictable overlay.

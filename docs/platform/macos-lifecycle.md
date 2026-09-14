@@ -237,7 +237,7 @@ When the app is inactive:
 ### 6.3 Focus policy
 
 - Passive compact status should not steal keyboard focus unnecessarily.
-- Expanded Notch interaction or a separate detail window may become the active target.
+- Expanded Notch interaction or a separate application scene may become the active target.
 - Settings/Diagnostics are separate user-facing windows/scenes.
 - Returning focus to the previous app is preferred after the Notch interaction ends where practical.
 
@@ -263,7 +263,7 @@ See [`notch-surface.md`](../architecture/notch-surface.md).
 |---|---|
 | Initializing | Hidden or safe non-interactive placeholder |
 | Running, idle | Collapsed/hidden per Settings |
-| Running, user interaction | Expanded Notch panel or a separately requested detail window |
+| Running, user interaction | Expanded Notch panel or a separately requested application scene |
 | Full-screen suppression | Suppressed or hidden per policy |
 | Sleep | Hidden/suspended interaction |
 | Built-in display unavailable | Hidden/suppressed in foundation |
@@ -276,7 +276,7 @@ See [`notch-surface.md`](../architecture/notch-surface.md).
 Panel recreation must:
 
 - Preserve the desired logical `SurfaceState` separately from the native object.
-- Avoid restoring `expanded` automatically after a disruptive display/sleep event unless explicitly safe. Detail windows follow their own privacy-aware restoration policy and default to closed for sensitive content.
+- Avoid restoring `expanded` automatically after a disruptive display/sleep event unless explicitly safe. Application scenes follow their own privacy-aware restoration policy.
 - Return to `collapsed` or `suppressed` after successful recovery.
 - Use bounded retry/backoff.
 - Publish recovery start/completion/failure events.
@@ -402,8 +402,8 @@ After wake:
 
 ### 10.3 Lock/unlock
 
-- Locking must not expose a separate detail window containing private content unexpectedly.
-- Consider suppressing user-content-sensitive detail views while the session is locked.
+- Locking must not expose a separate application scene containing private content unexpectedly.
+- Consider suppressing user-content-sensitive application scenes while the session is locked.
 - Do not treat lock as permission grant/revocation.
 - On unlock/activation, refresh permission and screen state.
 - Do not replay a stale assistant/transcript/clipboard surface automatically without user interaction.
@@ -663,7 +663,7 @@ Do not record private screen content, raw event streams, tokens, or sensitive us
 
 ### Surface never appears
 
-1. Use menu-bar Diagnostics.
+1. Open Diagnostics through its application scene or Settings route.
 2. Check app lifecycle state.
 3. Check selected built-in display/topology.
 4. Check suppression reason.

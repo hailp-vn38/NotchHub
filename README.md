@@ -45,16 +45,16 @@ later-phase work.
 
 ## Product model
 
-NotchHub has four presentation layers:
+NotchHub has three presentation layers:
 
 | Layer | Purpose | Example |
 |---|---|---|
 | Passive indicator | Quiet information visible at a glance | Connection badge, media-playing indicator, action result badge |
 | Compact Notch | Brief status that can disappear automatically | “Assistant is thinking…” |
 | Expanded panel | Quick actions and short interactions | Action grid, media controls, recent status |
-| Detail window | Long content and configuration | Diagnostics, full transcript, Settings, history |
+| Application scene | Configuration and diagnostics outside the Surface | Settings, diagnostics, history |
 
-The design rule is simple: **the Notch is for glanceable information and short actions**. Long text, logs, configuration, and history belong in detail windows.
+The design rule is simple: **the Notch is for glanceable information and short actions**. Long text, logs, configuration, and history belong in application scenes.
 
 ## Reference: Boring Notch
 
@@ -80,7 +80,7 @@ NotchSurface + NotchUI + NotchActions + NotchIPC
 
 - `NotchDomain` contains pure Swift models, contracts, identifiers, events, actions, and errors. It does not import SwiftUI or AppKit.
 - `NotchCore` owns module runtime, event routing, persistence, permission coordination, presentation policy, lifecycle management, and diagnostics.
-- `NotchSurface` contains `NotchPanelController`, the sole Notch `NSPanel` owner, plus `DetailWindowCoordinator` for separate explicitly requested long-form views; detail is not a Notch surface state.
+- `NotchSurface` contains `NotchPanelController`, the sole Notch `NSPanel` owner, and the Surface lifecycle/state machinery. Settings and diagnostics are application scenes outside the Surface.
 - `NotchUI` contains design tokens and reusable UI components.
 - `NotchActions` owns action registration, typed execution, confirmation policy, cancellation, timeouts, and result events.
 - `NotchIPC` owns local socket/loopback HTTP/WebSocket communication, request authentication, schema validation, rate limiting, and external event routing.

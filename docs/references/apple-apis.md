@@ -64,7 +64,7 @@ ADR required:
 | Framework/API family | NotchHub use | Owner | Foundation status |
 |---|---|---|---|
 | SwiftUI | Settings, menu bar scenes, Notch content, design system | `NotchUI`, App Shell, `NotchSurface` views | Adopt |
-| AppKit `NSPanel`/`NSWindow` | Native floating Notch surface and separate detail windows | `NotchPanelController` / `DetailWindowCoordinator` | Adopt |
+| AppKit `NSPanel`/`NSWindow` | Native floating Notch surface and separate application scenes | `NotchPanelController` / `application-scene coordinator` | Adopt |
 | AppKit `NSScreen` | Screen topology, display frames, scale, built-in-display policy | `NotchSurface` | Adopt |
 | AppKit `NSEvent` | Local/global input monitoring where required, click-outside/hotkey support | `NotchSurface`/Shortcut service | Review per feature |
 | SwiftUI `MenuBarExtra` | Menu-bar-first recovery/control surface | App Shell | Adopt |
@@ -95,7 +95,7 @@ Use SwiftUI for:
 - Settings navigation and controls.
 - Diagnostics and About views.
 - Design-system components.
-- Module presentation views and detail windows.
+- Module presentation views and application scenes.
 - Accessibility labels, focus behavior, and reduced-motion UI policy.
 
 SwiftUI views should render focused snapshots and send typed intents/actions. They should not own external side effects.
@@ -108,9 +108,8 @@ NotchHub uses the menu bar as an independent recovery/control surface:
 
 ```text
 MenuBarExtra
-├── Toggle Notch
 ├── Open Settings
-├── Open Diagnostics
+├── Diagnostics
 ├── Restart App Shell
 └── Quit
 ```
@@ -174,7 +173,7 @@ If a component uses `ObservableObject`/`@Published`, migration to [Observation](
 
 [`NSPanel`](https://developer.apple.com/documentation/appkit/nspanel) is an AppKit panel/window type suited to auxiliary utility behavior.
 
-NotchHub uses `NSPanel` for the native Notch surface and a separate detail window for long-form content. `DetailWindowCoordinator` owns that window; opening it never creates a `detail` state in the Notch `SurfaceStateMachine`.
+NotchHub uses `NSPanel` for the native Notch surface and a separate application scene for long-form content. `application-scene coordinator` owns that window; opening it never creates a `detail` state in the Notch `SurfaceStateMachine`.
 
 ### 6.2 Ownership
 
@@ -276,7 +275,7 @@ The menu bar is a recovery path and control center:
 
 - Toggle surface.
 - Open Settings.
-- Open Diagnostics.
+- Diagnostics.
 - Show current module/runtime health summary.
 - Restart runtime.
 - Quit.

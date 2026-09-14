@@ -172,8 +172,7 @@ Notes:
 2. Confirm the menu-bar icon/control appears.
 3. Open menu-bar menu.
 4. Open Settings.
-5. Open Diagnostics.
-6. Toggle the Notch surface.
+5. Confirm the menu contains exactly Settings, Restart App Shell, and Quit.
 7. Test expanded → collapse with Escape.
 8. Test click outside.
 9. Trigger a deterministic Demo status if available.
@@ -226,7 +225,7 @@ Notes:
 
 **Expected:**
 
-- Settings, Diagnostics, Restart App Shell, and Quit remain available. A ModuleRuntime-specific restart is only applicable after F7.
+- Settings, Restart App Shell, and Quit remain available. A ModuleRuntime-specific restart is only applicable after F7.
 - User can inspect why surface is unavailable.
 - Menu bar does not depend on successful panel creation.
 
@@ -293,7 +292,7 @@ Notes:
 
 ## QA-SUR-004 — Escape and click-outside
 
-**Steps:** Expand surface. Press Escape. Reopen and click outside. If a detail window is available, repeat its independent Escape/back route.
+**Steps:** Expand surface. Press Escape. Reopen and click outside. If a application scene is available, repeat its independent Escape/back route.
 
 **Expected:**
 
@@ -313,14 +312,14 @@ Notes:
 - Auto-collapse does not interrupt active keyboard/pointer interaction.
 - Timeout tasks are cancelled when panel closes/stops.
 
-## QA-SUR-006 — Detail route
+## QA-SUR-006 — Application scene boundary
 
-**Steps:** Open a detail view from a deterministic demo contribution. Navigate back/collapse.
+**Steps:** Open a application scene from a deterministic demo contribution. Navigate back/collapse.
 
 **Expected:**
 
 - Detail requires explicit user action.
-- Long content appears in a suitable detail window, not compact surface.
+- Long content appears in a suitable application scene, not compact surface.
 - Keyboard/Escape/back route works.
 - Closing detail does not leave stale focus or panel state.
 
@@ -340,7 +339,7 @@ Notes:
 
 ## QA-DIS-001 — Physical notch built-in display
 
-**Steps:** Run on a supported MacBook with physical notch. Test collapsed/compact/expanded surface states and the separate detail window route.
+**Steps:** Run on a supported MacBook with physical notch. Test collapsed/compact/expanded surface states and the separate application scene route.
 
 **Expected:**
 
@@ -372,7 +371,7 @@ Notes:
 
 ## QA-DIS-004 — Resolution/scale change
 
-**Steps:** Change built-in display resolution/scale while surface is collapsed, expanded, and detail.
+**Steps:** Change built-in display resolution/scale while the Surface is collapsed, expanded, and recovering.
 
 **Expected:**
 
@@ -397,7 +396,7 @@ Notes:
 
 ## QA-SPACE-001 — Space switching
 
-**Steps:** Switch Spaces with surface collapsed, compact, expanded, and detail.
+**Steps:** Switch Spaces with the Surface collapsed, compact, expanded, and suppressed.
 
 **Expected:**
 
@@ -759,7 +758,7 @@ Notes:
 
 - Contribution is truncated/rejected/degraded with diagnostics warning.
 - Module cannot enlarge surface beyond policy.
-- Detail route is offered for long content.
+- Long content remains in the owning application scene.
 
 ---
 

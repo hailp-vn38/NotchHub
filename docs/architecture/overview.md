@@ -151,7 +151,7 @@ flowchart LR
 
 ### Context boundaries
 
-- The user interacts with NotchHub through the Notch surface, menu bar, Settings, shortcuts, and detail windows.
+- The user interacts with NotchHub through the Notch surface, menu bar, Settings, shortcuts, and application scenes.
 - macOS provides windows, events, permissions, notifications, media/session APIs, and system services.
 - Local scripts interact through controlled local IPC and `notchctl`.
 - Future integrations, including a Xiaozhi relay, provide normalized event/action input through defined adapters.
@@ -303,7 +303,6 @@ stop IPC
 ```text
 NotchSurface
  ├── NotchPanelController
- ├── DetailWindowCoordinator
  ├── SurfaceCoordinator
  ├── SurfaceStateMachine
  ├── ScreenTopology
@@ -315,7 +314,7 @@ NotchSurface
  └── SwiftUI root views
 ```
 
-`NotchPanelController` is the only owner of the native Notch panel. `DetailWindowCoordinator` separately owns explicitly requested long-form windows. Each receives typed presentation/navigation input and neither infers feature priority nor parses external event payloads.
+`NotchPanelController` is the only owner of the native Notch panel. Settings and diagnostics are owned by application scenes outside `NotchSurface`.
 
 ### 7.3 Core runtime
 
@@ -551,12 +550,11 @@ public enum SurfaceSlot: String, Codable, Sendable {
     case compactStatus
     case expandedPrimary
     case expandedSecondary
-    case detail // Separate DetailWindowCoordinator target; never rendered in the Notch panel
     case menuBar
 }
 ```
 
-The platform controls slot placement, priority, collision resolution, and visibility. A module provides a small view-model/contribution descriptor rather than a direct panel reference. The `detail` slot is routed to a separate detail window after explicit user navigation and does not enter `SurfaceStateMachine`.
+The platform controls slot placement, priority, collision resolution, and visibility. A module provides a small view-model/contribution descriptor rather than a direct panel reference. The `detail` slot is routed to a separate application scene after explicit user navigation and does not enter `SurfaceStateMachine`.
 
 ---
 
@@ -779,7 +777,7 @@ At that point, a Xiaozhi adapter/module can be added as an edge integration with
 
 1. Local IPC starts with a Unix domain socket in F8; loopback HTTP/WebSocket remains an optional later adapter.
 2. Module UI contributions use declarative, testable descriptors/snapshots rather than raw module-owned window references.
-3. Long-form `detail` content opens through a separate `DetailWindowCoordinator`; `detail` is not a Notch `SurfaceState`.
+3. Long-form content belongs in dedicated application scenes and is never a `NotchSurface` state.
 
 These decisions are captured by ADR-0005, ADR-0003, and ADR-0002 respectively.
 

@@ -98,7 +98,7 @@ demo state, or module runtime return an explicit unavailable outcome; they do no
 | Attribute | Description |
 |---|---|
 | Technology | Swift, AppKit (`NSPanel`) hosting SwiftUI content |
-| Responsibility | Sole owner of the native Notch panel; screen/notch geometry; interaction state machine (`hidden`, `collapsed`, `compact`, `expanded`, `suppressed`, `recovering`); separate `DetailWindowCoordinator` for explicitly requested long-form views; hover/click/Escape/click-outside/hotkey handling |
+| Responsibility | Sole owner of the native Notch panel; screen/notch geometry; interaction state machine (`hidden`, `collapsed`, `compact`, `expanded`, `suppressed`, `recovering`); hover/click/Escape/click-outside/hotkey handling |
 | Depends on | `NotchCore` (presentation state), `NotchUI` (components), `NotchDomain` (contracts) |
 | Must not do | Parse Xiaozhi/media/clipboard protocols directly, or let modules call its APIs directly |
 | Delivered in phase | F2 |

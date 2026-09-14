@@ -139,7 +139,7 @@ The notch should disappear into the background when there is no useful informati
 | Passive indicator | Quiet status at a glance | Small state icon or badge |
 | Compact Notch | One to three lines of transient information | “Assistant is thinking…” |
 | Expanded panel | Quick interaction lasting seconds | Action grid, controls, current summary |
-| Detail window | Long content or configuration | Settings, transcript, history, diagnostics |
+| Application scene | Configuration and diagnostics outside the Surface | Settings, transcript, history, diagnostics |
 
 ### One action model everywhere
 
@@ -172,7 +172,7 @@ Before business modules, NotchHub must provide:
 - A menu-bar-first application shell and recovery path.
 - A Notch surface based on AppKit `NSPanel` with SwiftUI content.
 - Notch surface states: hidden, collapsed, compact, expanded, suppressed, recovering.
-- Long-form module content opens in a separate, explicitly requested detail view/window and is not a Notch surface state.
+- Long-form module content opens in a separate, explicitly requested application scene/window and is not a Notch surface state.
 - Interaction: hover, click, click-outside, Escape, auto-collapse, keyboard shortcut.
 - Settings with typed schema, validation, migration, reset, and sanitized import/export.
 - A centralized Permission Center.

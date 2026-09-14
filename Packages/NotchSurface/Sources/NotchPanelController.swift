@@ -3,14 +3,13 @@ import SwiftUI
 
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
-public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring, DetailNavigationInput,
+public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring,
     SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling, SurfaceExpansionAdmitting
 {
     private var panel: NSPanel?
     private let presentationModel = NotchSurfacePresentationModel()
     private var hostingView: NSHostingView<NotchSurfaceRootView>?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
-    private var detailNavigationHandler: (@MainActor (DetailNavigationRequest) -> Void)?
     private var eventMonitors: [Any] = []
     private weak var priorKeyWindow: NSWindow?
     private var screenParametersObservation: ScreenParametersObservation?
@@ -68,21 +67,20 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         interactionHandler = handler
     }
 
-    public func setDetailNavigationHandler(_ handler: @escaping @MainActor (DetailNavigationRequest) -> Void) {
-        detailNavigationHandler = handler
-    }
-
     public func setDisplayChangeHandler(_ handler: @escaping @MainActor () -> Void) { displayChangeHandler = handler }
     public func setContextChangeHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
         contextChangeHandler = handler
     }
 
     public func revalidateGeometry() -> Bool {
-        guard let panel, let frame = surfaceFrame() else {
+        guard let frame = surfaceFrame() else {
             removeEventMonitors()
             panel?.orderOut(nil)
             return false
         }
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        ensurePresentation(on: panel)
         panel.setFrame(frame, display: true)
         refreshNativeHitTesting()
         return true
@@ -176,8 +174,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         guard hostingView == nil else { return }
         let rootView = NotchSurfaceRootView(
             model: presentationModel,
-            send: { [weak self] intent in self?.interactionHandler?(intent) },
-            openDetail: { [weak self] in self?.detailNavigationHandler?(.placeholder) }
+            send: { [weak self] intent in self?.interactionHandler?(intent) }
         )
         let hostingView = NSHostingView(rootView: rootView)
         panel.contentView = hostingView

@@ -480,9 +480,9 @@ Each row should show:
 
 | Status | Suggested user-facing label | Available action |
 |---|---|---|
-| Not required | Not used by enabled features | View details |
+| Not required | Not used by enabled features | Open application scenes |
 | Not determined | Not enabled | View explanation / Enable |
-| Authorized | Enabled | View details / Disable in System Settings |
+| Authorized | Enabled | Open application scenes / Disable in System Settings |
 | Denied | Not allowed | Open System Settings |
 | Restricted | Restricted by macOS or policy | View explanation |
 | Unavailable | Not available on this system/configuration | View alternative |

@@ -38,17 +38,14 @@ NotchPanelController
  ├── Owns: show/hide/order-front/order-out calls
  └── Delegates to: SurfaceStateMachine (state), SurfaceCoordinator (policy → intent translation)
 
-DetailWindowCoordinator
- ├── Owns: separate module detail window/scene lifecycle
- ├── Opens only from an explicit typed user-navigation request
- └── Does not mutate the Notch panel's SurfaceState
+Application scenes are outside NotchSurface and own their own lifecycle.
 ```
 
-**Rule:** No other type in the codebase — not `NotchCore`, not a module, not the App Shell — may call AppKit window APIs (`makeKeyAndOrderFront`, `orderOut`, `setFrame`, `.level =`, etc.) on the Notch panel. All such calls are private implementation details of `NotchPanelController`. Separate detail windows are owned only by `DetailWindowCoordinator`.
+**Rule:** No other type in the codebase — not `NotchCore`, not a module, not the App Shell — may call AppKit window APIs (`makeKeyAndOrderFront`, `orderOut`, `setFrame`, `.level =`, etc.) on the Notch panel. All such calls are private implementation details of `NotchPanelController`. Application scenes are owned outside `NotchSurface`.
 
 Everything else — `NotchCore`'s `PresentationPolicy`, modules via `SurfaceContribution` (see [`module-system.md` §5](module-system.md#5-ui-contribution-model)), and user interaction — communicates with the surface only through:
 
-- **Intents** flowing in: `SurfaceIntent` values (for example `.expand(reason:)`, `.collapse`). Detail navigation uses a separate typed `DetailNavigationRequest`.
+- **Intents** flowing in: `SurfaceIntent` values for expansion, collapse, suppression, and recovery.
 - **Snapshots** flowing out: read-only `SurfacePresentationSnapshot` values consumed by SwiftUI views.
 
 ---
@@ -59,7 +56,6 @@ Everything else — `NotchCore`'s `PresentationPolicy`, modules via `SurfaceCont
 NotchSurface/
 ├── Windowing/
 │   ├── NotchPanelController.swift      # Sole NSPanel owner
-│   ├── DetailWindowCoordinator.swift   # Separate, explicit long-form detail window owner
 │   ├── ScreenTopology.swift            # Enumerates/tracks available screens
 │   ├── NotchGeometry.swift             # Computes frame for notch/no-notch layouts
 │   ├── ScreenObserver.swift            # Observes NSApplication.didChangeScreenParametersNotification
@@ -70,13 +66,13 @@ NotchSurface/
 │   ├── SurfacePointerMonitor.swift     # Native shape hit-testing and hover detection
 │   ├── ClickOutsideMonitor.swift       # Detects clicks outside the expanded panel
 │   ├── AutoCollapseController.swift    # Timeout-driven auto-collapse
-│   └── GlobalHotkeyService.swift       # Maps a registered shortcut to a toggle intent
+│   └── GlobalHotkeyService.swift       # Maps registered shortcuts to surface intents
 └── Views/
     ├── NotchRootView.swift             # SwiftUI root, switches on presentation state
     ├── CollapsedNotchView.swift
     ├── CompactStatusView.swift
     ├── ExpandedNotchView.swift
-    └── DetailWindowRootView.swift
+    └── application scene root.swift
 ```
 
 ---
@@ -94,14 +90,14 @@ NotchSurface/
 | `suppressed` | Temporarily forced non-visible due to policy (e.g., full-screen app, screen sharing) | 0×0 or collapsed-equivalent |
 | `recovering` | Transient state after an invalidated panel/screen change, converging back to a stable state | N/A (transitional only) |
 
-Long-form content is not a surface state. An explicit user action opens a separate detail view/window through `DetailWindowCoordinator`; the Notch panel may then return to `collapsed` according to presentation policy.
+Long-form content is not a surface state. It belongs in a dedicated application scene; the Notch panel remains governed independently by presentation policy.
 
 ### 5.2 Transition diagram
 
 ```mermaid
 stateDiagram-v2
     [*] --> hidden
-    hidden --> collapsed: app ready / user enables surface
+    hidden --> collapsed: app ready after successful recovery
     collapsed --> compact: low-priority event (Presentation Policy)
     compact --> collapsed: auto-dismiss timeout
     collapsed --> expanded: hover / click / shortcut / user-triggered action
@@ -116,7 +112,6 @@ stateDiagram-v2
     expanded --> recovering: screen/panel invalidated
     recovering --> collapsed: recovery succeeds
     recovering --> hidden: recovery fails safely
-    collapsed --> hidden: user disables surface
 ```
 
 ### 5.3 Transition rules
@@ -126,7 +121,7 @@ stateDiagram-v2
 - **`suppressed` is policy-driven, not module-driven.** Only `SurfaceCoordinator`, informed by system-level signals (full-screen app detection, screen-sharing detection if available, or explicit user setting), may trigger `suppressed`. A module cannot request suppression or force visibility during suppression.
 - **`recovering` must converge.** The state machine must not remain in `recovering` indefinitely; it has a bounded number of recovery attempts before falling back to `hidden` and reporting a diagnostics warning.
 - **Expanded admission is capability, not recovery.** A valid topology that cannot contain the fixed expanded host rejects expansion without entering `recovering`; only invalid topology or native panel failure begins recovery.
-- **Detail views require explicit navigation.** No automatic event or module contribution may open a detail window. A user action such as tapping "View full transcript" sends a typed detail-navigation request to `DetailWindowCoordinator`; it does not mutate `SurfaceState` to a detail state.
+- **Application scenes require explicit navigation.** No automatic event or module contribution may open an application scene from the Surface. Long-form content is routed by the owning application scene and does not mutate `SurfaceState`.
 
 ### 5.4 State machine interface
 
@@ -137,8 +132,6 @@ public enum SurfaceState: String, Codable, Sendable {
 
 public enum SurfaceEvent: Sendable {
     case appReady
-    case userEnabledSurface
-    case userDisabledSurface
     case lowPriorityEventReceived
     case autoCollapseTimeoutFired
     case userTriggeredExpand(reason: SurfaceExpandReason)
@@ -174,7 +167,7 @@ This interface is deliberately free of AppKit types, so the state machine itself
 
 These constraints are enforced at the `SurfaceContribution` validation layer (see [`module-system.md` §5.2](module-system.md#52-surface-contribution-descriptor)): a module's contribution for `compactStatus` that exceeds the line/character budget should be truncated or rejected with a diagnostics warning, not silently allowed to grow the panel.
 
-Full transcripts, logs, history, and settings-adjacent content belong to a separate detail view. Detail content has its own bounded-data, privacy, accessibility, and lifecycle policies and is never resized into the Notch panel.
+Full transcripts, logs, history, and settings-adjacent content belong to a separate application scene. Detail content has its own bounded-data, privacy, accessibility, and lifecycle policies and is never resized into the Notch panel.
 
 ---
 
@@ -224,12 +217,12 @@ public struct NotchGeometry: Sendable {
 ### 8.2 Click
 
 - A click on the `collapsed` or `compact` panel triggers `.userTriggeredExpand(reason: .click)`.
-- A click on F2 placeholder content sends a local user intent and may open the explicit placeholder detail window through `DetailWindowCoordinator`. Registered actions arrive in F6.
+- F2 Surface content sends only local Surface intents. Application scenes are opened by their owning app-shell route; registered actions arrive in F6.
 
 ### 8.3 Click-outside and Escape
 
 - `ClickOutsideMonitor` uses a local or global event monitor (scoped as narrowly as possible) to detect clicks outside the panel's current bounds while in `expanded`, sending `.clickOutside`.
-- The Escape key, while the panel has focus or is the active interaction target, sends `.escapeKeyPressed`, collapsing from `expanded` toward `collapsed`. A detail window handles its own close/back behavior independently.
+- The Escape key, while the panel has focus or is the active interaction target, sends `.escapeKeyPressed`, collapsing from `expanded` toward `collapsed`. A application scene handles its own close/back behavior independently.
 
 ### 8.4 Auto-collapse timeout
 
@@ -238,7 +231,6 @@ public struct NotchGeometry: Sendable {
 
 ### 8.5 Menu control and future shortcut
 
-- In F2, the menu-bar Toggle NotchHub control sends the generic toggle intent. It does not open or close detail windows.
 - F6 may map a user-configured shortcut through `NotchActions` to the same intent. The input source does not decide how to expand; `SurfaceCoordinator` decides the placeholder content in F2 and `PresentationPolicy` decides later module content.
 
 ### 8.6 Click-through when collapsed
@@ -297,7 +289,7 @@ sequenceDiagram
 ```
 
 - Recovery makes at most **two attempts** with a **250 ms backoff**. It then sends `.recoveryFailedPermanently`, hides the surface, and records a diagnostics warning.
-- A permanently failed recovery must leave the app otherwise fully functional — the user can still reach Settings and Diagnostics via the menu bar (per [Requirements FR-APP-002](../product/requirements.md#51-application-shell-and-lifecycle)) even if the Notch panel itself cannot be restored, and can attempt a manual "Restart App Shell" action. A ModuleRuntime-specific restart is only available after F7.
+- A permanently failed recovery must leave the app otherwise functional — the user can still reach Settings and use Restart App Shell even if the Notch panel cannot be restored. A ModuleRuntime-specific restart is only available after F7.
 
 ---
 
@@ -311,7 +303,6 @@ sequenceDiagram
 - Last suppression reason, if `suppressed`.
 - Count and outcome of recovery attempts.
 
-A development-only **debug overlay**, toggled by an F2-only menu/debug control, should render this information directly over or near the panel for fast visual debugging during development and must not be enabled by default in release builds. F6 may route the same intent through `surface.toggleDebugOverlay` after the Action Registry exists.
 
 ---
 
@@ -335,9 +326,9 @@ Using the AppKit-free `SurfaceStateMachine` interface (§5.4):
 
 ### 11.3 Detail-window tests
 
-- A detail window opens only from an explicit typed user-navigation request.
+- A application scene opens only from an explicit typed user-navigation request.
 - Opening or closing detail leaves the Notch `SurfaceStateMachine` in a valid non-detail state.
-- Repeated requests reuse/focus the intended detail window instead of creating unbounded duplicate windows.
+- Repeated requests reuse/focus the intended application scene instead of creating unbounded duplicate windows.
 - Closing detail does not destroy module state or the Notch panel.
 - Sensitive detail content defaults to closed after lock/sleep restoration unless an approved privacy policy says otherwise.
 
@@ -349,7 +340,7 @@ Using the AppKit-free `SurfaceStateMachine` interface (§5.4):
 - Enter/exit full-screen on another app and verify F2's default suppression behavior.
 - Attach/detach an external display; close/open the MacBook lid.
 - Change display resolution/scale while the panel is visible.
-- Open the F2 placeholder detail view from `expanded`, verify it is a separate window, then close it without changing the Notch panel into a detail state.
+- Open the F2 placeholder application scene from `expanded`, verify it is a separate window, then close it without changing the Notch panel into a detail state.
 - Trigger rapid open/close (1,000 cycles per the performance stress scenario in [`performance.md`](performance.md)) and confirm no window/allocation leak and no animation hitching.
 
 ---

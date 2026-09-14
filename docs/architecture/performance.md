@@ -457,7 +457,7 @@ Accept, optimize, or record justified ADR change
 ### P-005 — General operation-output flood
 
 - Simulate 10,000+ lines of generic approved operation/status output from a future in-scope desktop module.
-- Verify parser/background handling, tail display, ring buffer, and detail navigation.
+- Verify parser/background handling, tail display, ring buffer, and application-scene handoff.
 
 **Pass target:** no infinite string growth/OOM; compact Notch stays short and responsive.
 

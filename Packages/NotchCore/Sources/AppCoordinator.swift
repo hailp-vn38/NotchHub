@@ -7,22 +7,18 @@ public final class AppCoordinator {
     private let scenePresenter: any AppShellScenePresenter
     private let lifecycleObserver: any AppShellLifecycleObserving
     private let launchAtLoginController: any LaunchAtLoginControlling
-    private let surfaceController: any NotchSurfaceToggling
-    private let surfaceLifecycleHandler: (any NotchSurfaceLifecycleHandling)?
-    private let surfaceDebugController: (any NotchSurfaceDebugToggling)?
+    private let surfaceController: any NotchSurfaceLifecycleControlling
 
     public init(
         scenePresenter: (any AppShellScenePresenter)? = nil,
         lifecycleObserver: (any AppShellLifecycleObserving)? = nil,
         launchAtLoginController: (any LaunchAtLoginControlling)? = nil,
-        surfaceController: (any NotchSurfaceToggling)? = nil
+        surfaceController: (any NotchSurfaceLifecycleControlling)? = nil
     ) {
         self.scenePresenter = scenePresenter ?? NoopScenePresenter()
         self.lifecycleObserver = lifecycleObserver ?? NoopLifecycleObserver()
         self.launchAtLoginController = launchAtLoginController ?? UnavailableLaunchAtLoginController()
         self.surfaceController = surfaceController ?? UnavailableNotchSurfaceController()
-        self.surfaceLifecycleHandler = surfaceController as? any NotchSurfaceLifecycleHandling
-        self.surfaceDebugController = surfaceController as? any NotchSurfaceDebugToggling
     }
 
     @discardableResult
@@ -31,6 +27,7 @@ public final class AppCoordinator {
         snapshot.isRunning = true
         snapshot.startCount += 1
         snapshot.lifecycleState = .running
+        surfaceController.start()
         snapshot.launchAtLoginStatus = launchAtLoginController.status()
         lifecycleObserver.start { [weak self] event in
             self?.handleLifecycleEvent(event)
@@ -41,25 +38,8 @@ public final class AppCoordinator {
     @discardableResult
     public func perform(_ intent: AppShellMenuIntent) -> AppShellMenuOutcome {
         switch intent {
-        case .toggleNotchSurface:
-            switch surfaceController.toggleNotchSurface() {
-            case .shownCollapsed:
-                return .notchSurfaceToggled(.collapsed)
-            case .hidden:
-                return .notchSurfaceToggled(.hidden)
-            case .unavailable:
-                return .unavailable(.notchSurface)
-            }
-        case .showDemoState:
-            return .unavailable(.demoState)
-        case .toggleSurfaceDebugOverlay:
-            return surfaceDebugController?.toggleDebugOverlay() == true
-                ? .surfaceDebugOverlayToggled
-                : .unavailable(.notchSurface)
         case .openSettings:
             return presentPlaceholderScene(.settings)
-        case .openDiagnostics:
-            return presentPlaceholderScene(.diagnostics)
         case .restartAppShell:
             stop()
             _ = start()
@@ -75,7 +55,7 @@ public final class AppCoordinator {
     }
 
     private func handleLifecycleEvent(_ event: AppShellLifecycleEvent) {
-        surfaceLifecycleHandler?.handleAppShellLifecycle(event)
+        surfaceController.handleAppShellLifecycle(event)
         switch event {
         case .activated, .didWake, .unlocked:
             guard snapshot.isRunning else { return }
@@ -97,6 +77,7 @@ public final class AppCoordinator {
     private func stop() {
         guard snapshot.isRunning else { return }
         lifecycleObserver.stop()
+        surfaceController.stop()
         snapshot.isRunning = false
         snapshot.lifecycleState = .stopped
     }
@@ -160,19 +141,13 @@ public enum AppShellStartResult: Equatable, Sendable {
 }
 
 public enum AppShellMenuIntent: Sendable {
-    case toggleNotchSurface
-    case toggleSurfaceDebugOverlay
-    case showDemoState
     case openSettings
-    case openDiagnostics
     case restartAppShell
     case quit
 }
 
 public enum AppShellMenuOutcome: Equatable, Sendable {
     case unavailable(AppShellUnavailableFeature)
-    case notchSurfaceToggled(SurfaceState)
-    case surfaceDebugOverlayToggled
     case placeholderSceneRequested(AppShellPlaceholderScene)
     case placeholderSceneUnavailable(AppShellPlaceholderScene)
     case restarted
@@ -182,14 +157,6 @@ public enum AppShellMenuOutcome: Equatable, Sendable {
         switch self {
         case .unavailable(let feature):
             "\(feature.title) is unavailable until its owning phase is implemented."
-        case .notchSurfaceToggled(.collapsed):
-            "Notch surface shown."
-        case .notchSurfaceToggled(.hidden):
-            "Notch surface hidden."
-        case .notchSurfaceToggled:
-            "Notch surface updated."
-        case .surfaceDebugOverlayToggled:
-            "Notch surface debug overlay toggled."
         case .placeholderSceneRequested(let scene):
             "Opening \(scene.title) placeholder."
         case .placeholderSceneUnavailable(let scene):
@@ -254,12 +221,9 @@ private final class UnavailableLaunchAtLoginController: LaunchAtLoginControlling
 }
 
 @MainActor
-public protocol NotchSurfaceToggling: AnyObject {
-    func toggleNotchSurface() -> NotchSurfaceToggleResult
-}
-
-@MainActor
-public protocol NotchSurfaceLifecycleHandling: AnyObject {
+public protocol NotchSurfaceLifecycleControlling: AnyObject {
+    func start()
+    func stop()
     func handleAppShellLifecycle(_ event: AppShellLifecycleEvent)
 }
 
@@ -268,15 +232,11 @@ public protocol NotchSurfaceDebugToggling: AnyObject {
     func toggleDebugOverlay() -> Bool
 }
 
-public enum NotchSurfaceToggleResult: Equatable, Sendable {
-    case shownCollapsed
-    case hidden
-    case unavailable
-}
-
 @MainActor
-private final class UnavailableNotchSurfaceController: NotchSurfaceToggling {
-    func toggleNotchSurface() -> NotchSurfaceToggleResult { .unavailable }
+private final class UnavailableNotchSurfaceController: NotchSurfaceLifecycleControlling {
+    func start() {}
+    func stop() {}
+    func handleAppShellLifecycle(_: AppShellLifecycleEvent) {}
 }
 
 public enum AppShellUnavailableFeature: Equatable, Sendable {

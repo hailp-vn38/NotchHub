@@ -24,7 +24,7 @@ public struct SurfaceInteractionConfiguration: Equatable, Sendable {
 }
 
 @MainActor
-public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecycleHandling,
+public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     NotchSurfaceDebugToggling
 {
     public private(set) var snapshot = SurfaceSnapshot()
@@ -32,8 +32,6 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
     private let input: (any SurfaceInputMonitoring)?
     private let geometryInput: (any SurfaceGeometryRevalidating)?
     private let contextInput: (any SurfaceContextObserving)?
-    private let detailInput: (any DetailNavigationInput)?
-    private let detailNavigator: (any DetailNavigating)?
     private let admission: (any SurfaceExpansionAdmitting)?
     private let scheduler: any SurfaceInteractionScheduling
     private let configuration: SurfaceInteractionConfiguration
@@ -57,15 +55,12 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         scheduler: (any SurfaceInteractionScheduling)? = nil,
         configuration: SurfaceInteractionConfiguration = .init(),
         input: (any SurfaceInputMonitoring)? = nil,
-        detailNavigator: (any DetailNavigating)? = nil,
         admission: (any SurfaceExpansionAdmitting)? = nil
     ) {
         self.panel = panel
         self.input = input ?? (panel as? any SurfaceInputMonitoring)
         self.geometryInput = panel as? any SurfaceGeometryRevalidating
         self.contextInput = panel as? any SurfaceContextObserving
-        self.detailInput = self.input as? any DetailNavigationInput
-        self.detailNavigator = detailNavigator
         self.admission = admission ?? (panel as? any SurfaceExpansionAdmitting)
         self.scheduler = scheduler ?? MainQueueSurfaceScheduler()
         self.configuration = configuration
@@ -78,9 +73,24 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         self.contextInput?.setContextChangeHandler { [weak self] intent in
             _ = self?.handle(intent)
         }
-        self.detailInput?.setDetailNavigationHandler { [weak detailNavigator] request in
-            _ = detailNavigator?.open(request)
-        }
+        publishDebugSnapshot()
+    }
+
+    public func start() {
+        guard snapshot.state == .hidden else { return }
+        snapshot.state = .collapsed
+        beginRecovery()
+        publishDebugSnapshot()
+    }
+
+    public func stop() {
+        cancelHoverExpansion()
+        cancelAutoCollapse()
+        cancelRecovery()
+        interactionHolds.removeAll()
+        _ = panel.apply(.hide)
+        snapshot.state = .hidden
+        snapshot.isInteractionPaused = false
         publishDebugSnapshot()
     }
 
@@ -148,17 +158,6 @@ public final class SurfaceCoordinator: NotchSurfaceToggling, NotchSurfaceLifecyc
         guard interactionHolds.removeValue(forKey: id) != nil else { return }
         guard interactionHolds.isEmpty, !isHoveringExpanded else { return }
         scheduleCloseForCurrentOrigin()
-    }
-
-    public func toggleNotchSurface() -> NotchSurfaceToggleResult {
-        let priorState = snapshot.state
-        let state = handle(.toggle)
-        guard state != priorState else { return .unavailable }
-        return switch state {
-        case .collapsed: .shownCollapsed
-        case .hidden: .hidden
-        default: .unavailable
-        }
     }
 
     public func handleAppShellLifecycle(_ event: AppShellLifecycleEvent) {

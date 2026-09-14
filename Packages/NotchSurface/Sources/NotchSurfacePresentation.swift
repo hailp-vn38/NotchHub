@@ -132,7 +132,6 @@ public enum NotchSurfaceHitTesting {
 struct NotchSurfaceRootView: View {
     @Bindable var model: NotchSurfacePresentationModel
     let send: (SurfaceIntent) -> Void
-    let openDetail: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isExpanded: Bool { model.isExpandedGeometry }
@@ -152,7 +151,6 @@ struct NotchSurfaceRootView: View {
                 VStack(spacing: 8) {
                     Text("NotchHub").font(.headline)
                     Text("Surface ready").font(.subheadline).foregroundStyle(.secondary)
-                    Button("View detail", action: openDetail)
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

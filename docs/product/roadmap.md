@@ -149,7 +149,6 @@ Create a reliable application entry point that remains usable even if the notch 
 ### Scope
 
 - Create menu-bar-first app shell using `MenuBarExtra` or a wrapper around `NSStatusItem`.
-- Implement menu items: Toggle Notch Surface, Show Demo State, Open Settings, Open Diagnostics, Restart App Shell, Quit.
 - Introduce `AppCoordinator` as composition and lifecycle owner.
 - Define app lifecycle state and startup/shutdown ordering.
 - Rely on the normal macOS app-bundle/LaunchServices path and make `AppCoordinator` startup
@@ -160,10 +159,8 @@ Create a reliable application entry point that remains usable even if the notch 
 
 ### Demonstrable slice
 
-The app launches as a menu-bar utility. Settings and Diagnostics open as separate, explicitly
-labelled placeholder windows; neither persists settings nor exposes operational diagnostics. Until
-F2, Toggle Notch Surface and Show Demo State remain safe, visible recovery intents that report the
-surface as unavailable rather than creating an `NSPanel`. Restart App Shell only restarts F1-owned
+The app launches as a menu-bar utility. Settings remains a separate, explicitly labelled
+placeholder application scene and does not persist settings. Restart App Shell only restarts F1-owned
 in-memory coordination; it is not the F7 `ModuleRuntime` restart.
 
 ### Exit criteria
@@ -194,7 +191,7 @@ Implement the core windowing and interaction behavior that every future module r
 - Add a SwiftUI host/root view.
 - Add `ScreenTopology`, `NotchGeometry`, and built-in display selection.
 - Implement Notch surface states: `hidden`, `collapsed`, `compact`, `expanded`, `suppressed`, `recovering`.
-- Add an explicit navigation path from expanded content to a separate detail view/window; `detail` is not a Notch surface state.
+- Add an explicit navigation path from expanded content to a separate application scene/window; `detail` is not a Notch surface state.
 - Implement hover zone, click, click-outside, Escape, auto-collapse, and configurable timeouts.
 - Implement first-pass Spaces/full-screen/sleep-wake/display-change handling.
 - Add click-through/hit-test policy when collapsed.
@@ -322,7 +319,6 @@ Create one safe, typed action system for every entry point before introducing mo
 - Register base actions:
 
 ```text
-app.toggleSurface
 app.openSettings
 app.openDiagnostics
 app.restartRuntime
@@ -330,6 +326,10 @@ surface.showDemoStatus
 surface.toggleDebugOverlay
 settings.reset
 ```
+
+Only `app.openSettings` is represented by the current menu item; Diagnostics
+and development actions are registered for their owning application scenes or
+development hooks, not exposed in `MenuBarExtra`.
 
 ### Exit criteria
 
@@ -467,7 +467,7 @@ Validate the module contribution API with a module that is more representative t
 
 ### Scope
 
-- Contribute indicator, compact status, expanded content, and optional detail view through declared slots.
+- Contribute indicator, compact status, expanded content, and optional application scene through declared slots.
 - Use settings namespace, action registration, event subscriptions, module diagnostics, and runtime resource policy.
 - Verify UI placement conflict rules between multiple module contributions.
 
@@ -489,11 +489,11 @@ Show Xiaozhi voice/AI session state and streamed text without adding native Mac 
 
 - Create a relay or adapter that transforms Xiaozhi protocol/events into `EventEnvelope v1`.
 - Display states: disconnected, idle, listening, thinking, speaking, error.
-- Display partial/final user and assistant transcript in compact/expanded contexts, with full content in a separately opened detail window.
+- Display partial/final user and assistant transcript in compact/expanded contexts, with full content in a separately opened application scene.
 - Add transcript assembler with sequence/correlation/session handling.
 - Coalesce UI text updates to approximately 20–30 flushes per second.
 - Add registered actions where backend support exists: reconnect, stop, mute.
-- Use detail window for full transcript; keep Notch view short.
+- Use application scene for full transcript; keep Notch view short.
 
 ### Explicit non-goals
 
@@ -566,7 +566,7 @@ Add time-sensitive productivity context after the platform has proven its permis
 - Upcoming calendar event summary.
 - Reminder/task summary.
 - Timer and focus-session state.
-- Contextual action to open the relevant macOS app or detail view.
+- Contextual action to open the relevant macOS app or application scene.
 
 ### Gate
 

@@ -173,7 +173,7 @@ public enum SurfaceSlot: String, Codable, Sendable {
     case compactStatus    // 1–3 line transient status
     case expandedPrimary  // Main content area when expanded
     case expandedSecondary // Secondary/auxiliary content when expanded
-    case detail           // Separate detail window content; never rendered in the Notch panel
+    case detail           // Separate application scene content; never rendered in the Notch panel
     case menuBar          // Contribution to the app's menu bar menu
 }
 ```
@@ -202,7 +202,7 @@ public struct SurfaceContribution: Sendable {
 | One `indicator` at a time | If multiple modules want the indicator slot, the highest-priority active one wins; others are suppressed, not hidden-and-retried aggressively |
 | `compactStatus` queueing | Compact status messages from different modules are queued and shown briefly in sequence rather than overlapping |
 | `expandedPrimary` exclusivity | Only one module's `expandedPrimary` content is shown per user-triggered expansion; module selection follows the action/event that triggered expansion |
-| `detail` is on-demand and separate | A module's `detail` contribution is routed to a separate detail window only when the user explicitly navigates to it (for example, "Open full transcript"); it never becomes a Notch `SurfaceState` |
+| `detail` is on-demand and separate | A module's `detail` contribution is routed to a separate application scene only when the user explicitly navigates to it (for example, "Open full transcript"); it never becomes a Notch `SurfaceState` |
 | `menuBar` items are additive | Multiple modules may each contribute a menu item; the platform sorts them under a "Modules" submenu or similar convention |
 
 ---

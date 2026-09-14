@@ -20,8 +20,8 @@ _Avoid_: hover exception, sticky panel
 The bounded expanded interaction lifetime to which Surface interaction holds belong; it ends on every authoritative departure from the expanded state.
 _Avoid_: panel lifetime, hover session
 
-**Detail view**:
-A separately opened, user-requested window or scene for long-form content. It is not a Notch surface state.
+**Application scene**:
+A dedicated application window or scene for configuration, diagnostics, or other content that does not belong in the Notch surface.
 _Avoid_: detail state, expanded detail
 
 **Module**:

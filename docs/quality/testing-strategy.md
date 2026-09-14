@@ -151,7 +151,7 @@ No test double may weaken a security contract. For example, an IPC fake must sti
 Required automated coverage:
 
 - `AppCoordinator` startup is idempotent and tears down F1-owned observers/tasks in reverse order.
-- Each menu intent routes to its designated outcome: Settings/Diagnostics open their placeholder
+- The menu exposes exactly Settings, Restart App Shell, and Quit.
   scenes; surface/demo intents report unavailable; Restart App Shell does not create a module runtime.
 - Activation, deactivation, sleep, wake, lock, and unlock are observable without creating an `NSPanel` or
   requesting a permission.
@@ -193,7 +193,7 @@ Required cases:
 - Screen/panel invalidation always entering bounded recovery.
 - Recovery success/failure convergence.
 - User disable behavior.
-- Detail navigation requires explicit user action, opens a separate view/window, and does not add a `detail` state to the Notch surface state machine.
+- Long-form content is handled by dedicated application scenes and does not add a `detail` state to the Notch surface state machine.
 - Hover-origin exit closes only after the 100 ms grace, cancels on re-entry, and is held by active keyboard/popover/drag/confirmation/accessibility leases.
 - Expanded admission distinguishes insufficient safe geometry from invalid topology/native panel failure; only the latter enters recovery.
 - `expandedAvailability` expires on topology invalidation and is refreshed by topology revision; historical admission rejection is asserted through bounded Diagnostics events.
@@ -399,7 +399,7 @@ Automate where stable:
 - Modules page enable/disable/health/error display.
 - Diagnostics page filtering/export action.
 - Notch expanded/compact/collapse behavior using controlled interaction/test hooks.
-- Explicit detail navigation opens a separate window, does not mutate `SurfaceState` to `detail`, and does not create unbounded duplicate windows.
+- Application-scene navigation does not mutate `SurfaceState` or create unbounded duplicate windows.
 - Error/empty/loading states.
 
 ### 8.2 Accessibility checks
@@ -409,7 +409,7 @@ Automate where stable:
 - Focus does not become trapped in an invisible/suppressed Notch panel.
 - Status is not conveyed by color alone.
 - Reduced Motion disables/reduces continuous animations.
-- Dynamic text/contrast remain usable in Settings/detail views.
+- Dynamic text/contrast remain usable in Settings/application scenes.
 
 ### 8.3 Visual testing
 
@@ -523,7 +523,7 @@ Every security test should link to a threat scenario in `docs/security/threat-mo
 #### PT-005 — Operation-output flood
 
 - 10,000+ lines from an in-scope future desktop operation/status source.
-- Verify bounded tail/history and responsive detail view.
+- Verify bounded tail/history and responsive application scene.
 
 #### PT-006 — Module toggle loop
 

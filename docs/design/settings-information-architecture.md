@@ -185,7 +185,7 @@ Controls when and how the Notch surface appears and responds to interaction.
 
 | Group | Settings | Default direction |
 |---|---|---|
-| Surface | Enable Notch surface, default start state | Enabled; safe collapsed state |
+| Surface | Surface is always enabled, default start state | Enabled; safe collapsed state |
 | Pointer interaction | Hover-to-expand, hover delay | Enabled with conservative delay; user can disable |
 | Collapse behavior | Auto-collapse, timeout duration | Enabled; validated preset/range |
 | Keyboard/interaction | Escape/click-outside behavior | Collapse to safe state |
@@ -220,7 +220,6 @@ Lets the user view, assign, enable, disable, and resolve conflicts for registere
 | Group | Content |
 |---|---|
 | Global controls | Enable/disable global shortcut support if applicable |
-| Core actions | Toggle Notch, Open Settings, Open Diagnostics, show demo state |
 | Module actions | Actions contributed by enabled modules, grouped by module/category |
 | Conflict/help | Reserved shortcut guidance, conflict state, permission/accessibility explanation |
 
@@ -251,7 +250,7 @@ Clear/reset option
 Initial suggestion, subject to conflict check:
 
 ```text
-⌥⌘Space → app.toggleSurface
+No Surface visibility toggle shortcut.
 ```
 
 Do not assume this binding is available for every user/system configuration.
@@ -281,7 +280,7 @@ Privacy information
 | Status | Not used, Not enabled, Enabled, Denied, Restricted, Unavailable |
 | Feature/module | Identify why it is relevant |
 | Explanation | What is accessed, why, when it is active, what happens if declined |
-| Primary action | Enable/Request/Open System Settings/View details as appropriate |
+| Primary action | Enable/Request/Open System Settings/Open application scenes as appropriate |
 | Secondary action | Learn more/privacy route where applicable |
 
 ### Foundation behavior
@@ -342,7 +341,7 @@ Reason/details link when unavailable
 
 | Action | Category | Settings behavior |
 |---|---|---|
-| `app.toggleSurface` | App | Show current shortcut and run button |
+| `` | App | Show current shortcut and run button |
 | `app.openSettings` | App | Informational; current page already open |
 | `app.openDiagnostics` | App | Open diagnostics route |
 | `app.restartRuntime` | Runtime | Run with policy-driven confirmation |
@@ -403,7 +402,7 @@ Suggested DemoModule controls:
 - Modules cannot add arbitrary top-level Settings pages.
 - Module detail page must use common `NotchUI` design-system components.
 - Module disabled state must not start hidden background work just to populate Settings.
-- Module detail views must not expose tokens, raw payloads, or unbounded diagnostics.
+- Module application scenes must not expose tokens, raw payloads, or unbounded diagnostics.
 - A failed module must not prevent Modules page, Settings, or Diagnostics from opening.
 
 ---
@@ -656,7 +655,7 @@ Settings must satisfy the project accessibility requirements:
 - Disabled controls include a textual reason and, where available, a recovery button.
 - Color is never the only signal for running/failed/denied/unavailable state.
 - Reduced Motion applies to navigation/panel previews without hiding state changes.
-- Text scales in Settings/detail views within macOS accessibility expectations.
+- Text scales in Settings/application scenes within macOS accessibility expectations.
 
 See `docs/design/accessibility.md` when it is created; until then, treat this section and [Requirements §6.6](../product/requirements.md#66-accessibility-and-usability) as authoritative.
 
