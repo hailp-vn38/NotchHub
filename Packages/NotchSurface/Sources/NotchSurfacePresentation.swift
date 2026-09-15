@@ -250,7 +250,7 @@ struct NotchSurfaceRootView: View {
         }
         .frame(width: model.visibleSurfaceSize.width, height: model.visibleSurfaceSize.height, alignment: .top)
         .clipShape(shape)
-        .background {
+        .overlay {
             shape
                 .fill(.clear)
                 .contentShape(shape)
