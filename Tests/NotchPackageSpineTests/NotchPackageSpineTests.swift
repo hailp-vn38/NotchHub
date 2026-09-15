@@ -249,6 +249,45 @@ func restoresPriorStateAfterLockWithoutCreatingDuplicateRecovery() {
     #expect(coordinator.snapshot.isInteractionPaused == false)
 }
 
+@Test("Activation revalidates geometry without collapsing an expanded Surface")
+@MainActor
+func activationPreservesExpandedSurface() {
+    let panel = RecordingSurfacePanel()
+    let coordinator = SurfaceCoordinator(panel: panel)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
+    let effectsBeforeActivation = panel.effects
+
+    coordinator.handleAppShellLifecycle(.activated)
+
+    #expect(coordinator.snapshot.state == .expanded)
+    #expect(panel.revalidationCount == 1)
+    #expect(panel.effects == effectsBeforeActivation)
+}
+
+@Test("Activation recovery restores the prior expanded Surface state")
+@MainActor
+func activationRecoveryPreservesExpandedSurface() {
+    let panel = RecordingSurfacePanel(revalidationSucceeds: false)
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
+
+    coordinator.handleAppShellLifecycle(.activated)
+
+    #expect(coordinator.snapshot.state == .recovering)
+    #expect(panel.revalidationCount == 2)
+    panel.setRevalidationSucceeds(true)
+    scheduler.fireLatest()
+
+    #expect(coordinator.snapshot.state == .expanded)
+    #expect(panel.revalidationCount == 3)
+    #expect(panel.effects.last == .showExpanded(focus: false))
+}
+
 @Test("Wake recovery retries once after the F2 backoff then hides with a warning")
 @MainActor
 func boundsRecoveryAndKeepsTheMenuBarRecoverySeamAvailable() {

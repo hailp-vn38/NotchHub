@@ -181,7 +181,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         case .didWake: _ = handle(.didWake)
         case .locked: _ = handle(.sessionLocked)
         case .unlocked: _ = handle(.sessionUnlocked)
-        case .activated: _ = handle(.displayInvalidated)
+        case .activated: revalidateGeometryAfterActivation()
         case .deactivated, .willTerminate: break
         }
     }
@@ -290,6 +290,18 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
 
     private func revalidateDisplayGeometry() {
         _ = handle(.displayInvalidated)
+    }
+
+    private func revalidateGeometryAfterActivation() {
+        guard snapshot.state != .hidden, snapshot.state != .recovering else { return }
+        invalidateExpandedAvailability()
+        _ = expandedAdmission()
+        let stateBeforeRevalidation = snapshot.state
+        guard geometryInput?.revalidateGeometry() != false else {
+            beginRecovery(restoring: stateBeforeRevalidation)
+            return
+        }
+        publishDebugSnapshot()
     }
 
     private func pauseInteraction() {
