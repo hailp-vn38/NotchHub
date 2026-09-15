@@ -166,13 +166,6 @@ public struct SettingsShellView: View {
             .accessibilityLabel("Settings sections")
         } detail: {
             SettingsPageView(model: model, systemReducedMotion: systemReducedMotion)
-                .id(model.selectedRoute)
-                .transition(.opacity)
-                .animation(
-                    model.isReducedMotion(systemPreference: systemReducedMotion)
-                        ? .easeOut(duration: 0.12) : .spring(response: 0.35, dampingFraction: 0.9),
-                    value: model.selectedRoute
-                )
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 760, minHeight: 560)
