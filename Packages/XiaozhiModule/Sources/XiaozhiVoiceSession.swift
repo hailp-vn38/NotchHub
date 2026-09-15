@@ -1,5 +1,6 @@
 import Foundation
 import NotchCore
+import OSLog
 
 public enum XiaozhiVoiceTransportMessage: Sendable {
     case text(String)
@@ -108,6 +109,7 @@ public enum XiaozhiVoiceSessionError: Error, Equatable, Sendable {
 public actor XiaozhiVoiceSession {
     private static let uplinkFrameLimit = 40  // 40 × 60 ms = 2400 ms.
     private static let downlinkFrameLimit = 20  // 20 × 60 ms = 1200 ms.
+    private static let logger = Logger(subsystem: "NotchHub", category: "xiaozhi.websocket")
 
     private let connector: any XiaozhiVoiceConnecting
     private let capture: any XiaozhiAudioCapturing
@@ -184,8 +186,12 @@ public actor XiaozhiVoiceSession {
     public func receive(_ message: XiaozhiVoiceTransportMessage) async throws {
         do {
             switch message {
-            case .text(let text): try await receiveText(text)
-            case .binary(let packet): try await receiveAudio(packet)
+            case .text(let text):
+                Self.logIncomingText(text)
+                try await receiveText(text)
+            case .binary(let packet):
+                Self.logger.debug("received WebSocket binary packet bytes=\(packet.count, privacy: .public)")
+                try await receiveAudio(packet)
             }
             await emit(.state(state))
         } catch {
@@ -295,6 +301,22 @@ public actor XiaozhiVoiceSession {
             }
         default: throw XiaozhiVoiceSessionError.malformedMessage
         }
+    }
+
+    /// Logs protocol metadata only. Raw JSON can contain conversation text,
+    /// session IDs, or credentials and must not leave the session boundary.
+    private static func logIncomingText(_ text: String) {
+        guard
+            let data = text.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            logger.debug("received malformed WebSocket text bytes=\(text.utf8.count, privacy: .public)")
+            return
+        }
+        let type = object["type"] as? String ?? "missing"
+        let state = object["state"] as? String ?? "none"
+        logger.debug(
+            "received WebSocket text type=\(type, privacy: .public) state=\(state, privacy: .public) bytes=\(text.utf8.count, privacy: .public)")
     }
 
     private func receiveAudio(_ packet: Data) async throws {
