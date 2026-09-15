@@ -83,9 +83,6 @@ public struct ModuleEnablementSettings: Codable, Equatable, Sendable {
 public enum XiaozhiConversationMode: String, Codable, CaseIterable, Sendable { case auto, pushToTalk }
 
 public enum XiaozhiIdentity {
-    public static let clientID = "test-client"
-    public static let defaultDeviceID = randomDeviceID()
-
     public static func randomDeviceID() -> String {
         var generator = SystemRandomNumberGenerator()
         var bytes = (0..<6).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
@@ -99,6 +96,10 @@ public enum XiaozhiIdentity {
             let firstOctet = UInt8(value.prefix(2), radix: 16)
         else { return false }
         return firstOctet & 0b0000_0011 == 0b0000_0010
+    }
+
+    public static func isValidClientID(_ value: String) -> Bool {
+        UUID(uuidString: value) != nil && value == value.lowercased()
     }
 }
 

@@ -4,10 +4,10 @@ import NotchDomain
 import Testing
 import XiaozhiModule
 
-@Test("Xiaozhi identity keeps the requested hard-coded client ID and validates generated MAC IDs")
+@Test("Xiaozhi identity validates generated stable IDs")
 func xiaozhiIdentity() {
-    #expect(XiaozhiIdentity.clientID == "test-client")
     #expect(XiaozhiIdentity.isValidDeviceID(XiaozhiIdentity.randomDeviceID()))
+    #expect(XiaozhiIdentity.isValidClientID(UUID().uuidString.lowercased()))
     #expect(!XiaozhiIdentity.isValidDeviceID("00:11:22:33:44:55"))
     #expect(!XiaozhiIdentity.isValidDeviceID("03:11:22:33:44:55"))
 }
@@ -114,4 +114,5 @@ private struct XiaozhiFakeBootstrap: XiaozhiBootstrapping {
 
 private struct XiaozhiFakeIdentity: XiaozhiIdentityStoring {
     func deviceID() throws -> String { "02:11:22:33:44:55" }
+    func clientID() throws -> String { "d1a6d617-337a-439a-ad02-5cf5c447a755" }
 }

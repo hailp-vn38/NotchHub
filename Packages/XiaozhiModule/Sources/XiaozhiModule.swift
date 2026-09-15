@@ -78,17 +78,33 @@ public struct KeychainXiaozhiCredentialStore: XiaozhiCredentialStoring {
 
 public protocol XiaozhiIdentityStoring: Sendable {
     func deviceID() throws -> String
+    func clientID() throws -> String
 }
 
 /// Generates one locally-administered unicast MAC ID, then keeps it in
 /// Keychain so identity is stable without becoming Settings/export data.
 public struct KeychainXiaozhiIdentityStore: XiaozhiIdentityStoring {
     private let service = "com.notchhub.xiaozhi"
-    private let account = "device-id"
 
     public init() {}
 
     public func deviceID() throws -> String {
+        try persistentValue(account: "device-id", isValid: XiaozhiIdentity.isValidDeviceID) {
+            XiaozhiIdentity.randomDeviceID()
+        }
+    }
+
+    public func clientID() throws -> String {
+        try persistentValue(account: "client-id", isValid: XiaozhiIdentity.isValidClientID) {
+            UUID().uuidString.lowercased()
+        }
+    }
+
+    private func persistentValue(
+        account: String,
+        isValid: (String) -> Bool,
+        generate: () -> String
+    ) throws -> String {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -103,7 +119,7 @@ public struct KeychainXiaozhiIdentityStore: XiaozhiIdentityStoring {
             return existing
         }
         guard status == errSecItemNotFound else { throw XiaozhiCredentialStoreError.keychainFailure(status) }
-        let generated = XiaozhiIdentity.randomDeviceID()
+        let generated = generate()
         var create = query
         create.removeValue(forKey: kSecReturnData)
         create.removeValue(forKey: kSecMatchLimit)
@@ -132,11 +148,13 @@ public enum XiaozhiDiagnostics {
 
 public struct XiaozhiBootstrapRequest: Encodable, Sendable {
     public let deviceID: String
+    public let clientID: String
     public let language: String
     public let appVersion: String
 
-    public init(deviceID: String, language: String = "en", appVersion: String) {
+    public init(deviceID: String, clientID: String, language: String = "en", appVersion: String) {
         self.deviceID = deviceID
+        self.clientID = clientID
         self.language = language
         self.appVersion = appVersion
     }
@@ -148,7 +166,7 @@ public struct XiaozhiBootstrapRequest: Encodable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(2, forKey: .version)
         try container.encode(language, forKey: .language)
-        try container.encode(XiaozhiIdentity.clientID, forKey: .uuid)
+        try container.encode(clientID, forKey: .uuid)
         var application = container.nestedContainer(keyedBy: ApplicationKeys.self, forKey: .application)
         try application.encode("NotchHub", forKey: .name)
         try application.encode(appVersion, forKey: .version)
@@ -210,7 +228,7 @@ public struct XiaozhiCloudBootstrapClient: XiaozhiBootstrapping {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("1", forHTTPHeaderField: "Activation-Version")
         urlRequest.setValue(request.deviceID, forHTTPHeaderField: "Device-Id")
-        urlRequest.setValue(XiaozhiIdentity.clientID, forHTTPHeaderField: "Client-Id")
+        urlRequest.setValue(request.clientID, forHTTPHeaderField: "Client-Id")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
         let (data, response) = try await session.data(for: urlRequest)
@@ -257,7 +275,7 @@ public actor XiaozhiModule: NotchModule {
     private func prepare(eventPublisher: any ModuleEventPublisher) async {
         do {
             let response = try await bootstrap.bootstrap(.init(
-                deviceID: try identity.deviceID(), appVersion: "0.1.0"))
+                deviceID: try identity.deviceID(), clientID: try identity.clientID(), appVersion: "0.1.0"))
             if let token = response.websocket?.token { try credentials.saveCredential(token) }
             let type = response.activation == nil ? "xiaozhi.ready" : "xiaozhi.activationRequired"
             await eventPublisher.publish(.init(moduleID: id, type: EventType(type)!))
