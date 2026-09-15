@@ -33,6 +33,7 @@ public protocol XiaozhiAudioCapturing: Sendable {
 
 public protocol XiaozhiAudioPlaying: Sendable {
     func enqueue(_ pcm: Data, sampleRate: Int, channels: Int) async throws
+    func setDrainedObserver(_ observer: @escaping @Sendable () async -> Void) async
     func stop() async
 }
 
@@ -43,7 +44,9 @@ public protocol XiaozhiOpusCoding: Sendable {
     func decode(_ packet: Data, sampleRate: Int, channels: Int) throws -> Data
 }
 
-public enum XiaozhiVoiceState: String, Equatable, Sendable { case ready, connecting, handshaking, idle, listening, thinking, speaking, error }
+public enum XiaozhiVoiceState: String, Equatable, Sendable {
+    case ready, connecting, handshaking, idle, listening, thinking, speaking, error
+}
 
 public struct XiaozhiVoiceSessionSnapshot: Equatable, Sendable, CustomStringConvertible {
     public let voiceState: XiaozhiVoiceState
@@ -67,24 +70,44 @@ public struct XiaozhiVoiceSessionConfiguration: Sendable {
     public let deviceID: String
     public let clientID: String
     public let mode: XiaozhiConversationMode
+    public let ttsMuted: Bool
 
-    public init(url: URL, token: String, version: Int, deviceID: String, clientID: String, mode: XiaozhiConversationMode) {
+    public init(
+        url: URL,
+        token: String,
+        version: Int,
+        deviceID: String,
+        clientID: String,
+        mode: XiaozhiConversationMode,
+        ttsMuted: Bool = false
+    ) {
         self.url = url
         self.token = token
         self.version = version
         self.deviceID = deviceID
         self.clientID = clientID
         self.mode = mode
+        self.ttsMuted = ttsMuted
     }
 }
 
-public enum XiaozhiVoiceSessionError: Error, Equatable, Sendable { case malformedMessage, invalidHello, noSession, pushToTalkOnly, audioFrame }
+/// Normalized session events. They deliberately exclude the upstream payload,
+/// audio frames, identifiers, and credentials.
+public enum XiaozhiVoiceSessionEvent: Equatable, Sendable {
+    case state(XiaozhiVoiceState)
+    case assistantText(String)
+    case completed
+}
+
+public enum XiaozhiVoiceSessionError: Error, Equatable, Sendable {
+    case malformedMessage, invalidHello, noSession, pushToTalkOnly, audioFrame
+}
 
 /// Owns one authenticated voice session. Its snapshot is normalized and
 /// intentionally excludes credentials, headers, raw packets, and transcripts.
 public actor XiaozhiVoiceSession {
-    private static let uplinkFrameLimit = 40 // 40 × 60 ms = 2400 ms.
-    private static let downlinkFrameLimit = 20 // 20 × 60 ms = 1200 ms.
+    private static let uplinkFrameLimit = 40  // 40 × 60 ms = 2400 ms.
+    private static let downlinkFrameLimit = 20  // 20 × 60 ms = 1200 ms.
 
     private let connector: any XiaozhiVoiceConnecting
     private let capture: any XiaozhiAudioCapturing
@@ -103,26 +126,43 @@ public actor XiaozhiVoiceSession {
     private var droppedUplinkFrames = 0
     private var droppedDownlinkFrames = 0
     private var lastError: String?
+    private var eventObserver: (@Sendable (XiaozhiVoiceSessionEvent) async -> Void)?
+    private var didReceiveTTSStop = false
+    private var isPlaybackDrained = true
 
-    public init(connector: any XiaozhiVoiceConnecting, capture: any XiaozhiAudioCapturing, playback: any XiaozhiAudioPlaying, codec: any XiaozhiOpusCoding) {
+    public init(
+        connector: any XiaozhiVoiceConnecting, capture: any XiaozhiAudioCapturing, playback: any XiaozhiAudioPlaying,
+        codec: any XiaozhiOpusCoding
+    ) {
         self.connector = connector
         self.capture = capture
         self.playback = playback
         self.codec = codec
     }
 
+    /// Observes normalized state, bounded assistant text, and completion only.
+    public func setEventObserver(_ observer: @escaping @Sendable (XiaozhiVoiceSessionEvent) async -> Void) {
+        eventObserver = observer
+    }
+
     public func start(_ configuration: XiaozhiVoiceSessionConfiguration) async throws {
         await resetResources()
         self.configuration = configuration
+        didReceiveTTSStop = false
+        isPlaybackDrained = true
+        await playback.setDrainedObserver { [weak self] in await self?.playbackDidDrain() }
         state = .connecting
-        let authorization = configuration.token.lowercased().hasPrefix("bearer ")
+        let authorization =
+            configuration.token.lowercased().hasPrefix("bearer ")
             ? configuration.token : "Bearer \(configuration.token)"
-        let request = XiaozhiVoiceConnectionRequest(url: configuration.url, headers: [
-            "Authorization": authorization,
-            "Protocol-Version": String(configuration.version),
-            "Device-Id": configuration.deviceID,
-            "Client-Id": configuration.clientID,
-        ])
+        let request = XiaozhiVoiceConnectionRequest(
+            url: configuration.url,
+            headers: [
+                "Authorization": authorization,
+                "Protocol-Version": String(configuration.version),
+                "Device-Id": configuration.deviceID,
+                "Client-Id": configuration.clientID,
+            ])
         transport = try await connector.connect(request)
         state = .handshaking
         try await sendJSON([
@@ -132,8 +172,11 @@ public actor XiaozhiVoiceSession {
         let transport = try requireTransport()
         receiveTask = Task { [weak self] in
             while !Task.isCancelled {
-                do { try await self?.receive(transport.nextMessage()) }
-                catch { return }
+                do { try await self?.receive(transport.nextMessage()) } catch {
+                    await self?.failProtocol()
+                    await self?.emit(.state(.error))
+                    return
+                }
             }
         }
     }
@@ -144,8 +187,10 @@ public actor XiaozhiVoiceSession {
             case .text(let text): try await receiveText(text)
             case .binary(let packet): try await receiveAudio(packet)
             }
+            await emit(.state(state))
         } catch {
             await failProtocol()
+            await emit(.state(state))
             if let error = error as? XiaozhiVoiceSessionError { throw error }
             throw XiaozhiVoiceSessionError.malformedMessage
         }
@@ -185,17 +230,25 @@ public actor XiaozhiVoiceSession {
     }
 
     public func snapshot() -> XiaozhiVoiceSessionSnapshot {
-        .init(voiceState: state, sessionID: sessionID, inputSampleRate: 16_000,
-              outputSampleRate: outputSampleRate, frameDurationMS: 60,
-              droppedUplinkFrames: droppedUplinkFrames, droppedDownlinkFrames: droppedDownlinkFrames,
-              lastError: lastError)
+        .init(
+            voiceState: state, sessionID: sessionID, inputSampleRate: 16_000,
+            outputSampleRate: outputSampleRate, frameDurationMS: 60,
+            droppedUplinkFrames: droppedUplinkFrames, droppedDownlinkFrames: droppedDownlinkFrames,
+            lastError: lastError)
     }
 
-    public func stop() async { await resetResources(); configuration = nil; state = .ready }
+    public func stop() async {
+        await resetResources()
+        configuration = nil
+        state = .ready
+    }
 
     public func abort() async throws {
         guard let sessionID else { throw XiaozhiVoiceSessionError.noSession }
-        await playback.stop(); await capture.stop(); uplink.removeAll(); downlink.removeAll()
+        await playback.stop()
+        await capture.stop()
+        uplink.removeAll()
+        downlink.removeAll()
         try await sendJSON(["session_id": sessionID, "type": "abort"])
         state = configuration?.mode == .auto ? .listening : .idle
     }
@@ -207,17 +260,17 @@ public actor XiaozhiVoiceSession {
 
     private func receiveText(_ text: String) async throws {
         guard let data = text.data(using: .utf8),
-              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let type = object["type"] as? String
+            let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let type = object["type"] as? String
         else { throw XiaozhiVoiceSessionError.malformedMessage }
         switch type {
         case "hello":
             guard let id = object["session_id"] as? String,
-                  let audio = object["audio_params"] as? [String: Any],
-                  audio["format"] as? String == "opus",
-                  let sampleRate = audio["sample_rate"] as? Int,
-                  let channels = audio["channels"] as? Int,
-                  sampleRate > 0, channels == 1
+                let audio = object["audio_params"] as? [String: Any],
+                audio["format"] as? String == "opus",
+                let sampleRate = audio["sample_rate"] as? Int,
+                let channels = audio["channels"] as? Int,
+                sampleRate > 0, channels == 1
             else { throw XiaozhiVoiceSessionError.invalidHello }
             sessionID = id
             outputSampleRate = sampleRate
@@ -228,13 +281,26 @@ public actor XiaozhiVoiceSession {
             }
         case "stt": state = .thinking
         case "tts":
-            if object["state"] as? String == "start" { state = .speaking }
+            switch object["state"] as? String {
+            case "start":
+                state = .speaking
+                if let text = object["text"] as? String, !text.isEmpty {
+                    await emit(.assistantText(String(text.prefix(280))))
+                }
+            case "stop":
+                didReceiveTTSStop = true
+                await capture.stop()
+                await publishCompletionIfReady()
+            default: throw XiaozhiVoiceSessionError.malformedMessage
+            }
         default: throw XiaozhiVoiceSessionError.malformedMessage
         }
     }
 
     private func receiveAudio(_ packet: Data) async throws {
         guard outputSampleRate != nil else { throw XiaozhiVoiceSessionError.noSession }
+        guard configuration?.ttsMuted != true else { return }
+        isPlaybackDrained = false
         if downlink.count == Self.downlinkFrameLimit {
             downlink.removeFirst()
             droppedDownlinkFrames += 1
@@ -270,19 +336,28 @@ public actor XiaozhiVoiceSession {
         await playback.stop()
         await capture.stop()
         sessionID = nil
-        uplink.removeAll(); downlink.removeAll()
+        uplink.removeAll()
+        downlink.removeAll()
         state = .error
         lastError = "Protocol error."
     }
 
     private func resetResources() async {
-        receiveTask?.cancel(); receiveTask = nil
-        downlinkTask?.cancel(); downlinkTask = nil
+        receiveTask?.cancel()
+        receiveTask = nil
+        downlinkTask?.cancel()
+        downlinkTask = nil
         await playback.stop()
         await capture.stop()
         await transport?.disconnect()
-        transport = nil; sessionID = nil; uplink.removeAll(); downlink.removeAll()
-        outputSampleRate = nil; outputChannels = 1
+        transport = nil
+        sessionID = nil
+        uplink.removeAll()
+        downlink.removeAll()
+        outputSampleRate = nil
+        outputChannels = 1
+        didReceiveTTSStop = false
+        isPlaybackDrained = true
     }
 
     private func requireTransport() throws -> any XiaozhiVoiceTransport {
@@ -294,7 +369,9 @@ public actor XiaozhiVoiceSession {
         while !Task.isCancelled, let sampleRate = outputSampleRate, !downlink.isEmpty {
             let packet = downlink.removeFirst()
             do {
-                try await playback.enqueue(try codec.decode(packet, sampleRate: sampleRate, channels: outputChannels), sampleRate: sampleRate, channels: outputChannels)
+                try await playback.enqueue(
+                    try codec.decode(packet, sampleRate: sampleRate, channels: outputChannels), sampleRate: sampleRate,
+                    channels: outputChannels)
             } catch {
                 await failProtocol()
                 return
@@ -302,4 +379,18 @@ public actor XiaozhiVoiceSession {
         }
         downlinkTask = nil
     }
+
+    private func playbackDidDrain() async {
+        isPlaybackDrained = true
+        await publishCompletionIfReady()
+    }
+
+    private func publishCompletionIfReady() async {
+        guard didReceiveTTSStop, configuration?.ttsMuted == true || isPlaybackDrained else { return }
+        didReceiveTTSStop = false
+        state = .idle
+        await emit(.completed)
+    }
+
+    private func emit(_ event: XiaozhiVoiceSessionEvent) async { await eventObserver?(event) }
 }

@@ -523,6 +523,17 @@ private struct ModuleSettingsPage: View {
                     }
                 )
             )
+            Toggle(
+                "Mute Xiaozhi TTS",
+                isOn: Binding(
+                    get: { model.settings.xiaozhi.ttsMuted },
+                    set: { value in
+                        var settings = model.settings.xiaozhi
+                        settings.ttsMuted = value
+                        model.update(.xiaozhi(settings))
+                    }
+                )
+            )
             Picker(
                 "Conversation mode",
                 selection: Binding(
@@ -696,7 +707,9 @@ private struct PermissionCenterPage: View {
                 Task { await model.confirmXiaozhiMicrophoneConsent() }
             }
         } message: {
-            Text("Microphone audio is sent only during an active Xiaozhi conversation. Xiaozhi never starts capture at launch.")
+            Text(
+                "Microphone audio is sent only during an active Xiaozhi conversation. Xiaozhi never starts capture at launch."
+            )
         }
     }
 

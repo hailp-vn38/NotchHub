@@ -113,8 +113,34 @@ func migratesV3SettingsToXiaozhiSchema() async throws {
 
     #expect(migrated.recovery == .loaded)
     #expect(migrated.settings.modules["xiaozhi"]?.xiaozhi == migrated.settings.xiaozhi)
-    #expect((try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active))).modules["xiaozhi"]?.xiaozhi == migrated.settings.xiaozhi)
+    #expect(
+        (try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active))).modules["xiaozhi"]?.xiaozhi
+            == migrated.settings.xiaozhi)
     #expect((await SettingsStore(backend: backend).load()).settings.xiaozhi == migrated.settings.xiaozhi)
+}
+
+@Test("Settings store migrates released v5 Xiaozhi settings with TTS unmuted")
+func migratesV5XiaozhiSettings() async throws {
+    let v5 = try JSONSerialization.data(withJSONObject: [
+        "schemaVersion": 5,
+        "appearance": ["theme": "dark", "reducedMotion": "followSystem"],
+        "notchBehavior": ["hoverDelay": 300, "autoCollapseTimeout": 3],
+        "shortcuts": ["bindings": []],
+        "modules": [
+            "demo": ["isEnabled": true],
+            "xiaozhi": [
+                "isEnabled": true,
+                "xiaozhi": [
+                    "isPreparedOnLaunch": true, "autoReconnect": false, "conversationMode": "auto",
+                ],
+            ],
+        ],
+    ])
+
+    let result = await SettingsStore(backend: MemorySettingsBackend(active: v5)).load()
+    #expect(result.recovery == .loaded)
+    #expect(result.settings.schemaVersion == 6)
+    #expect(result.settings.xiaozhi.ttsMuted == false)
 }
 
 @Test("Settings store publishes the complete valid runtime projection")
@@ -151,13 +177,13 @@ func quarantinesCorruptSnapshot() async throws {
 
 @Test("Future schema is read-only and original bytes remain untouched")
 func preservesFutureSchema() async throws {
-    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 6, "future": true])
+    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 7, "future": true])
     let backend = MemorySettingsBackend(active: future)
     let store = SettingsStore(backend: backend)
     let loaded = await store.load()
     let mutation = await store.mutate(.theme(.dark))
 
-    #expect(loaded.recovery == .readOnlyFutureSchema(version: 6))
+    #expect(loaded.recovery == .readOnlyFutureSchema(version: 7))
     #expect(mutation.outcome == .readOnly)
     #expect(await backend.active == future)
     #expect(await backend.quarantined.isEmpty)

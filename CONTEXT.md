@@ -33,7 +33,7 @@ A validated, non-secret preference with a declared default and reset behavior; i
 _Avoid_: preference key, toggle state
 
 **Settings store**:
-The single typed boundary for the current durable settings snapshot, including validation, migration, persistence, reset, and sanitized import/export.
+The single typed boundary for the current durable settings snapshot, including validation, migration, persistence, reset, sanitized import/export, and namespaced Module settings.
 _Avoid_: UserDefaults wrapper, settings UI
 
 **Settings snapshot**:
@@ -47,6 +47,26 @@ _Avoid_: diagnostics record, silent fallback
 **Secret**:
 A credential or authentication value whose disclosure could grant access or reveal protected data; it is never part of a settings snapshot.
 _Avoid_: normal setting, exported configuration
+
+**Conversation transcript**:
+The transient recognized user or assistant text for one active voice session. It is held only in session memory by default and is cleared when that session ends, is aborted, disabled, or the Mac sleeps.
+_Avoid_: conversation history, diagnostics log
+
+**TTS-muted voice session**:
+An active Xiaozhi voice session in which synthesized speech is not played, while the session may still receive assistant text.
+_Avoid_: microphone mute, disconnected voice session, saved transcript
+
+**Assistant transcript ticker**:
+A camera-safe, one-line, continuously moving projection of the current session's latest assistant text. It is transient and disappears with the voice session; it is never conversation history.
+_Avoid_: transcript reader, transcript log, two-line caption
+
+**Voice session completion**:
+The terminal presentation condition for an active Xiaozhi conversation: upstream has sent `tts.stop` and local TTS playback has drained, or, for a TTS-muted session, upstream has sent `tts.stop`. Completion starts the bounded return-to-home delay and then revokes the session resources.
+_Avoid_: server message alone, audio drain alone, idle connection
+
+**Module settings**:
+The typed, non-secret configuration owned by one Module's schema, validation, and Settings application-scene UI. The Settings store persists it as a versioned entry in the complete settings snapshot.
+_Avoid_: module-local preferences, module settings file
 
 **Module**:
 A compile-time feature unit that contributes declared capabilities through NotchHub contracts.
@@ -83,6 +103,10 @@ _Avoid_: Restart App Shell, module restart
 **Surface contribution descriptor**:
 A typed, bounded description of a Module's content for a declared Surface slot; the platform renders it and retains all surface-transition authority.
 _Avoid_: module view, panel content
+
+**Surface content mode**:
+A platform-owned visual composition selected from the currently active Surface contribution; it changes the content inside the one Notch surface without creating another panel or granting a Module surface-transition authority.
+_Avoid_: module window, module-owned panel, second Surface
 
 ## Platform contracts
 

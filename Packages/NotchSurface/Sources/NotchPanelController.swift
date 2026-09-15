@@ -13,6 +13,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private let presentationModel: NotchSurfacePresentationModel
     private var hostingView: NSHostingView<NotchSurfaceRootView>?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
+    private var actionHandler: (@MainActor (ActionID) -> Void)?
     private var eventMonitors: [Any] = []
     private weak var priorKeyWindow: NSWindow?
     private var screenParametersObservation: ScreenParametersObservation?
@@ -72,6 +73,11 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     public func setInteractionHandler(_ handler: @escaping @MainActor (SurfaceIntent) -> Void) {
         interactionHandler = handler
+    }
+
+    /// Routes a declarative surface action to the application-owned registry.
+    public func setActionHandler(_ handler: @escaping @MainActor (ActionID) -> Void) {
+        actionHandler = handler
     }
 
     public func setDisplayChangeHandler(_ handler: @escaping @MainActor () -> Void) { displayChangeHandler = handler }
@@ -198,7 +204,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         guard hostingView == nil else { return }
         let rootView = NotchSurfaceRootView(
             model: presentationModel,
-            send: { [weak self] intent in self?.interactionHandler?(intent) }
+            send: { [weak self] intent in self?.interactionHandler?(intent) },
+            invokeAction: { [weak self] id in self?.actionHandler?(id) }
         )
         let hostingView = NSHostingView(rootView: rootView)
         panel.contentView = hostingView

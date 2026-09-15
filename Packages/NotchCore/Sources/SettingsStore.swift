@@ -107,21 +107,24 @@ public struct XiaozhiSettings: Codable, Equatable, Sendable {
     public var isPreparedOnLaunch: Bool
     public var autoReconnect: Bool
     public var conversationMode: XiaozhiConversationMode
+    public var ttsMuted: Bool
 
     public init(
         isPreparedOnLaunch: Bool = true,
         autoReconnect: Bool = true,
-        conversationMode: XiaozhiConversationMode = .auto
+        conversationMode: XiaozhiConversationMode = .auto,
+        ttsMuted: Bool = false
     ) {
         self.isPreparedOnLaunch = isPreparedOnLaunch
         self.autoReconnect = autoReconnect
         self.conversationMode = conversationMode
+        self.ttsMuted = ttsMuted
     }
 }
 
 /// The complete, non-secret settings snapshot; F6 v2 adds shortcut bindings.
 public struct AppSettings: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 5
+    public static let currentSchemaVersion = 6
 
     public var schemaVersion: Int
     public var appearance: AppearanceSettings
@@ -401,6 +404,24 @@ public actor SettingsStore {
             }
             return .current(current)
         }
+        if version == 5 {
+            let legacy = try decoder.decode(LegacySettingsV5.self, from: data)
+            let modules: [String: ModuleEnablementSettings] = legacy.modules.mapValues { entry in
+                .init(
+                    isEnabled: entry.isEnabled,
+                    xiaozhi: entry.xiaozhi.map {
+                        XiaozhiSettings(
+                            isPreparedOnLaunch: $0.isPreparedOnLaunch,
+                            autoReconnect: $0.autoReconnect,
+                            conversationMode: $0.conversationMode,
+                            ttsMuted: false)
+                    })
+            }
+            return .migrated(
+                .init(
+                    appearance: legacy.appearance, notchBehavior: legacy.notchBehavior,
+                    shortcuts: legacy.shortcuts, modules: modules))
+        }
         if version == 4 {
             let legacy = try decoder.decode(LegacySettingsV4.self, from: data)
             var migrated = AppSettings(
@@ -492,6 +513,25 @@ public actor SettingsStore {
         let shortcuts: ShortcutSettings
         let modules: [String: ModuleEnablementSettings]
         let xiaozhi: XiaozhiSettings
+    }
+
+    private struct LegacySettingsV5: Decodable {
+        let schemaVersion: Int
+        let appearance: AppearanceSettings
+        let notchBehavior: NotchBehaviorSettings
+        let shortcuts: ShortcutSettings
+        let modules: [String: LegacyModuleEnablementSettingsV5]
+    }
+
+    private struct LegacyModuleEnablementSettingsV5: Decodable {
+        let isEnabled: Bool
+        let xiaozhi: LegacyXiaozhiSettingsV5?
+    }
+
+    private struct LegacyXiaozhiSettingsV5: Decodable {
+        let isPreparedOnLaunch: Bool
+        let autoReconnect: Bool
+        let conversationMode: XiaozhiConversationMode
     }
 }
 

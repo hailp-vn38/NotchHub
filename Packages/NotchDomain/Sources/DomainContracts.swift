@@ -221,6 +221,7 @@ public struct ShortcutBinding: Codable, Equatable, Sendable {
 public enum SurfaceSlot: String, Codable, CaseIterable, Hashable, Sendable {
     case indicator
     case compactStatus
+    case expandedContent
 }
 
 public struct ModuleRuntimePolicy: Codable, Equatable, Sendable {
@@ -298,13 +299,68 @@ public struct SurfaceContributionDescriptor: Codable, Equatable, Sendable, Ident
     public let moduleID: ModuleID
     public let slot: SurfaceSlot
     public let text: String
+    public let actions: [SurfaceActionDescriptor]
+    public let content: SurfaceContent
 
     public var id: String { "\(moduleID.rawValue).\(slot.rawValue)" }
 
-    public init(moduleID: ModuleID, slot: SurfaceSlot, text: String) {
+    public init(
+        moduleID: ModuleID,
+        slot: SurfaceSlot,
+        text: String,
+        actions: [SurfaceActionDescriptor] = [],
+        content: SurfaceContent = .home
+    ) {
         self.moduleID = moduleID
         self.slot = slot
         self.text = text
+        self.actions = actions
+        self.content = content
+    }
+}
+
+/// A platform-owned composition selected by a bounded module projection.
+/// Modules never contribute a view or an AppKit object.
+public enum SurfaceContent: Codable, Equatable, Sendable {
+    case home
+    case voice(SurfaceVoicePresentation)
+}
+
+public enum SurfaceVoiceState: String, Codable, Equatable, Sendable {
+    case connecting, listening, thinking, speaking, mutedText, completed, error
+}
+
+/// The protocol-agnostic, bounded state required by the platform voice renderer.
+public struct SurfaceVoicePresentation: Codable, Equatable, Sendable {
+    public let state: SurfaceVoiceState
+    public let assistantText: String?
+    public let activity: SurfaceVoiceActivity
+
+    public init(
+        state: SurfaceVoiceState,
+        assistantText: String? = nil,
+        activity: SurfaceVoiceActivity = .inactive
+    ) {
+        self.state = state
+        self.assistantText = assistantText
+        self.activity = activity
+    }
+}
+
+public enum SurfaceVoiceActivity: String, Codable, Equatable, Sendable { case inactive, active }
+
+/// A bounded, declarative action offered by an expanded Notch surface. The
+/// surface dispatches its ID through the Action Registry; it never receives a
+/// module callback or protocol payload.
+public struct SurfaceActionDescriptor: Codable, Equatable, Sendable, Identifiable {
+    public let actionID: ActionID
+    public let title: String
+
+    public var id: ActionID { actionID }
+
+    public init(actionID: ActionID, title: String) {
+        self.actionID = actionID
+        self.title = title
     }
 }
 

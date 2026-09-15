@@ -115,7 +115,8 @@ public struct KeychainXiaozhiIdentityStore: XiaozhiIdentityStoring {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecSuccess, let data = result as? Data,
-           let existing = String(data: data, encoding: .utf8), XiaozhiIdentity.isValidDeviceID(existing) {
+            let existing = String(data: data, encoding: .utf8), XiaozhiIdentity.isValidDeviceID(existing)
+        {
             return existing
         }
         guard status == errSecItemNotFound else { throw XiaozhiCredentialStoreError.keychainFailure(status) }
@@ -137,9 +138,10 @@ public enum XiaozhiDiagnostics {
 
     public static func redact(_ value: Any) -> Any {
         if let dictionary = value as? [String: Any] {
-            return Dictionary(uniqueKeysWithValues: dictionary.map { key, value in
-                (key, secretKeys.contains(key.lowercased()) ? "[REDACTED]" : redact(value))
-            })
+            return Dictionary(
+                uniqueKeysWithValues: dictionary.map { key, value in
+                    (key, secretKeys.contains(key.lowercased()) ? "[REDACTED]" : redact(value))
+                })
         }
         if let array = value as? [Any] { return array.map(redact) }
         return value
@@ -252,7 +254,7 @@ public actor XiaozhiModule: NotchModule {
     public nonisolated let id = ModuleID("xiaozhi")!
     public nonisolated let metadata = ModuleMetadata(
         displayName: "Native Xiaozhi Client", version: "0.1.0",
-        supportedSurfaceSlots: [.indicator, .compactStatus],
+        supportedSurfaceSlots: [.indicator, .compactStatus, .expandedContent],
         requiredCapabilities: [Capability("microphone")!])
 
     private let bootstrap: any XiaozhiBootstrapping
@@ -260,17 +262,28 @@ public actor XiaozhiModule: NotchModule {
     private let identity: any XiaozhiIdentityStoring
     private let voiceFactory: @Sendable () throws -> XiaozhiVoiceSession
     private let permissionCoordinator: PermissionCoordinator?
-    private let modeProvider: @Sendable () async -> XiaozhiConversationMode
+    private let ttsMutedProvider: @Sendable () async -> Bool
     private var voice: XiaozhiVoiceSession?
+    private var lifetime: ModuleLifetime?
+    private var presentation = XiaozhiConversationPresentation.ready
+    private var isVoiceMode = false
+    private var sessionTTSMuted = false
+    private var assistantText: String?
+    private var completionTask: Task<Void, Never>?
+    private var completionGeneration = 0
+    private let completionDelay: Duration
 
     public init(
         bootstrap: any XiaozhiBootstrapping = XiaozhiCloudBootstrapClient(),
         credentials: any XiaozhiCredentialStoring = KeychainXiaozhiCredentialStore(),
         identity: any XiaozhiIdentityStoring = KeychainXiaozhiIdentityStore(),
         permissionCoordinator: PermissionCoordinator? = nil,
-        modeProvider: @escaping @Sendable () async -> XiaozhiConversationMode = { .auto },
+        ttsMutedProvider: @escaping @Sendable () async -> Bool = { false },
+        completionDelay: Duration = .seconds(3),
         voiceFactory: @escaping @Sendable () throws -> XiaozhiVoiceSession = {
-            try XiaozhiVoiceSession(connector: XiaozhiURLSessionVoiceConnector(), capture: XiaozhiAVAudioCapture(), playback: XiaozhiAVAudioPlayback(), codec: XiaozhiOpusCodec())
+            try XiaozhiVoiceSession(
+                connector: XiaozhiURLSessionVoiceConnector(), capture: XiaozhiAVAudioCapture(),
+                playback: XiaozhiAVAudioPlayback(), codec: XiaozhiOpusCodec())
         }
     ) {
         self.bootstrap = bootstrap
@@ -278,12 +291,14 @@ public actor XiaozhiModule: NotchModule {
         self.identity = identity
         self.voiceFactory = voiceFactory
         self.permissionCoordinator = permissionCoordinator
-        self.modeProvider = modeProvider
+        self.ttsMutedProvider = ttsMutedProvider
+        self.completionDelay = completionDelay
     }
 
     public func start(context: ModuleContext) async throws {
+        lifetime = context.lifetime
         await context.lifetime.register(.init(moduleID: id, slot: .indicator, text: "Xiaozhi"))
-        await context.lifetime.register(.init(moduleID: id, slot: .compactStatus, text: "Xiaozhi ready"))
+        await publishPresentation()
         let prepare = ModuleAction(
             definition: .init(id: ActionID("xiaozhi.prepare")!, title: "Prepare Xiaozhi"),
             invoke: { [weak self, eventPublisher = context.eventPublisher] in
@@ -298,21 +313,16 @@ public actor XiaozhiModule: NotchModule {
             }
         )
         _ = await context.actions.register(start, lifetime: context.lifetime)
-        for (id, title) in [("xiaozhi.pttBegin", "Begin Xiaozhi Push-to-Talk"), ("xiaozhi.pttEnd", "End Xiaozhi Push-to-Talk"), ("xiaozhi.abort", "Abort Xiaozhi"), ("xiaozhi.reconnect", "Reconnect Xiaozhi")] {
-            let action = ModuleAction(definition: .init(id: ActionID(id)!, title: title), invoke: { [weak self, eventPublisher = context.eventPublisher] in
-                await self?.control(id, eventPublisher: eventPublisher)
-            })
-            _ = await context.actions.register(action, lifetime: context.lifetime)
-        }
         await context.lifetime.register(.socket, named: "xiaozhi.voice") { [weak self] in
-            await self?.voice?.stop()
+            await self?.stopVoiceSession()
         }
     }
 
     private func prepare(eventPublisher: any ModuleEventPublisher) async {
         do {
-            let response = try await bootstrap.bootstrap(.init(
-                deviceID: try identity.deviceID(), clientID: try identity.clientID(), appVersion: "0.1.0"))
+            let response = try await bootstrap.bootstrap(
+                .init(
+                    deviceID: try identity.deviceID(), clientID: try identity.clientID(), appVersion: "0.1.0"))
             if let token = response.websocket?.token { try credentials.saveCredential(token) }
             let type = response.activation == nil ? "xiaozhi.ready" : "xiaozhi.activationRequired"
             await eventPublisher.publish(.init(moduleID: id, type: EventType(type)!))
@@ -326,41 +336,185 @@ public actor XiaozhiModule: NotchModule {
             if let permissionCoordinator {
                 await permissionCoordinator.refresh()
                 guard await permissionCoordinator.snapshot().row(for: .microphone)?.status == .authorized else {
-                    await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.microphoneDenied")!)); return
+                    await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.microphoneDenied")!))
+                    return
                 }
             }
+            cancelCompletion()
+            sessionTTSMuted = await ttsMutedProvider()
+            assistantText = nil
+            isVoiceMode = true
+            presentation = .connecting
+            await publishPresentation()
             let deviceID = try identity.deviceID()
             let clientID = try identity.clientID()
-            let response = try await bootstrap.bootstrap(.init(deviceID: deviceID, clientID: clientID, appVersion: "0.1.0"))
+            let response = try await bootstrap.bootstrap(
+                .init(deviceID: deviceID, clientID: clientID, appVersion: "0.1.0"))
             guard let websocket = response.websocket else {
+                presentation = .error
+                await publishPresentation()
                 await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.activationRequired")!))
+                scheduleReturnHome()
                 return
             }
             try credentials.saveCredential(websocket.token)
             let voice = try voiceFactory()
+            await voice.setEventObserver { [weak self] event in
+                await self?.receiveVoiceEvent(event)
+            }
             self.voice = voice
-            try await voice.start(.init(url: websocket.url, token: websocket.token, version: websocket.version,
-                                        deviceID: deviceID, clientID: clientID, mode: await modeProvider()))
+            try await voice.start(
+                .init(
+                    url: websocket.url, token: websocket.token, version: websocket.version,
+                    deviceID: deviceID, clientID: clientID, mode: .auto, ttsMuted: sessionTTSMuted))
+            presentation = .connecting
+            await publishPresentation()
             await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connecting")!))
         } catch {
+            presentation = .error
+            await publishPresentation()
             await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connectionFailed")!))
+            if isVoiceMode { scheduleReturnHome() }
         }
     }
 
-    private func control(_ action: String, eventPublisher: any ModuleEventPublisher) async {
-        do {
-            switch action {
-            case "xiaozhi.pttBegin": try await voice?.beginPushToTalk()
-            case "xiaozhi.pttEnd": try await voice?.endPushToTalk()
-            case "xiaozhi.abort": try await voice?.abort()
-            case "xiaozhi.reconnect": try await voice?.reconnect()
-            default: return
-            }
-            if let state = await voice?.snapshot().voiceState {
-                await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.\(state.rawValue)")!))
-            }
-        } catch { await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connectionFailed")!)) }
+    public func currentPresentation() -> XiaozhiConversationPresentation { presentation }
+
+    public func handle(_ command: ModuleCommand) async throws -> ModuleCommandResult {
+        switch command {
+        case .simulateFailure:
+            return .ignored
+        case .endTransientSession:
+            guard isVoiceMode else { return .ignored }
+            await returnHomeNow()
+            return .handled
+        }
     }
 
-    public func stop() async { await voice?.stop(); voice = nil }
+    private func receiveVoiceEvent(_ event: XiaozhiVoiceSessionEvent) async {
+        switch event {
+        case .state(let voiceState):
+            presentation = .init(voiceState: voiceState)
+            if voiceState == .error { scheduleReturnHome() }
+        case .assistantText(let text): assistantText = text
+        case .completed:
+            presentation = .ready
+            scheduleReturnHome()
+        }
+        await publishPresentation()
+    }
+
+    private func publishPresentation() async {
+        guard let lifetime else { return }
+        await lifetime.update(.init(moduleID: id, slot: .compactStatus, text: presentation.compactText))
+        await lifetime.update(
+            .init(
+                moduleID: id, slot: .expandedContent, text: presentation.expandedText,
+                actions: isVoiceMode ? [] : presentation.actions,
+                content: isVoiceMode
+                    ? presentation.surfaceContent(ttsMuted: sessionTTSMuted, assistantText: assistantText)
+                    : .home))
+    }
+
+    public func stop() async {
+        await stopVoiceSession()
+        lifetime = nil
+        presentation = .ready
+    }
+
+    private func scheduleReturnHome() {
+        cancelCompletion()
+        completionGeneration &+= 1
+        let generation = completionGeneration
+        completionTask = Task { [weak self] in
+            try? await Task.sleep(for: self?.completionDelay ?? .zero)
+            await self?.returnHome(generation: generation)
+        }
+    }
+
+    private func cancelCompletion() {
+        completionGeneration &+= 1
+        completionTask?.cancel()
+        completionTask = nil
+    }
+
+    private func returnHome(generation: Int) async {
+        guard generation == completionGeneration else { return }
+        await returnHomeNow()
+    }
+
+    private func returnHomeNow() async {
+        cancelCompletion()
+        await stopVoiceSession()
+        isVoiceMode = false
+        sessionTTSMuted = false
+        assistantText = nil
+        presentation = .ready
+        await publishPresentation()
+    }
+
+    private func stopVoiceSession() async {
+        cancelCompletion()
+        await voice?.stop()
+        voice = nil
+        assistantText = nil
+    }
+}
+
+/// The only conversation information released to presentation. It contains no
+/// session identifier, credential, audio packet, transport error, or history.
+public enum XiaozhiConversationPresentation: Equatable, Sendable {
+    case ready, connecting, listening, thinking, speaking, error
+
+    init(voiceState: XiaozhiVoiceState) {
+        switch voiceState {
+        case .ready, .idle: self = .ready
+        case .connecting, .handshaking: self = .connecting
+        case .listening: self = .listening
+        case .thinking: self = .thinking
+        case .speaking: self = .speaking
+        case .error: self = .error
+        }
+    }
+
+    public var compactText: String { "Xiaozhi \(expandedText)" }
+
+    public var expandedText: String {
+        switch self {
+        case .ready: "Ready"
+        case .connecting: "Connecting"
+        case .listening: "Listening"
+        case .thinking: "Thinking"
+        case .speaking: "Speaking"
+        case .error: "Connection failed"
+        }
+    }
+
+    public var actions: [SurfaceActionDescriptor] {
+        let make = { (id: String, title: String) in SurfaceActionDescriptor(actionID: ActionID(id)!, title: title) }
+        return switch self {
+        case .ready: [make("xiaozhi.start", "Start")]
+        case .connecting, .listening, .thinking, .speaking, .error: []
+        }
+    }
+
+    public func surfaceContent(ttsMuted: Bool, assistantText: String? = nil) -> SurfaceContent {
+        if ttsMuted, self == .speaking {
+            return .voice(.init(state: .mutedText, assistantText: assistantText, activity: .inactive))
+        }
+        let state: SurfaceVoiceState =
+            switch self {
+            case .ready: .completed
+            case .connecting: .connecting
+            case .listening: .listening
+            case .thinking: .thinking
+            case .speaking: .speaking
+            case .error: .error
+            }
+        return .voice(
+            .init(
+                state: state,
+                assistantText: assistantText,
+                activity: self == .listening || self == .speaking ? .active : .inactive))
+    }
 }

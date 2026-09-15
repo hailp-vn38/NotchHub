@@ -10,8 +10,11 @@ public actor ModuleLifetime {
     private var contributions: [SurfaceContributionDescriptor] = []
     private var revoked = false
     private var cleanups: [@Sendable () async -> Void] = []
+    private let contributionsDidChange: @Sendable () async -> Void
 
-    public init() {}
+    public init(contributionsDidChange: @escaping @Sendable () async -> Void = {}) {
+        self.contributionsDidChange = contributionsDidChange
+    }
 
     public func register(_ kind: ModuleResourceKind, named name: String) {
         guard !revoked else { return }
@@ -37,6 +40,12 @@ public actor ModuleLifetime {
         contributions.removeAll { $0.slot == contribution.slot }
         contributions.append(contribution)
         resources[.surfaceContribution, default: []].insert(contribution.id)
+        Task { await contributionsDidChange() }
+    }
+
+    /// Replaces a module-owned projection without extending its lifetime.
+    public func update(_ contribution: SurfaceContributionDescriptor) {
+        register(contribution)
     }
 
     public func revoke() async {
@@ -46,6 +55,7 @@ public actor ModuleLifetime {
         cleanups.removeAll()
         resources.removeAll()
         contributions.removeAll()
+        await contributionsDidChange()
         for cleanup in ownedCleanups.reversed() { await cleanup() }
     }
 
@@ -108,7 +118,11 @@ public struct ModuleContext: Sendable {
     }
 }
 
-public enum ModuleCommand: Sendable { case simulateFailure }
+public enum ModuleCommand: Sendable {
+    case simulateFailure
+    /// Ends an interactive session before the host becomes unavailable.
+    case endTransientSession
+}
 public enum ModuleCommandResult: Equatable, Sendable { case handled, ignored }
 
 public protocol NotchModule: Sendable {
@@ -139,6 +153,7 @@ public actor ModuleRuntime {
     private var registrationOrder: [ModuleID] = []
     private let eventPublisher: any ModuleEventPublisher
     private let settingsStore: SettingsStore?
+    private var contributionContinuations: [UUID: AsyncStream<[SurfaceContributionDescriptor]>.Continuation] = [:]
     public let actions: ModuleActionRegistry
 
     public init(
@@ -171,11 +186,33 @@ public actor ModuleRuntime {
         await entries[id]?.lifetime?.activeContributions ?? []
     }
 
+    public func allContributions() async -> [SurfaceContributionDescriptor] {
+        var result: [SurfaceContributionDescriptor] = []
+        for id in registrationOrder {
+            result += await entries[id]?.lifetime?.activeContributions ?? []
+        }
+        return result
+    }
+
+    public func contributionUpdates() -> AsyncStream<[SurfaceContributionDescriptor]> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            contributionContinuations[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removeContributionContinuation(id) }
+            }
+            Task { [weak self] in
+                guard let self else { return }
+                continuation.yield(await self.allContributions())
+            }
+        }
+    }
+
     public func start(_ id: ModuleID) async {
         guard var entry = entries[id], entry.health.isEnabled,
             entry.health.state == .registered || entry.health.state == .stopped
         else { return }
-        let lifetime = ModuleLifetime()
+        let lifetime = ModuleLifetime { [weak self] in await self?.publishContributionUpdate() }
         entry.lifetime = lifetime
         entry.health = .init(
             id: id, state: .starting, isEnabled: true,
@@ -278,6 +315,15 @@ public actor ModuleRuntime {
             lastStartedAt: current.health.lastStartedAt, lastError: message,
             restartCount: current.health.restartCount)
         entries[id] = current
+    }
+
+    private func publishContributionUpdate() async {
+        let contributions = await allContributions()
+        for continuation in contributionContinuations.values { continuation.yield(contributions) }
+    }
+
+    private func removeContributionContinuation(_ id: UUID) {
+        contributionContinuations[id] = nil
     }
 
     private func bounded<T: Sendable>(_ duration: Duration, operation: @escaping @Sendable () async throws -> T)

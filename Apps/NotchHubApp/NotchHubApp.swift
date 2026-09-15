@@ -1,6 +1,7 @@
 import AppKit
 import NotchActions
 import NotchCore
+import NotchDomain
 import NotchSurface
 import NotchUI
 import ServiceManagement
@@ -54,11 +55,10 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     let permissionCenter: PermissionCenterModel
     let settingsShell: SettingsShellModel
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
-    private lazy var notchSurface = SurfaceCoordinator(
-        panel: NotchPanelController(sessionMotionPreference: { [weak settingsShell] in
-            settingsShell?.settings.appearance.reducedMotion == .reduceMotion
-        })
-    )
+    private lazy var notchPanel = NotchPanelController(sessionMotionPreference: { [weak settingsShell] in
+        settingsShell?.settings.appearance.reducedMotion == .reduceMotion
+    })
+    private lazy var notchSurface = SurfaceCoordinator(panel: notchPanel)
     private lazy var coordinator = AppCoordinator(
         scenePresenter: self,
         lifecycleObserver: lifecycleObserver,
@@ -94,31 +94,57 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_: Notification) {
+        lifecycleObserver.additionalHandler = { [moduleRuntime] event in
+            switch event {
+            case .willSleep, .locked, .willTerminate:
+                Task { await moduleRuntime.send(.endTransientSession, to: ModuleID("xiaozhi")!) }
+            case .activated, .deactivated, .didWake, .unlocked:
+                break
+            }
+        }
         settingsRuntime.surface = notchSurface
+        notchPanel.setActionHandler { [weak self] id in
+            guard let self else { return }
+            Task {
+                await self.moduleRuntime.actions.invoke(id)
+                await self.refreshSurfaceContributions()
+            }
+        }
+        Task { [weak self, moduleRuntime] in
+            for await contributions in await moduleRuntime.contributionUpdates() {
+                guard let self else { return }
+                self.notchSurface.apply(contributions: contributions)
+            }
+        }
         Task {
             let settings = await settingsStore.load().settings
             let xiaozhi = XiaozhiModule(
                 permissionCoordinator: permissionCoordinator,
-                modeProvider: { await self.settingsStore.load().settings.xiaozhi.conversationMode }
+                ttsMutedProvider: { await self.settingsStore.load().settings.xiaozhi.ttsMuted }
             )
             await moduleRuntime.register(
                 xiaozhi,
                 enabled: settings.modules[xiaozhi.id.rawValue]?.isEnabled ?? false
             )
             if settings.modules[xiaozhi.id.rawValue]?.isEnabled == true,
-               settings.xiaozhi.isPreparedOnLaunch {
+                settings.xiaozhi.isPreparedOnLaunch
+            {
                 await moduleRuntime.start(xiaozhi.id)
             }
             #if DEBUG
                 let demo = NotchDemoModule()
                 await moduleRuntime.register(demo, enabled: settings.modules[demo.id.rawValue]?.isEnabled ?? true)
                 await moduleRuntime.start(demo.id)
-                let contributions = await moduleRuntime.contributions(for: demo.id)
-                await MainActor.run { [weak self] in self?.notchSurface.apply(contributions: contributions) }
             #endif
+            await refreshSurfaceContributions()
             await settingsShell.loadSettings()
         }
         _ = coordinator.start()
+    }
+
+    private func refreshSurfaceContributions() async {
+        let contributions = await moduleRuntime.allContributions()
+        await MainActor.run { [weak self] in self?.notchSurface.apply(contributions: contributions) }
     }
 
     func applicationWillTerminate(_: Notification) {
@@ -200,6 +226,7 @@ extension AppShellDelegate: AppShellScenePresenter {
 @MainActor
 private final class MacOSAppShellLifecycleObserver: AppShellLifecycleObserving {
     private var observerRemovals: [() -> Void] = []
+    var additionalHandler: ((AppShellLifecycleEvent) -> Void)?
 
     func start(observing handler: @escaping @MainActor (AppShellLifecycleEvent) -> Void) {
         guard observerRemovals.isEmpty else { return }
@@ -218,6 +245,7 @@ private final class MacOSAppShellLifecycleObserver: AppShellLifecycleObserving {
             ) { _ in
                 MainActor.assumeIsolated {
                     handler(event)
+                    self.additionalHandler?(event)
                 }
             }
             return { center.removeObserver(registration) }

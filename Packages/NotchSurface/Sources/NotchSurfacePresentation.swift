@@ -170,6 +170,7 @@ public enum NotchSurfaceHitTesting {
 struct NotchSurfaceRootView: View {
     @Bindable var model: NotchSurfacePresentationModel
     let send: (SurfaceIntent) -> Void
+    let invokeAction: (ActionID) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AccessibilityFocusState private var isAccessibilityFocused: Bool
 
@@ -177,6 +178,13 @@ struct NotchSurfaceRootView: View {
 
     private var accessibilityState: String {
         isExpanded ? "expanded" : model.isCompactGeometry ? "compact" : "collapsed"
+    }
+
+    private var voicePresentation: SurfaceVoicePresentation? {
+        for contribution in model.contributions {
+            if case .voice(let presentation) = contribution.content { return presentation }
+        }
+        return nil
     }
 
     var body: some View {
@@ -187,14 +195,29 @@ struct NotchSurfaceRootView: View {
         ZStack(alignment: .top) {
             shape.fill(.black)
             if isExpanded {
-                VStack(spacing: 8) {
-                    Text("NotchHub").font(.headline)
-                    ForEach(model.contributions) { Text($0.text).font(.subheadline).foregroundStyle(.secondary) }
+                if let voicePresentation {
+                    SurfaceVoiceModeView(presentation: voicePresentation, reduceMotion: reduceMotion)
+                        .transition(.opacity)
+                } else {
+                    VStack(spacing: 8) {
+                        Text("NotchHub").font(.headline)
+                        ForEach(model.contributions) { contribution in
+                            Text(contribution.text).font(.subheadline).foregroundStyle(.secondary)
+                            if !contribution.actions.isEmpty {
+                                HStack(spacing: 8) {
+                                    ForEach(contribution.actions) { action in
+                                        Button(action.title) { invokeAction(action.actionID) }
+                                            .accessibilityLabel(action.title)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(12)
+                    .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(12)
-                .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
             } else if model.isCompactGeometry {
                 Text(model.contributions.first(where: { $0.slot == .compactStatus })?.text ?? "Surface ready")
                     .font(.subheadline)
@@ -262,5 +285,104 @@ struct NotchSurfaceRootView: View {
     private func handleHover(_ hovering: Bool) {
         model.isHovering = hovering
         send(hovering ? .hoverEntered : .hoverExited)
+    }
+}
+
+private struct SurfaceVoiceModeView: View {
+    let presentation: SurfaceVoicePresentation
+    let reduceMotion: Bool
+
+    private var status: String {
+        switch presentation.state {
+        case .connecting: "Đang kết nối Xiaozhi"
+        case .listening: "VOICE ON"
+        case .thinking: "Xiaozhi đang suy nghĩ"
+        case .speaking: "VOICE ON"
+        case .mutedText: "VOICE MUTED"
+        case .completed: "Xiaozhi đã hoàn tất"
+        case .error: "Không thể kết nối Xiaozhi"
+        }
+    }
+
+    var body: some View {
+        Group {
+            if presentation.state == .mutedText {
+                HStack(spacing: 10) {
+                    Image(systemName: "speaker.slash.fill")
+                    Text("VOICE MUTED").font(.caption.weight(.semibold))
+                    Spacer(minLength: 150)
+                    SurfaceVoiceTicker(text: presentation.assistantText ?? "", reduceMotion: reduceMotion)
+                        .frame(width: 190, alignment: .leading)
+                }
+            } else if presentation.activity == .active {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(status).font(.caption.weight(.semibold))
+                        SurfaceVoiceBars(isActive: true, reduceMotion: reduceMotion)
+                    }
+                    Spacer(minLength: 210)
+                    SurfaceVoiceBars(isActive: true, reduceMotion: reduceMotion)
+                }
+            } else {
+                HStack {
+                    Text(status).font(.subheadline.weight(.medium))
+                    Spacer(minLength: 220)
+                    Image(systemName: presentation.state == .error ? "exclamationmark.triangle" : "ellipsis")
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(status)
+        .accessibilityValue(presentation.assistantText ?? "")
+    }
+}
+
+private struct SurfaceVoiceBars: View {
+    let isActive: Bool
+    let reduceMotion: Bool
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach([9.0, 17, 12, 22, 10], id: \.self) { height in
+                Capsule()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: 3, height: animating ? height : height * 0.48)
+            }
+        }
+        .onAppear {
+            guard isActive, !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.58).repeatForever(autoreverses: true)) { animating = true }
+        }
+    }
+}
+
+private struct SurfaceVoiceTicker: View {
+    let text: String
+    let reduceMotion: Bool
+    @State private var moves = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            Text(text)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .offset(x: reduceMotion ? 0 : moves ? proxy.size.width : -proxy.size.width)
+                .onAppear { animate() }
+                .onChange(of: text) { _, _ in
+                    moves = false
+                    animate()
+                }
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    private func animate() {
+        guard !reduceMotion, !text.isEmpty else { return }
+        withAnimation(.linear(duration: 7).repeatForever(autoreverses: false)) { moves = true }
     }
 }
