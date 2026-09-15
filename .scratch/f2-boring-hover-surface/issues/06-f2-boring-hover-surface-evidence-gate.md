@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Coordinator admission contract; 02 — Persistent animated Boring-style Notch shape; 03 — Native shape-aware click-through; 04 — Hover interaction session and holds; 05 — Accessible Surface lifecycle integration.
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Full automated suite cover admission/capability revision, shape/animation state, pointer click-through, holds, recovery và regressions F2.
 - [ ] Manual evidence trên physical-notch hardware cover visual morph, fixed size, no frame jump, hover grace/re-entry, click-through, focus, VoiceOver, Reduce Motion, Spaces/full-screen/sleep/display behavior và rapid reopen.
@@ -19,4 +19,6 @@
 
 ## Comments
 
-2026-09-14 — Updated the F2 evidence artifact and closed the documentation/automated-evidence checklist. Native manual QA remains `ready-for-human` and intentionally unclaimed.
+2026-09-14 — Updated the F2 evidence artifact and closed the documentation/automated-evidence checklist. Native manual QA remains unrun and intentionally unclaimed.
+
+2026-09-15 — Đóng ticket theo yêu cầu người dùng; native manual QA chưa chạy vẫn được ghi nhận là giới hạn evidence.

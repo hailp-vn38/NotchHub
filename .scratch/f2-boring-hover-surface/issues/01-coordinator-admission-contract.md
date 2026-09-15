@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Coordinator phân biệt request click/keyboard/hover giữa admitted, unsupported capacity, invalid topology và native failure mà không scale/crop expanded Surface.
 - [x] Surface snapshot expose expanded availability theo topology revision; rejection feedback có vòng đời bounded và historical event chỉ nằm trong Diagnostics.
@@ -26,3 +26,5 @@
 ## Comments
 
 2026-09-14 — Implemented and committed as `2d1a006` (`feat(surface): add expansion admission contract`). Automated coordinator contract is complete; human/native verification remains intentionally pending.
+
+2026-09-15 — Đóng ticket theo yêu cầu người dùng; giới hạn human/native verification được giữ nguyên.

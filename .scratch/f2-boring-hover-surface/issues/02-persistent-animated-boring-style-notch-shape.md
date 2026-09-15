@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Coordinator admission contract.
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Closed shape có top shoulder/bottom radius 6/14; expanded shape có 19/24; cùng một clean-room shape animate được giữa hai trạng thái và không là rounded rectangle.
 - [x] Một persistent presentation hierarchy render projection từ coordinator, dùng fixed expanded visual 640 × 190 pt trong host admitted 640 × 210 pt, top seam/shadow, và collapsed physical-notch/fallback geometry.
@@ -17,3 +17,4 @@
 - Implementation: `d7a9ae5 feat(surface): add animated notch shape` and `67d5d09 fix(surface): retain presentation task ownership`.
 - Evidence: `2fb3870 docs(surface): record animated shape evidence`; `swift build`, focused package tests, and `Scripts/verify.sh` passed.
 - Manual QA remains required on a physical-notch Mac, including shape/morph, rapid reopen during host settle, and Reduce Motion. The ticket therefore awaits a human QA run rather than being marked closed.
+- 2026-09-15: Đóng ticket theo yêu cầu người dùng; manual QA chưa chạy vẫn được ghi nhận là giới hạn evidence.

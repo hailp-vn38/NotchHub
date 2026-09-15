@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Persistent animated Boring-style Notch shape.
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Panel-owned pointer monitoring dùng local/global pointer state và visible shape geometry thay vì chỉ dựa vào SwiftUI hover.
 - [x] Native panel ignore mouse events ngoài visible shape, re-enable khi pointer vào lại, và re-evaluate đồng bộ sau thay đổi state, geometry hoặc capture.
@@ -17,3 +17,4 @@
 - Added pure shape hit-testing coverage for visible center, transparent corner, and host envelope.
 - `swift test` passes all 38 tests and `Scripts/verify.sh` passes.
 - Remaining: manual QA on physical-notch hardware for pointer re-entry, collapsed/suppressed safety, and unrelated-app click-through.
+- 2026-09-15: Đóng ticket theo yêu cầu người dùng; manual QA chưa chạy vẫn được ghi nhận là giới hạn evidence.

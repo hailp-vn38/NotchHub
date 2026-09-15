@@ -1,6 +1,6 @@
 # Boring-inspired animated Notch Surface
 
-**Status:** ready-for-agent
+**Status:** complete
 **Phase:** F2 follow-up
 **Owner:** Platform / Architecture / Design / Quality
 
@@ -83,3 +83,7 @@ Xây dựng một Notch surface clean-room lấy cảm hứng từ Boring Notch:
 - Current source still has 150 ms hover, state-specific hosts, clipped preferred geometry, and rectangular native hit testing; these are migration targets, not completed behavior.
 - The implementation plan and ADR-0013 are the reviewed authority for admission, state ownership, interaction holds, and native click-through.
 - The chosen seams reflect the confirmed design: coordinator tests cover policy, while one panel-owned native pointer adapter covers AppKit-specific hit testing. No per-view seam is introduced.
+
+## Comments
+
+- 2026-09-15: Đóng phase theo yêu cầu người dùng. Automated verification đã được ghi nhận; native visual/input/accessibility/lifecycle QA chưa chạy vẫn được giữ nguyên trong evidence và checklist ticket.

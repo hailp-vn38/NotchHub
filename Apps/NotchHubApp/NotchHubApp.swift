@@ -24,7 +24,7 @@ struct NotchHubApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        WindowGroup("Settings", id: AppShellPlaceholderScene.settings.windowID) {
+        Window("Settings", id: AppShellPlaceholderScene.settings.windowID) {
             SettingsShellView(model: appShell.settingsShell)
         }
 

@@ -1,6 +1,6 @@
 # F2 Notch Surface Shell
 
-**Status:** ready-for-agent
+**Status:** complete
 **Phase:** F2
 **Owner:** Platform / Architecture / Design
 
@@ -96,3 +96,7 @@ Xây dựng F2 như một vertical slice Notch surface cho built-in MacBook disp
 - F0 and F1 are complete. This spec is ready for implementation after its issue-tracker publication.
 - The specification concretizes existing ADR-0002 and ADR-0010 plus the already accepted Notch surface and interaction documents; it does not require a new ADR because it applies previously chosen boundaries to the first F2 slice.
 - The F2 evidence record must distinguish unit/integration results from manual macOS results and identify actual Mac model, macOS version, Xcode version, tested display context, and any unrun scenario.
+
+## Comments
+
+- 2026-09-15: Đóng phase theo yêu cầu người dùng. Automated verification đã được ghi nhận; các scenario native/manual chưa chạy vẫn được giữ nguyên trong evidence artifact và checklist ticket.

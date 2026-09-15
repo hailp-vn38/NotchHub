@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Coordinator admission contract; 03 — Native shape-aware click-through.
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Hover-origin expansion chỉ close sau 100 ms khi pointer outside và không có active Surface interaction hold; re-entry hủy close đang chờ.
 - [x] Coordinator sở hữu typed lease registry theo interaction-session generation; stale release vô hại và mọi departure từ expanded clear session, holds, timer close.
@@ -17,3 +17,4 @@
 - Added `SurfaceInteractionHoldKind` and generation-scoped `SurfaceInteractionHoldLease` to `SurfaceCoordinator`.
 - `swift test` passes all 43 tests; `swift build` and `git diff --check` pass.
 - Manual macOS lifecycle/accessibility verification remains for ticket 05; production call-sites acquire/release holds there.
+- 2026-09-15: Đóng ticket theo yêu cầu người dùng; manual QA liên quan vẫn được giữ nguyên là chưa chạy.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Persistent animated Boring-style Notch shape; 03 — Native shape-aware click-through; 04 — Hover interaction session and holds.
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Deliberate expansion có focus và label có nghĩa; collapsed, hidden, suppressed hoặc recovered view không giữ VoiceOver/keyboard focus stale.
 - [x] Escape, click-outside và collapse khôi phục focus an toàn; active accessibility interaction có hold đúng lifecycle.
@@ -18,3 +18,4 @@
 - Automated evidence: deterministic focus-restoration and accessibility-hold tests; `swift test` passes 41 tests, `swift build`, Xcode Debug build, and changed-file Swift format lint pass.
 - Verification note: `Scripts/verify.sh` remains blocked by pre-existing unrelated failures in README link/secret checks and the NotchDomain boundary check.
 - Manual VoiceOver, keyboard, full-screen/Space, sleep/wake, lock/unlock, display invalidation, and physical-notch checks remain required before closing this ticket.
+- 2026-09-15: Đóng ticket theo yêu cầu người dùng; các kiểm tra native/manual chưa chạy vẫn được ghi nhận là giới hạn evidence.
