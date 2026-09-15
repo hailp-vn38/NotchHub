@@ -196,6 +196,15 @@ public struct XiaozhiBootstrapResponse: Decodable, Equatable, Sendable {
             self.token = token
             self.version = version
         }
+
+        private enum CodingKeys: String, CodingKey { case url, token, version }
+
+        public init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            url = try values.decode(URL.self, forKey: .url)
+            token = try values.decode(String.self, forKey: .token)
+            version = try values.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        }
     }
 
     public let activation: XiaozhiActivation?

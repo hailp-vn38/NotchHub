@@ -69,6 +69,12 @@ func decodesXiaozhiBootstrapResponses() throws {
     #expect(readyResponse.websocket?.token == "temporary-token")
 }
 
+@Test("Xiaozhi Cloud websocket defaults the omitted protocol version to V1")
+func defaultsCloudWebSocketVersion() throws {
+    let response = try JSONDecoder().decode(XiaozhiBootstrapResponse.self, from: Data("{\"websocket\":{\"url\":\"wss://example.test/voice\",\"token\":\"temporary-token\"}}".utf8))
+    #expect(response.websocket?.version == 1)
+}
+
 @Test("The user-invoked Xiaozhi preparation bootstraps and saves only a ready-session credential")
 func preparesXiaozhiOnUserAction() async throws {
     let credentials = XiaozhiMemoryCredentialStore()
