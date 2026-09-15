@@ -439,35 +439,34 @@ private struct PermissionCenterPage: View {
 
     var body: some View {
         SettingsSection(title: "Permission Center") {
-            SettingsStatusRow(title: "Notifications", value: statusText)
-            Text(model.notificationsGuidance.reason)
-                .font(.caption)
-                .foregroundStyle(NotchUITokens.contentSecondary)
-            Text(model.notificationsGuidance.dataImplication)
-                .font(.caption)
-                .foregroundStyle(NotchUITokens.contentSecondary)
+            HStack(alignment: .top, spacing: NotchUITokens.rowSpacing) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.blue.gradient, in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: NotchUITokens.microSpacing) {
+                    Text("Recovery notifications").font(.headline)
+                    Text("Permission Center only")
+                        .font(.subheadline)
+                        .foregroundStyle(NotchUITokens.contentSecondary)
+                }
+                Spacer()
+                PermissionStatusBadge(status: model.notificationsStatus, text: statusText)
+            }
+            Divider()
+            PermissionDetailRow(title: "Why", detail: model.notificationsGuidance.reason)
+            PermissionDetailRow(title: "Privacy", detail: model.notificationsGuidance.dataImplication)
             Text(model.notificationsGuidance.declineEffect)
                 .font(.caption)
                 .foregroundStyle(NotchUITokens.contentSecondary)
-            if model.notificationsStatus == .denied {
-                Button("Open System Settings") {
-                    Task { _ = await model.openSystemSettings() }
-                }
-            } else if model.notificationsStatus == .authorized {
-                Text(model.notificationsGuidance.nextAction)
-                    .font(.caption)
-                    .foregroundStyle(NotchUITokens.contentSecondary)
-            } else if model.notificationsStatus == .notDetermined {
-                Button("Enable recovery notifications") {
-                    model.beginNotificationsRecoveryOptIn()
-                }
-            } else {
-                Text(model.notificationsGuidance.nextAction)
-                    .font(.caption)
-                    .foregroundStyle(NotchUITokens.contentSecondary)
-            }
+            permissionAction
         }
         SettingsSection(title: "Not used by enabled features") {
+            Text("NotchHub will not request these permissions until an enabled feature needs them.")
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
             ForEach(model.informationalCapabilities, id: \.self) { capability in
                 SettingsStatusRow(title: capability.title, value: "Not used")
             }
@@ -498,6 +497,52 @@ private struct PermissionCenterPage: View {
         case .unavailable: "Unavailable"
         }
     }
+
+    @ViewBuilder private var permissionAction: some View {
+        switch model.notificationsStatus {
+        case .denied:
+            Button("Open System Settings") { Task { _ = await model.openSystemSettings() } }
+        case .notDetermined:
+            Button("Enable recovery notifications") { model.beginNotificationsRecoveryOptIn() }
+        case .authorized, .restricted, .unavailable:
+            Text(model.notificationsGuidance.nextAction)
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+        }
+    }
+}
+
+private struct PermissionDetailRow: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        LabeledContent(title) {
+            Text(detail)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PermissionStatusBadge: View {
+    let status: PermissionStatus
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, NotchUITokens.controlSpacing)
+            .padding(.vertical, NotchUITokens.microSpacing)
+            .foregroundStyle(foreground)
+            .background(background, in: Capsule())
+            .accessibilityLabel("Notifications: \(text)")
+    }
+
+    private var foreground: Color { status == .authorized ? .green : .orange }
+    private var background: Color { foreground.opacity(0.15) }
 }
 
 extension PermissionKind {
