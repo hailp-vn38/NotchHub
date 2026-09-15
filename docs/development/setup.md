@@ -53,7 +53,7 @@ Minimum development environment:
 
 ### 3.3 Toolchain
 
-- Xcode 26.0.1, pinned in [`.xcode-version`](../../.xcode-version) and selected by the matching
+- Xcode 27.0, pinned in [`.xcode-version`](../../.xcode-version) and selected by the matching
   pull-request workflow. It provides Swift 6 and Swift Package Manager.
 - Swift Package Manager (bundled with Swift/Xcode).
 - Git.
