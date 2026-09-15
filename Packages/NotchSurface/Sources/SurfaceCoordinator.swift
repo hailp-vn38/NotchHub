@@ -24,6 +24,11 @@ public struct SurfaceInteractionConfiguration: Equatable, Sendable {
 }
 
 @MainActor
+public protocol SurfaceAppearanceApplying: AnyObject {
+    func apply(theme: SettingsTheme)
+}
+
+@MainActor
 public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     NotchSurfaceDebugToggling
 {
@@ -34,7 +39,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     private let contextInput: (any SurfaceContextObserving)?
     private let admission: (any SurfaceExpansionAdmitting)?
     private let scheduler: any SurfaceInteractionScheduling
-    private let configuration: SurfaceInteractionConfiguration
+    private var configuration: SurfaceInteractionConfiguration
     private var hoverTask: (any SurfaceInteractionTask)?
     private var collapseTask: (any SurfaceInteractionTask)?
     private var hoverGeneration = 0
@@ -82,6 +87,24 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         snapshot.state = .collapsed
         beginRecovery()
         publishDebugSnapshot()
+    }
+
+    /// Applies only the validated interaction values owned by the Settings store.
+    /// Surface eligibility, suppression, and startup state remain coordinator invariants.
+    public func applyInteractionConfiguration(_ configuration: SurfaceInteractionConfiguration) {
+        self.configuration = configuration
+        if snapshot.state == .collapsed, isPointerInside {
+            scheduleHoverExpansion()
+        } else if snapshot.state == .expanded || snapshot.state == .compact {
+            scheduleAutoCollapse()
+        }
+    }
+
+    public func applySettings(_ projection: SettingsProjection) {
+        applyInteractionConfiguration(
+            .init(hoverDelay: projection.hoverDelay, autoCollapseDelay: projection.autoCollapseTimeout)
+        )
+        (panel as? any SurfaceAppearanceApplying)?.apply(theme: projection.theme)
     }
 
     public func stop() {

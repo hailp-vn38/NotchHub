@@ -1,0 +1,55 @@
+# F4 Typed Settings Evidence
+
+**Status:** Automated gates passed; native manual gate pending
+**Owner:** Architecture / Quality
+**Last updated:** 2026-09-15
+**Scope:** Typed settings, migration, atomic persistence, reset, sanitized import/export, and recovery
+
+## Contract under test
+
+- `AppSettings` v1 owns only Appearance and Notch Behavior configuration: theme, Reduced Motion
+  override, hover delay (`150`/`300`/`500` ms), and auto-collapse timeout (`2`/`3`/`5` seconds).
+- Full-screen suppression remains an invariant and is not persisted by F4 v1.
+- `SettingsBackend` stores one versioned snapshot in Application Support and atomically replaces it.
+- Secrets remain in Keychain and never enter a settings snapshot, ordinary reset, import, export,
+  fixture, or diagnostics payload.
+- A valid F4 import replaces the complete F4-owned snapshot atomically after validation.
+- Corrupt current-schema data moves to quarantine (at most three 1 MiB files; 3 MiB total), then
+  recovers to safe defaults with a typed Settings recovery outcome.
+- A newer unknown schema enters read-only recovery and its bytes are not overwritten.
+- F4 does not create concrete shortcut, module, or diagnostics settings. Their owners are F6, F7,
+  and F9.
+
+## Phase precondition
+
+F2's prerequisite is confirmed by the maintainer for this implementation run. F4 still requires
+its own manual macOS scenarios below before phase closure.
+
+## Required automated evidence
+
+| Check | Required evidence | Result |
+|---|---|---|
+| Defaults and validation | Unit tests for every F4 v1 field and invalid value | **PASS** — `swift test` |
+| Migration | Before/after fixture for every released schema version | **PASS** — v0 fixture and failed-write preservation |
+| Corruption recovery | Fixtures quarantine original bytes, enforce 3-file/3 MiB rotation, and recover without preventing startup | **PASS** — `swift test` |
+| Forward schema | Newer-schema fixture produces read-only recovery and preserves bytes | **PASS** — `swift test` |
+| Atomic persistence | Simulated interrupted/failed replacement retains last known-good snapshot | **PASS** — `swift test` |
+| Import/export | Export excludes secrets; invalid import changes nothing; valid import atomically replaces F4 scope | **PASS** — `swift test` |
+| Reset | Normal reset excludes credentials; credential deletion remains a distinct confirmed flow | **PASS** — F4 snapshot contains no Secret field |
+| Boundary | Views do not access raw persistence APIs or Keychain | **PASS** — typed store/model projection and repository checks |
+
+## Manual macOS evidence
+
+Record the macOS version and build used to confirm:
+
+1. F4 settings survive an app relaunch.
+2. A recovery outcome is understandable and does not claim an F9 diagnostics record exists.
+3. Import, export, normal reset, and credential deletion clearly describe distinct scopes.
+
+**Current result:** Unrun. The Debug macOS build succeeded, but a build is not evidence of these
+native UX scenarios.
+
+## F4 gate
+
+F4 closes only after every required row above is PASS, privacy and retention commitments remain
+accurate in `docs/operations/privacy.md`, and any unrun manual scenario is explicitly recorded.

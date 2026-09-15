@@ -1,5 +1,8 @@
+import Foundation
+import NotchCore
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 public enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
     case general
@@ -90,9 +93,14 @@ public final class SettingsShellModel {
     public let routes = SettingsRoute.allCases
     public fileprivate(set) var selectedRoute: SettingsRoute
     public private(set) var sessionMotionPreference: SettingsMotionPreference = .system
+    public private(set) var settings = AppSettings.safeDefaults
+    public private(set) var recoveryOutcome: SettingsRecoveryOutcome = .loaded
+    public private(set) var saveOutcome: SettingsMutationOutcome?
+    fileprivate let settingsStore: SettingsStore?
 
-    public init(selectedRoute: SettingsRoute = .general) {
+    public init(selectedRoute: SettingsRoute = .general, settingsStore: SettingsStore? = nil) {
         self.selectedRoute = selectedRoute
+        self.settingsStore = settingsStore
     }
 
     public func select(_ route: SettingsRoute) {
@@ -101,7 +109,9 @@ public final class SettingsShellModel {
 
     public func routeState(for route: SettingsRoute) -> SettingsRouteState {
         switch route {
-        case .general, .appearance, .notchBehavior, .about:
+        case .general, .appearance, .notchBehavior:
+            .init(route: route, owningPhase: .f4, isInteractive: true)
+        case .about:
             .init(route: route, owningPhase: .f3, isInteractive: true)
         case .shortcuts, .actions:
             .init(route: route, owningPhase: .f6, isInteractive: false)
@@ -127,7 +137,66 @@ public final class SettingsShellModel {
     }
 
     public func isReducedMotion(systemPreference: Bool) -> Bool {
-        systemPreference || sessionMotionPreference == .reduced
+        systemPreference
+            || (settingsStore == nil
+                ? sessionMotionPreference == .reduced
+                : settings.appearance.reducedMotion == .reduceMotion)
+    }
+
+    public func loadSettings() async {
+        guard let settingsStore else { return }
+        let result = await settingsStore.load()
+        settings = result.settings
+        recoveryOutcome = result.recovery
+    }
+
+    public func update(_ mutation: SettingsMutation) {
+        guard let settingsStore else { return }
+        Task { [weak self] in
+            let result = await settingsStore.mutate(mutation)
+            self?.apply(result)
+        }
+    }
+
+    public func resetSettings() {
+        resetSettings(confirmingFutureSchema: false)
+    }
+
+    public func resetSettings(confirmingFutureSchema: Bool) {
+        guard let settingsStore else { return }
+        Task { [weak self] in
+            self?.apply(await settingsStore.reset(confirmingFutureSchema: confirmingFutureSchema))
+        }
+    }
+
+    public func importSettings(_ data: Data) {
+        guard let settingsStore else { return }
+        Task { [weak self] in
+            self?.apply(await settingsStore.importSanitized(data))
+        }
+    }
+
+    public func exportSettings() async -> Data? {
+        guard let settingsStore else { return nil }
+        return try? await settingsStore.exportSanitized()
+    }
+
+    public var isReadOnly: Bool {
+        if case .readOnlyFutureSchema = recoveryOutcome { return true }
+        return false
+    }
+
+    public var preferredColorScheme: ColorScheme? {
+        switch settings.appearance.theme {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    private func apply(_ result: SettingsMutationResult) {
+        settings = result.settings
+        saveOutcome = result.outcome
     }
 }
 
@@ -168,6 +237,8 @@ public struct SettingsShellView: View {
             SettingsPageView(model: model, systemReducedMotion: systemReducedMotion)
         }
         .navigationSplitViewStyle(.balanced)
+        .task { await model.loadSettings() }
+        .preferredColorScheme(model.preferredColorScheme)
         .frame(minWidth: 760, minHeight: 560)
     }
 }
@@ -175,6 +246,9 @@ public struct SettingsShellView: View {
 private struct SettingsPageView: View {
     @Bindable var model: SettingsShellModel
     let systemReducedMotion: Bool
+    @State private var isImporting = false
+    @State private var exportDocument: SettingsExportDocument?
+    @State private var isConfirmingFutureReset = false
 
     var body: some View {
         let route = model.selectedRoute
@@ -191,23 +265,71 @@ private struct SettingsPageView: View {
                 } else {
                     SettingsUnavailableState(owner: state.owningPhase)
                 }
+                SettingsFeedback(recovery: model.recoveryOutcome, save: model.saveOutcome)
             }
             .frame(maxWidth: 720, alignment: .leading)
             .padding(NotchUITokens.contentPadding)
         }
         .accessibilityElement(children: .contain)
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
+            guard case .success(let url) = result else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else { return }
+            model.importSettings(data)
+        }
+        .fileExporter(
+            isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: "NotchHub-settings"
+        ) { _ in }
+        .confirmationDialog(
+            "Discard newer settings?",
+            isPresented: $isConfirmingFutureReset,
+            titleVisibility: .visible
+        ) {
+            Button("Discard and reset", role: .destructive) {
+                model.resetSettings(confirmingFutureSchema: true)
+            }
+        } message: {
+            Text("This replaces the newer snapshot with safe F4 defaults.")
+        }
     }
 
     @ViewBuilder
     private func interactiveContent(for route: SettingsRoute) -> some View {
         switch route {
         case .appearance:
+            SettingsSection(title: "Appearance") {
+                Picker(
+                    "Theme",
+                    selection: Binding(
+                        get: { model.settings.appearance.theme },
+                        set: { model.update(.theme($0)) }
+                    )
+                ) {
+                    ForEach(SettingsTheme.allCases, id: \.self) { theme in
+                        Text(theme.rawValue.capitalized).tag(theme)
+                    }
+                }
+            }
             SettingsSection(title: "Motion") {
                 Picker(
                     "Motion preference",
                     selection: Binding(
-                        get: { model.sessionMotionPreference },
-                        set: { _ = model.setSessionMotionPreference($0) }
+                        get: {
+                            model.settingsStore == nil
+                                ? model.sessionMotionPreference
+                                : model.settings.appearance.reducedMotion == .reduceMotion ? .reduced : .system
+                        },
+                        set: {
+                            if model.settingsStore == nil {
+                                _ = model.setSessionMotionPreference($0)
+                            } else {
+                                model.update(.reducedMotion($0 == .reduced ? .reduceMotion : .followSystem))
+                            }
+                        }
                     )
                 ) {
                     ForEach(SettingsMotionPreference.allCases, id: \.self) { preference in
@@ -215,24 +337,60 @@ private struct SettingsPageView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                Text("This preview applies only while NotchHub is running and is not saved.")
-                    .font(.caption)
-                    .foregroundStyle(NotchUITokens.contentSecondary)
+                Text(
+                    model.settingsStore == nil
+                        ? "This preview applies only while NotchHub is running and is not saved."
+                        : "Saved changes apply safely while NotchHub is running."
+                )
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
             }
         case .notchBehavior:
             SettingsSection(title: "Current surface behavior") {
-                SettingsStatusRow(title: "Hover", value: "300 ms delay")
-                SettingsStatusRow(title: "Auto-collapse", value: "3 seconds")
-                Text("Persisted Notch behavior preferences arrive in F4.")
+                Picker(
+                    "Hover delay",
+                    selection: Binding(
+                        get: { model.settings.notchBehavior.hoverDelay },
+                        set: { model.update(.hoverDelay($0)) }
+                    )
+                ) {
+                    ForEach(HoverDelay.allCases, id: \.self) { delay in
+                        Text("\(delay.rawValue) ms").tag(delay)
+                    }
+                }
+                Picker(
+                    "Auto-collapse",
+                    selection: Binding(
+                        get: { model.settings.notchBehavior.autoCollapseTimeout },
+                        set: { model.update(.autoCollapseTimeout($0)) }
+                    )
+                ) {
+                    ForEach(AutoCollapseTimeout.allCases, id: \.self) { timeout in
+                        Text("\(timeout.rawValue) seconds").tag(timeout)
+                    }
+                }
+                Text("Full-screen suppression remains a safety invariant, not a preference.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         case .general:
             SettingsSection(title: "Foundation") {
                 Text(
-                    "Settings navigation and reusable presentation are ready. Configuration persistence, "
-                        + "import, export, and reset arrive in F4."
+                    "Appearance and Notch Behavior are stored locally. Import and export contain only this non-secret F4 snapshot."
                 )
+                Button("Reset Appearance and Notch Behavior", role: .destructive) {
+                    if model.isReadOnly {
+                        isConfirmingFutureReset = true
+                    } else {
+                        model.resetSettings()
+                    }
+                }
+                Button("Import Settings…") { isImporting = true }
+                    .disabled(model.isReadOnly)
+                Button("Export Settings…") {
+                    Task { exportDocument = await model.exportSettings().map(SettingsExportDocument.init) }
+                }
+                .disabled(model.isReadOnly)
             }
         case .about:
             SettingsSection(title: "NotchHub") {
@@ -263,6 +421,21 @@ private struct SettingsPageView: View {
         case .diagnostics: "Operational diagnostics arrive in F9."
         case .about: "Application information safe to show in the foundation."
         }
+    }
+}
+
+private struct SettingsExportDocument: FileDocument {
+    static let readableContentTypes: [UTType] = [.json]
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration _: WriteConfiguration) throws -> FileWrapper {
+        .init(regularFileWithContents: data)
     }
 }
 
@@ -334,6 +507,36 @@ private struct SettingsStatusRow: View {
     var body: some View {
         LabeledContent(title, value: value)
             .accessibilityElement(children: .combine)
+    }
+}
+
+private struct SettingsFeedback: View {
+    let recovery: SettingsRecoveryOutcome
+    let save: SettingsMutationOutcome?
+
+    var body: some View {
+        if recovery != .loaded || save != nil {
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(recovery == .loaded && save == .saved ? Color.secondary : Color.orange)
+                .accessibilityLabel("Settings status: \(message)")
+        }
+    }
+
+    private var message: String {
+        switch recovery {
+        case .recoveredToSafeDefaults: "Settings were corrupt and recovered to safe defaults."
+        case .readOnlyFutureSchema: "Settings were created by a newer NotchHub version and are read-only."
+        case .persistenceFailed: "Settings could not be saved; the last known good settings remain active."
+        case .loaded:
+            switch save {
+            case .saved: "Settings saved."
+            case .rejected: "That settings change was rejected."
+            case .readOnly: "Settings are read-only until you update or reset them."
+            case .persistenceFailed: "Settings could not be saved; the last known good settings remain active."
+            case nil: ""
+            }
+        }
     }
 }
 

@@ -40,11 +40,13 @@ struct NotchHubApp: App {
 
 @MainActor
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
-    let settingsShell = SettingsShellModel()
+    private let settingsRuntime = SurfaceSettingsRuntime()
+    private let settingsStore: SettingsStore
+    let settingsShell: SettingsShellModel
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
     private lazy var notchSurface = SurfaceCoordinator(
         panel: NotchPanelController(sessionMotionPreference: { [weak settingsShell] in
-            settingsShell?.sessionMotionPreference == .reduced
+            settingsShell?.settings.appearance.reducedMotion == .reduceMotion
         })
     )
     private lazy var coordinator = AppCoordinator(
@@ -55,7 +57,16 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     )
     private var openScene: ((AppShellPlaceholderScene) -> Void)?
 
+    override init() {
+        let backend = FileSettingsBackend.applicationSupport()
+        settingsStore = SettingsStore(backend: backend, runtime: settingsRuntime)
+        settingsShell = SettingsShellModel(settingsStore: settingsStore)
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_: Notification) {
+        settingsRuntime.surface = notchSurface
+        Task { await settingsShell.loadSettings() }
         _ = coordinator.start()
     }
 
@@ -101,6 +112,15 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+}
+
+@MainActor
+private final class SurfaceSettingsRuntime: SettingsProjectionApplying {
+    weak var surface: SurfaceCoordinator?
+
+    func apply(_ projection: SettingsProjection) async {
+        surface?.applySettings(projection)
     }
 }
 

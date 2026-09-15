@@ -1,3 +1,4 @@
+import NotchCore
 import NotchDomain
 import Observation
 import SwiftUI
@@ -20,6 +21,7 @@ final class NotchSurfacePresentationModel {
     private(set) var isCompactGeometry = false
     var isHovering = false
     var debugLabel: String?
+    private(set) var theme: SettingsTheme = .system
 
     init(sessionMotionPreference: @escaping @MainActor () -> Bool = { false }) {
         self.sessionMotionPreference = sessionMotionPreference
@@ -32,6 +34,16 @@ final class NotchSurfacePresentationModel {
     func apply(_ snapshot: SurfaceSnapshot, collapsedSize: CGSize? = nil) {
         self.snapshot = snapshot
         if let collapsedSize { self.collapsedSize = collapsedSize }
+    }
+
+    func apply(theme: SettingsTheme) { self.theme = theme }
+
+    var colorScheme: ColorScheme? {
+        switch theme {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 
     func projectCollapsed(collapsedSize: CGSize) {
@@ -229,6 +241,7 @@ struct NotchSurfaceRootView: View {
             send(focused ? .accessibilityInteractionBegan : .accessibilityInteractionEnded)
         }
         .animation(surfaceAnimation, value: model.visibleSurfaceSize)
+        .preferredColorScheme(model.colorScheme)
     }
 
     private var surfaceAnimation: Animation {
