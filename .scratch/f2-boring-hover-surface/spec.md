@@ -18,7 +18,7 @@ Xây dựng một Notch surface clean-room lấy cảm hứng từ Boring Notch:
 2. As a user without physical-notch geometry, I want a safe minimal top-center fallback, so that the Surface remains predictable.
 3. As a user, I want no persistent product text in collapsed state, so that it stays calm at rest.
 4. As a user, I want hover to wait 300 ms, so that incidental cursor passes do not expand the Surface.
-5. As a user, I want click to expand collapsed or compact Surface, so that hover is never essential.
+5. As a user, I want collapsed Surface expansion to require hover dwell while compact content remains clickable, so that an incidental collapsed click cannot replay the opening animation.
 6. As a keyboard user, I want menu and shortcut paths to remain available, so that pointer precision is optional.
 7. As a user, I want expanded visual geometry fixed at 640 × 190 pt, so that layout is predictable.
 8. As a user, I want a shoulder-inset notch shape with larger bottom corners, so that it does not resemble a rounded rectangle.
@@ -28,10 +28,10 @@ Xây dựng một Notch surface clean-room lấy cảm hứng từ Boring Notch:
 12. As a hover-open user, I want 100 ms exit grace, so that minor pointer slips do not immediately collapse the Surface.
 13. As a keyboard, popover, drag, confirmation, or assistive-technology user, I want active interaction to hold the Surface open, so that closing does not interrupt me.
 14. As a user who re-enters during grace, I want pending collapse canceled, so that the panel does not flicker.
-15. As a click/shortcut-open user, I want the bounded inactivity policy preserved, so that deliberate interaction is not treated as transient hover.
+15. As a click-inside/shortcut user, I want the bounded inactivity policy preserved, so that deliberate interaction is not treated as transient hover.
 16. As a user on an undersized valid topology, I want Surface to remain collapsed or compact rather than scale/crop, so that controls stay honest.
 17. As a hover user on an unsupported topology, I want no automatic Detail route, so that passive movement does not navigate me.
-18. As a click/keyboard user on an unsupported topology, I want bounded accessible feedback and an explicit Detail path where appropriate, so that access remains possible.
+18. As a compact-click/keyboard user on an unsupported topology, I want bounded accessible feedback and an explicit Detail path where appropriate, so that access remains possible.
 19. As a user changing displays or resolution, I want expanded availability refreshed for the current topology, so that stale geometry cannot decide a new interaction.
 20. As a user, I want invalid topology and native panel failure to recover safely, so that they remain distinct from ordinary capacity limits.
 21. As a user, I want transparent corners and shadow envelope to click through, so that NotchHub does not block other macOS UI.
@@ -83,4 +83,3 @@ Xây dựng một Notch surface clean-room lấy cảm hứng từ Boring Notch:
 - Current source still has 150 ms hover, state-specific hosts, clipped preferred geometry, and rectangular native hit testing; these are migration targets, not completed behavior.
 - The implementation plan and ADR-0013 are the reviewed authority for admission, state ownership, interaction holds, and native click-through.
 - The chosen seams reflect the confirmed design: coordinator tests cover policy, while one panel-owned native pointer adapter covers AppKit-specific hit testing. No per-view seam is introduced.
-

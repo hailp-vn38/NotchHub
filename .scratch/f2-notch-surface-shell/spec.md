@@ -20,7 +20,7 @@ Xây dựng F2 như một vertical slice Notch surface cho built-in MacBook disp
 4. As a user, I want a small collapsed indicator, so that I can discover the surface without losing menu-bar input.
 5. As a user, I want hovering over the bounded trigger region to expand the surface after 150 ms, so that incidental pointer movement does not cause distraction.
 6. As a user, I want the hover trigger to extend only 8 pt beyond visible collapsed content, so that unrelated menu-bar controls remain clickable.
-7. As a user, I want clicking collapsed or compact content to expand the surface, so that hover is never required.
+7. As a user, I want collapsed expansion to require the bounded hover trigger while compact content remains clickable, so that clicking a collapsed Surface cannot replay expansion.
 8. As a user, I want expanded placeholder content to remain short and legible, so that the Notch surface does not become a dashboard.
 9. As a user, I want a compact status to contain at most a few concise lines, so that transient feedback does not obscure my work.
 10. As a user, I want an inactive compact or expanded surface to collapse after 3 seconds, so that it clears itself without manual housekeeping.

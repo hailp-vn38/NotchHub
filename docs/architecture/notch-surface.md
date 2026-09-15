@@ -100,7 +100,7 @@ stateDiagram-v2
     hidden --> collapsed: app ready after successful recovery
     collapsed --> compact: low-priority event (Presentation Policy)
     compact --> collapsed: auto-dismiss timeout
-    collapsed --> expanded: hover / click / shortcut / user-triggered action
+    collapsed --> expanded: hover / shortcut / user-triggered action
     compact --> expanded: user interacts during compact display
     expanded --> collapsed: click-outside / Escape / timeout
     collapsed --> suppressed: full-screen app / screen-share policy engaged
@@ -216,12 +216,13 @@ public struct NotchGeometry: Sendable {
 
 ### 8.2 Click
 
-- A click on the `collapsed` or `compact` panel triggers `.userTriggeredExpand(reason: .click)`.
+- A click on the `collapsed` panel is ignored; collapsed pointer expansion requires the bounded hover dwell.
+- A click on the `compact` panel triggers `.userTriggeredExpand(reason: .click)`.
 - F2 Surface content sends only local Surface intents. Application scenes are opened by their owning app-shell route; registered actions arrive in F6.
 
 ### 8.3 Click-outside and Escape
 
-- `ClickOutsideMonitor` uses a local or global event monitor (scoped as narrowly as possible) to detect clicks outside the panel's current bounds while in `expanded`, sending `.clickOutside`.
+- `ClickOutsideMonitor` uses a local or global event monitor (scoped as narrowly as possible) to detect clicks outside the current visible `NotchSurfaceShape` while in `expanded`, sending `.clickOutside`; a click inside that shape is never classified as outside.
 - The Escape key, while the panel has focus or is the active interaction target, sends `.escapeKeyPressed`, collapsing from `expanded` toward `collapsed`. A application scene handles its own close/back behavior independently.
 
 ### 8.4 Auto-collapse timeout

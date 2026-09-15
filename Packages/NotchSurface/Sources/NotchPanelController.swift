@@ -221,9 +221,8 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     private func installExpandedEventMonitors() {
         removeEventMonitors()
-        let panel = self.panel
         let local = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .mouseMoved]) {
-            [weak self, weak panel] event in
+            [weak self] event in
             if event.type == .mouseMoved {
                 self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
                 return event
@@ -232,14 +231,20 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
                 self?.interactionHandler?(.escapePressed)
                 return nil
             }
-            if event.type == .leftMouseDown, event.window !== panel { self?.interactionHandler?(.clickedOutside) }
+            if event.type == .leftMouseDown,
+                let self,
+                self.shouldDismissForClick(pointerLocation: NSEvent.mouseLocation)
+            {
+                self.interactionHandler?(.clickedOutside)
+            }
             return event
         }
         let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown]) { [weak self] event in
             if event.type == .mouseMoved {
                 self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
             } else {
-                self?.interactionHandler?(.clickedOutside)
+                guard let self, self.shouldDismissForClick(pointerLocation: NSEvent.mouseLocation) else { return }
+                self.interactionHandler?(.clickedOutside)
             }
         }
         eventMonitors = [local, global].compactMap { $0 }
@@ -247,15 +252,33 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     private func refreshNativeHitTesting(pointerLocation: NSPoint = NSEvent.mouseLocation) {
         guard let panel else { return }
-        let point = CGPoint(x: pointerLocation.x - panel.frame.minX, y: panel.frame.maxY - pointerLocation.y)
-        let surfaceSize = presentationModel.visibleSurfaceSize
-        let inside = NotchSurfaceHitTesting.contains(
+        let inside = isPointerInsideSurface(pointerLocation: pointerLocation)
+        panel.ignoresMouseEvents = nativeMouseCaptureDepth == 0 && !inside
+    }
+
+    private func shouldDismissForClick(pointerLocation: NSPoint) -> Bool {
+        guard let panel else { return false }
+        let point = surfacePoint(pointerLocation: pointerLocation, panelFrame: panel.frame)
+        return NotchSurfaceHitTesting.shouldDismissForClick(
             point: point,
             hostSize: panel.frame.size,
-            surfaceSize: surfaceSize,
+            surfaceSize: presentationModel.visibleSurfaceSize,
             topShoulderRadius: presentationModel.topShoulderRadius,
             bottomCornerRadius: presentationModel.bottomCornerRadius)
-        panel.ignoresMouseEvents = nativeMouseCaptureDepth == 0 && !inside
+    }
+
+    private func isPointerInsideSurface(pointerLocation: NSPoint) -> Bool {
+        guard let panel else { return false }
+        return NotchSurfaceHitTesting.contains(
+            point: surfacePoint(pointerLocation: pointerLocation, panelFrame: panel.frame),
+            hostSize: panel.frame.size,
+            surfaceSize: presentationModel.visibleSurfaceSize,
+            topShoulderRadius: presentationModel.topShoulderRadius,
+            bottomCornerRadius: presentationModel.bottomCornerRadius)
+    }
+
+    private func surfacePoint(pointerLocation: NSPoint, panelFrame: NSRect) -> CGPoint {
+        CGPoint(x: pointerLocation.x - panelFrame.minX, y: panelFrame.maxY - pointerLocation.y)
     }
 
     private func removeEventMonitors() {

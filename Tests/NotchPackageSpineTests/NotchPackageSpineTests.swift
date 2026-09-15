@@ -101,6 +101,21 @@ func nativeHitTestingFollowsVisibleSurfaceShape() {
             topShoulderRadius: 19, bottomCornerRadius: 24))
 }
 
+@Test("Native clicks inside the visible Surface are not classified as click-outside")
+func clickInsideSurfaceDoesNotDismiss() {
+    let hostSize = SurfaceExpansionContract.hostSize
+    let surfaceSize = SurfaceExpansionContract.surfaceSize
+
+    #expect(
+        !NotchSurfaceHitTesting.shouldDismissForClick(
+            point: CGPoint(x: 320, y: 80), hostSize: hostSize, surfaceSize: surfaceSize,
+            topShoulderRadius: 19, bottomCornerRadius: 24))
+    #expect(
+        NotchSurfaceHitTesting.shouldDismissForClick(
+            point: CGPoint(x: 320, y: 202), hostSize: hostSize, surfaceSize: surfaceSize,
+            topShoulderRadius: 19, bottomCornerRadius: 24))
+}
+
 @Test("Geometry suppresses unavailable or invalid built-in displays and reframes changed topology")
 func suppressesInvalidTopologiesAndReframesAfterScaleChange() {
     let externalOnly = ScreenTopology.Screen(
@@ -174,7 +189,7 @@ func suppressesFullScreenWithoutRestoringExpandedState() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: RecordingSurfaceScheduler())
 
     _ = coordinator.handle(.showCollapsed)
-    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
     #expect(coordinator.snapshot.state == .expanded)
 
     _ = coordinator.handle(.fullScreenPolicyEngaged)
@@ -226,7 +241,7 @@ func restoresPriorStateAfterLockWithoutCreatingDuplicateRecovery() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: RecordingSurfaceScheduler())
 
     _ = coordinator.handle(.showCollapsed)
-    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
     _ = coordinator.handle(.sessionLocked)
     _ = coordinator.handle(.sessionUnlocked)
 
@@ -347,6 +362,22 @@ func expandsAfterBoundedHoverDelay() {
     #expect(panel.effects == [.showCollapsed, .showExpanded(focus: false)])
 }
 
+@Test("Clicking a collapsed Surface does not bypass hover expansion")
+@MainActor
+func collapsedClickDoesNotExpandSurface() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    for _ in 0..<4 {
+        #expect(coordinator.handle(.clicked) == .collapsed)
+    }
+
+    #expect(panel.effects == [.showCollapsed])
+    #expect(scheduler.scheduledDelays.isEmpty)
+}
+
 @Test("Hover uses a 300 ms dwell and 100 ms exit grace")
 @MainActor
 func hoverUsesDwellAndGraceWithoutFlicker() {
@@ -360,11 +391,74 @@ func hoverUsesDwellAndGraceWithoutFlicker() {
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .expanded)
 
-    _ = coordinator.handle(.expandedHoverExited)
+    _ = coordinator.handle(.hoverExited)
     #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.hoverCloseGrace)
-    _ = coordinator.handle(.expandedHoverEntered)
+    _ = coordinator.handle(.hoverEntered)
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .expanded)
+}
+
+@Test("Hover input keeps one meaning while the Surface geometry changes")
+@MainActor
+func hoverInputIsGeometryNeutral() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+
+    _ = coordinator.handle(.hoverEntered)
+    _ = coordinator.handle(.hoverExited)
+    #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.hoverCloseGrace)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+}
+
+@Test("Clicking a hover-expanded Surface does not replay opening and promotes deliberate interaction")
+@MainActor
+func clickInsideHoverExpandedSurfaceIsIdempotent() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .expanded)
+
+    let effectsBeforeClick = panel.effects
+    _ = coordinator.handle(.clicked)
+    #expect(coordinator.snapshot.state == .expanded)
+    #expect(panel.effects == effectsBeforeClick)
+
+    _ = coordinator.handle(.hoverExited)
+    #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.autoCollapseDelay)
+}
+
+@Test("Outside click defers collapse until the native mouse-down dispatch completes")
+@MainActor
+func outsideClickDefersCollapseForAnimation() {
+    let panel = RecordingSurfacePanel()
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
+
+    _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    scheduler.fireLatest()
+    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.hoverExited)
+
+    let effectsBeforeOutsideClick = panel.effects
+    #expect(coordinator.handle(.clickedOutside) == .expanded)
+    #expect(panel.effects == effectsBeforeOutsideClick)
+    #expect(scheduler.scheduledDelays.last == .zero)
+
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
+    #expect(panel.effects.last == .showCollapsed)
 }
 
 @Test("Interaction holds defer hover close and final release restarts grace outside")
@@ -377,7 +471,7 @@ func interactionHoldsDeferHoverClose() {
     _ = coordinator.handle(.showCollapsed)
     _ = coordinator.handle(.hoverEntered)
     scheduler.fireLatest()
-    _ = coordinator.handle(.expandedHoverExited)
+    _ = coordinator.handle(.hoverExited)
     let lease = coordinator.acquireInteractionHold(.keyboardFocus)
     #expect(lease != nil)
     scheduler.fireLatest()
@@ -397,7 +491,7 @@ func interactionHoldKindsAreTypedAndSessionScoped() {
 
     for kind in SurfaceInteractionHoldKind.allCases {
         _ = coordinator.handle(.showCollapsed)
-        _ = coordinator.handle(.clicked)
+        _ = coordinator.handle(.keyboardRequestedExpansion)
         let lease = coordinator.acquireInteractionHold(kind)
         #expect(lease != nil)
         _ = coordinator.handle(.escapePressed)
@@ -405,10 +499,10 @@ func interactionHoldKindsAreTypedAndSessionScoped() {
         #expect(coordinator.snapshot.state == .collapsed)
     }
 
-    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
     let stale = coordinator.acquireInteractionHold(.drag)
     _ = coordinator.handle(.escapePressed)
-    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
     stale?.release()
     _ = coordinator.handle(.autoCollapseElapsed)
     #expect(coordinator.snapshot.state == .collapsed)
@@ -424,7 +518,7 @@ func invalidatesHoldsAcrossSuppressionAndRecovery() {
     _ = coordinator.handle(.showCollapsed)
     _ = coordinator.handle(.hoverEntered)
     scheduler.fireLatest()
-    _ = coordinator.handle(.expandedHoverExited)
+    _ = coordinator.handle(.hoverExited)
     let suppressedLease = coordinator.acquireInteractionHold(.accessibilityInteraction)
     _ = coordinator.handle(.fullScreenPolicyEngaged)
     suppressedLease?.release()
@@ -432,7 +526,7 @@ func invalidatesHoldsAcrossSuppressionAndRecovery() {
     #expect(coordinator.snapshot.state == .suppressed)
 
     _ = coordinator.handle(.fullScreenPolicyCleared)
-    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
     let recoveringLease = coordinator.acquireInteractionHold(.confirmation)
     _ = coordinator.handle(.displayInvalidated)
     recoveringLease?.release()
@@ -448,8 +542,10 @@ func deliberateOriginsRetainInactivityPolicy() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
 
     _ = coordinator.handle(.showCollapsed)
+    _ = coordinator.handle(.hoverEntered)
+    scheduler.fireLatest()
     _ = coordinator.handle(.clicked)
-    _ = coordinator.handle(.expandedHoverExited)
+    _ = coordinator.handle(.hoverExited)
     #expect(scheduler.scheduledDelays.last == SurfaceInteractionDefaults.autoCollapseDelay)
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .collapsed)
@@ -468,10 +564,12 @@ func cancelsHoverAndCollapsesThroughSafeExits() {
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .collapsed)
 
-    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .expanded)
     #expect(coordinator.handle(.escapePressed) == .collapsed)
-    #expect(coordinator.handle(.clicked) == .expanded)
-    #expect(coordinator.handle(.clickedOutside) == .collapsed)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .expanded)
+    #expect(coordinator.handle(.clickedOutside) == .expanded)
+    scheduler.fireLatest()
+    #expect(coordinator.snapshot.state == .collapsed)
     #expect(
         panel.effects == [
             .showCollapsed,
@@ -490,7 +588,7 @@ func focusedExpansionRestoresPriorFocusOnCollapse() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
 
     _ = coordinator.handle(.showCollapsed)
-    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .expanded)
     #expect(coordinator.handle(.escapePressed) == .collapsed)
     #expect(panel.focusRestorationCount == 1)
 }
@@ -505,7 +603,7 @@ func accessibilityHoldFollowsExpandedSessionLifecycle() {
     _ = coordinator.handle(.showCollapsed)
     _ = coordinator.handle(.hoverDelayElapsed)
     #expect(coordinator.handle(.accessibilityInteractionBegan) == .expanded)
-    _ = coordinator.handle(.expandedHoverExited)
+    _ = coordinator.handle(.hoverExited)
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .expanded)
 
@@ -526,7 +624,7 @@ func resetsAutoCollapseAfterExpandedInteraction() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler)
 
     _ = coordinator.handle(.showCollapsed)
-    #expect(coordinator.handle(.clicked) == .expanded)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .expanded)
     #expect(scheduler.scheduledDelays == [SurfaceInteractionDefaults.autoCollapseDelay])
     _ = coordinator.handle(.interaction)
     #expect(
@@ -551,10 +649,10 @@ func pausesExpandedHoverAndExpandsCompactOnClick() {
     #expect(coordinator.handle(.showCompact) == .compact)
     #expect(panel.effects == [.showCollapsed, .showCompact])
     #expect(coordinator.handle(.clicked) == .expanded)
-    _ = coordinator.handle(.expandedHoverEntered)
+    _ = coordinator.handle(.hoverEntered)
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .expanded)
-    _ = coordinator.handle(.expandedHoverExited)
+    _ = coordinator.handle(.hoverExited)
     scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .collapsed)
 }
@@ -578,10 +676,12 @@ func rejectsPointerInteractionWhileUnavailable() {
 func receivesInputThroughMonitorSeam() {
     let panel = RecordingSurfacePanel()
     let input = RecordingSurfaceInput()
-    let coordinator = SurfaceCoordinator(panel: panel, input: input)
+    let scheduler = RecordingSurfaceScheduler()
+    let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, input: input)
 
     _ = coordinator.handle(.showCollapsed)
-    input.send(.clicked)
+    input.send(.hoverEntered)
+    scheduler.fireLatest()
     #expect(coordinator.snapshot.state == .expanded)
 }
 
@@ -601,7 +701,7 @@ func rejectsUnsupportedExpandedCapacityWithoutRecovery() {
     #expect(coordinator.snapshot.admissionFeedback == nil)
     #expect(coordinator.diagnostics.events == [.unsupportedExpandedCapacity(topologyRevision: 7)])
 
-    #expect(coordinator.handle(.clicked) == .collapsed)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .collapsed)
     #expect(coordinator.snapshot.admissionFeedback == .expandedUnavailable(topologyRevision: 7))
     #expect(coordinator.snapshot.state != .recovering)
     #expect(panel.effects == [.showCollapsed])
@@ -620,7 +720,7 @@ func refreshesExpandedAvailabilityForTheCurrentTopologyRevision() {
     let coordinator = SurfaceCoordinator(panel: panel, admission: admission)
 
     _ = coordinator.handle(.showCollapsed)
-    _ = coordinator.handle(.clicked)
+    _ = coordinator.handle(.keyboardRequestedExpansion)
     #expect(coordinator.snapshot.admissionFeedback == .expandedUnavailable(topologyRevision: 3))
 
     admission.availability = .available(topologyRevision: 4)
@@ -643,7 +743,7 @@ func recoversFromInvalidExpandedTopology() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, admission: admission)
 
     _ = coordinator.handle(.showCollapsed)
-    #expect(coordinator.handle(.clicked) == .recovering)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .recovering)
     #expect(coordinator.snapshot.expandedAvailability == .invalidTopology(topologyRevision: 9))
     #expect(coordinator.snapshot.admissionFeedback == nil)
     #expect(coordinator.diagnostics.events == [.invalidExpandedTopology(topologyRevision: 9)])
@@ -659,7 +759,7 @@ func recoversWhenNativeExpandedPanelApplyFails() {
     let coordinator = SurfaceCoordinator(panel: panel, scheduler: scheduler, admission: admission)
 
     _ = coordinator.handle(.showCollapsed)
-    #expect(coordinator.handle(.clicked) == .recovering)
+    #expect(coordinator.handle(.keyboardRequestedExpansion) == .recovering)
     #expect(coordinator.snapshot.expandedAvailability == .available(topologyRevision: 5))
     #expect(coordinator.diagnostics.events == [.nativeExpandedPanelFailure])
     #expect(panel.effects == [.showCollapsed, .showExpanded(focus: true), .suppress])

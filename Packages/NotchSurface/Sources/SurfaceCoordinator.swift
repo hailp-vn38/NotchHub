@@ -39,7 +39,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     private var collapseTask: (any SurfaceInteractionTask)?
     private var hoverGeneration = 0
     private var collapseGeneration = 0
-    private var isHoveringExpanded = false
+    private var isPointerInside = false
     private var expandedOrigin: SurfaceExpansionOrigin?
     private var interactionSessionGeneration: UInt64 = 0
     private var interactionHolds: [UUID: SurfaceInteractionHoldKind] = [:]
@@ -123,18 +123,24 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         case .sessionUnlocked:
             resumeAndRecover(restoring: sessionResumeState)
             sessionResumeState = nil
-        case .hoverEntered where snapshot.state == .collapsed:
-            scheduleHoverExpansion()
+        case .hoverEntered:
+            isPointerInside = true
+            if snapshot.state == .collapsed {
+                scheduleHoverExpansion()
+            } else if snapshot.state == .expanded {
+                cancelAutoCollapse()
+            }
         case .hoverExited:
+            isPointerInside = false
             cancelHoverExpansion()
-        case .expandedHoverEntered where snapshot.state == .expanded:
-            isHoveringExpanded = true
-            cancelAutoCollapse()
-        case .expandedHoverExited where snapshot.state == .expanded:
-            isHoveringExpanded = false
-            scheduleCloseForCurrentOrigin()
+            if snapshot.state == .expanded { scheduleCloseForCurrentOrigin() }
+        case .clicked where snapshot.state == .expanded:
+            expandedOrigin = .deliberate
+            scheduleAutoCollapse()
+        case .clickedOutside where snapshot.state == .expanded:
+            scheduleOutsideClickCollapse()
         case .interaction where snapshot.state == .expanded:
-            if !isHoveringExpanded { scheduleCloseForCurrentOrigin() }
+            if !isPointerInside { scheduleCloseForCurrentOrigin() }
         case .accessibilityInteractionBegan where snapshot.state == .expanded:
             if accessibilityInteractionHold == nil {
                 accessibilityInteractionHold = acquireInteractionHold(.accessibilityInteraction)
@@ -143,7 +149,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
             accessibilityInteractionHold?.release()
             accessibilityInteractionHold = nil
         case .autoCollapseElapsed where snapshot.state == .expanded:
-            guard interactionHolds.isEmpty, !isHoveringExpanded else { return snapshot.state }
+            guard interactionHolds.isEmpty, !isPointerInside else { return snapshot.state }
             guard let state = apply(intent) else { return snapshot.state }
             updateTimers(after: intent, state: state)
         default:
@@ -165,7 +171,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     fileprivate func releaseInteractionHold(id: UUID, generation: UInt64) {
         guard snapshot.state == .expanded, generation == interactionSessionGeneration else { return }
         guard interactionHolds.removeValue(forKey: id) != nil else { return }
-        guard interactionHolds.isEmpty, !isHoveringExpanded else { return }
+        guard interactionHolds.isEmpty, !isPointerInside else { return }
         scheduleCloseForCurrentOrigin()
     }
 
@@ -270,6 +276,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     }
 
     private func updateTimers(after intent: SurfaceIntent, state: SurfaceState) {
+        if state == .hidden || state == .suppressed { isPointerInside = false }
         if state != .collapsed { cancelHoverExpansion() }
         if state == .expanded {
             if intent != .hoverDelayElapsed { scheduleAutoCollapse() }
@@ -403,7 +410,7 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     }
 
     private func scheduleCloseForCurrentOrigin() {
-        guard interactionHolds.isEmpty, !isHoveringExpanded else { return }
+        guard interactionHolds.isEmpty, !isPointerInside else { return }
         if expandedOrigin == .hover {
             cancelAutoCollapse()
             collapseGeneration += 1
@@ -418,12 +425,25 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
         }
     }
 
+    private func scheduleOutsideClickCollapse() {
+        cancelAutoCollapse()
+        collapseGeneration += 1
+        let generation = collapseGeneration
+        collapseTask = scheduler.schedule(after: .zero) { [weak self] in
+            guard let self, self.collapseGeneration == generation else { return }
+            self.collapseTask = nil
+            guard let state = self.apply(.clickedOutside) else { return }
+            self.updateTimers(after: .clickedOutside, state: state)
+            self.publishDebugSnapshot()
+        }
+    }
+
     private func invalidateInteractionSession() {
         interactionSessionGeneration &+= 1
         interactionHolds.removeAll()
         accessibilityInteractionHold = nil
         expandedOrigin = nil
-        isHoveringExpanded = false
+        isPointerInside = false
         cancelAutoCollapse()
     }
 }
@@ -510,7 +530,7 @@ public enum SurfaceWarning: Equatable, Sendable { case recoveryFailed }
 
 public enum SurfaceIntent: Equatable, Sendable {
     case toggle, showCollapsed, hide, hoverEntered, hoverExited, hoverDelayElapsed
-    case expandedHoverEntered, expandedHoverExited, clicked, keyboardRequestedExpansion, interaction
+    case clicked, keyboardRequestedExpansion, interaction
     case escapePressed, clickedOutside, autoCollapseElapsed, suppressed, showCompact
     case fullScreenPolicyEngaged, fullScreenPolicyCleared
     case willSleep, didWake, sessionLocked, sessionUnlocked, displayInvalidated
@@ -615,8 +635,6 @@ public enum SurfaceStateMachine {
             (.hidden, .hide)
         case (.collapsed, .hoverDelayElapsed):
             (.expanded, .showExpanded(focus: false))
-        case (.collapsed, .clicked):
-            (.expanded, .showExpanded(focus: true))
         case (.collapsed, .keyboardRequestedExpansion):
             (.expanded, .showExpanded(focus: true))
         case (.collapsed, .showCompact):

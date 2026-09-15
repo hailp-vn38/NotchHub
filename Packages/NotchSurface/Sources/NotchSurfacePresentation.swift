@@ -119,6 +119,21 @@ struct NotchSurfaceShape: Shape {
 
 /// Native hit-testing for the visible surface, excluding its host and shadow envelope.
 public enum NotchSurfaceHitTesting {
+    public static func shouldDismissForClick(
+        point: CGPoint,
+        hostSize: CGSize,
+        surfaceSize: CGSize,
+        topShoulderRadius: CGFloat,
+        bottomCornerRadius: CGFloat
+    ) -> Bool {
+        !contains(
+            point: point,
+            hostSize: hostSize,
+            surfaceSize: surfaceSize,
+            topShoulderRadius: topShoulderRadius,
+            bottomCornerRadius: bottomCornerRadius)
+    }
+
     public static func contains(
         point: CGPoint,
         hostSize: CGSize,
