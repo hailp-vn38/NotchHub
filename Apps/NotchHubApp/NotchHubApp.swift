@@ -6,6 +6,10 @@ import NotchUI
 import ServiceManagement
 import SwiftUI
 
+#if DEBUG
+    import NotchDemoModule
+#endif
+
 @main
 struct NotchHubApp: App {
     @NSApplicationDelegateAdaptor(AppShellDelegate.self) private var appShell
@@ -45,6 +49,7 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     private let settingsStore: SettingsStore
     private let permissionCoordinator: PermissionCoordinator
     private let shortcutBindings: ShortcutBindingStore
+    private let moduleRuntime: ModuleRuntime
     let permissionCenter: PermissionCenterModel
     let settingsShell: SettingsShellModel
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
@@ -65,25 +70,38 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     override init() {
         let backend = FileSettingsBackend.applicationSupport()
         settingsStore = SettingsStore(backend: backend, runtime: settingsRuntime)
+        moduleRuntime = ModuleRuntime(settingsStore: settingsStore)
         shortcutBindings = ShortcutBindingStore(settingsStore: settingsStore)
         permissionCoordinator = PermissionCoordinator(adapter: NotificationsPermissionAdapter())
         permissionCenter = PermissionCenterModel(coordinator: permissionCoordinator)
         settingsShell = SettingsShellModel(
             settingsStore: settingsStore,
             permissionCenter: permissionCenter,
-            shortcutPresentation: ShortcutPresentationModel(bindingStore: shortcutBindings)
+            shortcutPresentation: ShortcutPresentationModel(bindingStore: shortcutBindings),
+            moduleRuntime: moduleRuntime
         )
         super.init()
     }
 
     func applicationDidFinishLaunching(_: Notification) {
         settingsRuntime.surface = notchSurface
-        Task { await settingsShell.loadSettings() }
+        Task {
+            let settings = await settingsStore.load().settings
+            #if DEBUG
+                let demo = NotchDemoModule()
+                await moduleRuntime.register(demo, enabled: settings.modules[demo.id.rawValue]?.isEnabled ?? true)
+                await moduleRuntime.start(demo.id)
+                let contributions = await moduleRuntime.contributions(for: demo.id)
+                await MainActor.run { [weak self] in self?.notchSurface.apply(contributions: contributions) }
+            #endif
+            await settingsShell.loadSettings()
+        }
         _ = coordinator.start()
     }
 
     func applicationWillTerminate(_: Notification) {
         coordinator.shutdown()
+        Task { await moduleRuntime.shutdown() }
     }
 
     func perform(_ intent: AppShellMenuIntent) -> AppShellMenuOutcome {

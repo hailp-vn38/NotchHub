@@ -133,13 +133,13 @@ func quarantinesCorruptSnapshot() async throws {
 
 @Test("Future schema is read-only and original bytes remain untouched")
 func preservesFutureSchema() async throws {
-    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 3, "future": true])
+    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 4, "future": true])
     let backend = MemorySettingsBackend(active: future)
     let store = SettingsStore(backend: backend)
     let loaded = await store.load()
     let mutation = await store.mutate(.theme(.dark))
 
-    #expect(loaded.recovery == .readOnlyFutureSchema(version: 3))
+    #expect(loaded.recovery == .readOnlyFutureSchema(version: 4))
     #expect(mutation.outcome == .readOnly)
     #expect(await backend.active == future)
     #expect(await backend.quarantined.isEmpty)
@@ -186,7 +186,7 @@ func exportsOnlyF4Settings() async throws {
     let exported = try await store.exportSanitized()
     let object = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
 
-    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts"])
+    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts", "modules"])
     #expect((object["appearance"] as? [String: String])?["theme"] == "dark")
 }
 
@@ -261,7 +261,7 @@ func normalResetRestoresF4Defaults() async throws {
 
     #expect(reset.outcome == .saved)
     #expect(reset.settings == .safeDefaults)
-    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts"])
+    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts", "modules"])
 }
 
 @Test("File backend rotates corrupt snapshots at the documented three-file one-MiB limit")

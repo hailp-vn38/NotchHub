@@ -70,25 +70,33 @@ public struct ShortcutSettings: Codable, Equatable, Sendable {
     }
 }
 
+public struct ModuleEnablementSettings: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public init(isEnabled: Bool = true) { self.isEnabled = isEnabled }
+}
+
 /// The complete, non-secret settings snapshot; F6 v2 adds shortcut bindings.
 public struct AppSettings: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var appearance: AppearanceSettings
     public var notchBehavior: NotchBehaviorSettings
     public var shortcuts: ShortcutSettings
+    public var modules: [String: ModuleEnablementSettings]
 
     public init(
         schemaVersion: Int = AppSettings.currentSchemaVersion,
         appearance: AppearanceSettings = .init(),
         notchBehavior: NotchBehaviorSettings = .init(),
-        shortcuts: ShortcutSettings = .init()
+        shortcuts: ShortcutSettings = .init(),
+        modules: [String: ModuleEnablementSettings] = ["demo": .init()]
     ) {
         self.schemaVersion = schemaVersion
         self.appearance = appearance
         self.notchBehavior = notchBehavior
         self.shortcuts = shortcuts
+        self.modules = modules
     }
 
     public static let safeDefaults = AppSettings()
@@ -128,6 +136,7 @@ public enum SettingsMutation: Sendable {
     case hoverDelay(HoverDelay)
     case autoCollapseTimeout(AutoCollapseTimeout)
     case shortcutBindings([ShortcutBinding])
+    case moduleEnabled(Bool, id: ModuleID)
     case replace(AppSettings)
 }
 
@@ -225,6 +234,7 @@ public actor SettingsStore {
         case .hoverDelay(let value): candidate.notchBehavior.hoverDelay = value
         case .autoCollapseTimeout(let value): candidate.notchBehavior.autoCollapseTimeout = value
         case .shortcutBindings(let value): candidate.shortcuts.bindings = value
+        case .moduleEnabled(let value, let id): candidate.modules[id.rawValue] = .init(isEnabled: value)
         case .replace(let value): candidate = value
         }
         guard candidate.schemaVersion == AppSettings.currentSchemaVersion, candidate.shortcuts.isValid else {
@@ -333,6 +343,11 @@ public actor SettingsStore {
             }
             return .current(current)
         }
+        if version == 2 {
+            let legacy = try decoder.decode(LegacySettingsV2.self, from: data)
+            return .migrated(
+                .init(appearance: legacy.appearance, notchBehavior: legacy.notchBehavior, shortcuts: legacy.shortcuts))
+        }
         if version == 1 {
             let legacy = try decoder.decode(LegacySettingsV1.self, from: data)
             return .migrated(
@@ -361,13 +376,15 @@ public actor SettingsStore {
     private func validateCurrentSchemaFields(in data: Data) throws {
         guard
             let snapshot = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            Set(snapshot.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts"],
+            Set(snapshot.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts", "modules"],
             let appearance = snapshot["appearance"] as? [String: Any],
             Set(appearance.keys) == ["theme", "reducedMotion"],
             let notchBehavior = snapshot["notchBehavior"] as? [String: Any],
             Set(notchBehavior.keys) == ["hoverDelay", "autoCollapseTimeout"],
             let shortcuts = snapshot["shortcuts"] as? [String: Any],
-            Set(shortcuts.keys) == ["bindings"]
+            Set(shortcuts.keys) == ["bindings"],
+            let modules = snapshot["modules"] as? [String: Any],
+            modules["demo"] as? [String: Any] != nil
         else {
             throw SettingsStoreError.invalidSnapshot
         }
@@ -377,6 +394,13 @@ public actor SettingsStore {
         let schemaVersion: Int
         let appearance: AppearanceSettings
         let notchBehavior: NotchBehaviorSettings
+    }
+
+    private struct LegacySettingsV2: Decodable {
+        let schemaVersion: Int
+        let appearance: AppearanceSettings
+        let notchBehavior: NotchBehaviorSettings
+        let shortcuts: ShortcutSettings
     }
 }
 

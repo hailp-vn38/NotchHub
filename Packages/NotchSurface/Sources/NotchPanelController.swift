@@ -1,12 +1,13 @@
 import AppKit
 import NotchCore
+import NotchDomain
 import SwiftUI
 
 /// The sole owner of the native Notch panel and its AppKit operations.
 @MainActor
 public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMonitoring,
     SurfaceGeometryRevalidating, SurfaceContextObserving, SurfaceDebugOverlayToggling,
-    SurfaceExpansionAdmitting, SurfaceFocusRestoring, SurfaceAppearanceApplying
+    SurfaceExpansionAdmitting, SurfaceFocusRestoring, SurfaceAppearanceApplying, SurfaceContributionApplying
 {
     private var panel: NSPanel?
     private let presentationModel: NotchSurfacePresentationModel
@@ -105,6 +106,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     public func apply(theme: SettingsTheme) {
         presentationModel.apply(theme: theme)
+    }
+
+    public func apply(contributions: [SurfaceContributionDescriptor]) {
+        presentationModel.apply(contributions: contributions)
     }
 
     /// Keeps the native panel interactive while a control owns a mouse gesture.

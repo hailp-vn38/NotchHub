@@ -218,19 +218,104 @@ public struct ShortcutBinding: Codable, Equatable, Sendable {
     }
 }
 
-public struct ModuleMetadata: Codable, Sendable {
-    public let displayName: String
-    public let capabilities: Set<Capability>
+public enum SurfaceSlot: String, Codable, CaseIterable, Hashable, Sendable {
+    case indicator
+    case compactStatus
+}
 
-    public init(displayName: String, capabilities: Set<Capability> = []) {
-        self.displayName = displayName
-        self.capabilities = capabilities
+public struct ModuleRuntimePolicy: Codable, Equatable, Sendable {
+    public let maximumEventRatePerMinute: Int
+
+    public init(maximumEventRatePerMinute: Int = 60) {
+        self.maximumEventRatePerMinute = maximumEventRatePerMinute
     }
 }
 
-public protocol NotchModule: Sendable {
-    var id: ModuleID { get }
-    var metadata: ModuleMetadata { get }
+public struct ModuleMetadata: Codable, Equatable, Sendable {
+    public let displayName: String
+    public let version: String
+    public let supportedSurfaceSlots: Set<SurfaceSlot>
+    public let requiredCapabilities: Set<Capability>
+    public let optionalCapabilities: Set<Capability>
+    public let runtimePolicy: ModuleRuntimePolicy
+
+    public init(
+        displayName: String,
+        version: String = "1.0.0",
+        supportedSurfaceSlots: Set<SurfaceSlot> = [],
+        requiredCapabilities: Set<Capability> = [],
+        optionalCapabilities: Set<Capability> = [],
+        runtimePolicy: ModuleRuntimePolicy = .init()
+    ) {
+        self.displayName = displayName
+        self.version = version
+        self.supportedSurfaceSlots = supportedSurfaceSlots
+        self.requiredCapabilities = requiredCapabilities
+        self.optionalCapabilities = optionalCapabilities
+        self.runtimePolicy = runtimePolicy
+    }
+
+    /// Compatibility projection; new callers distinguish required and optional capabilities.
+    public var capabilities: Set<Capability> { requiredCapabilities.union(optionalCapabilities) }
+}
+
+public enum ModuleLifecycleState: String, Codable, Equatable, Sendable {
+    case registered
+    case starting
+    case running
+    case suspended
+    case stopping
+    case stopped
+    case failed
+}
+
+public struct ModuleHealth: Codable, Equatable, Sendable, Identifiable {
+    public let id: ModuleID
+    public let state: ModuleLifecycleState
+    public let isEnabled: Bool
+    public let lastStartedAt: Date?
+    public let lastError: String?
+    public let restartCount: Int
+
+    public init(
+        id: ModuleID,
+        state: ModuleLifecycleState = .registered,
+        isEnabled: Bool,
+        lastStartedAt: Date? = nil,
+        lastError: String? = nil,
+        restartCount: Int = 0
+    ) {
+        self.id = id
+        self.state = state
+        self.isEnabled = isEnabled
+        self.lastStartedAt = lastStartedAt
+        self.lastError = lastError
+        self.restartCount = restartCount
+    }
+}
+
+public struct SurfaceContributionDescriptor: Codable, Equatable, Sendable, Identifiable {
+    public let moduleID: ModuleID
+    public let slot: SurfaceSlot
+    public let text: String
+
+    public var id: String { "\(moduleID.rawValue).\(slot.rawValue)" }
+
+    public init(moduleID: ModuleID, slot: SurfaceSlot, text: String) {
+        self.moduleID = moduleID
+        self.slot = slot
+        self.text = text
+    }
+}
+
+public struct ModuleEvent: Codable, Equatable, Sendable {
+    public let moduleID: ModuleID
+    public let type: EventType
+
+    public init(moduleID: ModuleID, type: EventType) {
+        self.moduleID = moduleID
+        self.type = type
+    }
 }
 
 private enum Identifier {

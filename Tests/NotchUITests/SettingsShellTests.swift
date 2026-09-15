@@ -158,6 +158,21 @@ func activatesShortcutRouteAtTheOwnedSeam() {
     #expect(SettingsShellModel().routeState(for: .shortcuts).isInteractive == false)
 }
 
+@Test("Settings modules route projects runtime health without calling a Module directly")
+@MainActor
+func projectsModuleRuntimeHealth() async throws {
+    let id = try #require(ModuleID("test.module"))
+    let runtime = ModuleRuntime()
+    await runtime.register(SettingsTestModule(id: id), enabled: true)
+    await runtime.start(id)
+    let model = SettingsShellModel(moduleRuntime: runtime)
+
+    await model.loadModuleHealth()
+
+    #expect(model.routeState(for: .modules).isInteractive)
+    #expect(model.moduleHealth.first?.state == .running)
+}
+
 private actor SettingsPermissionAdapter: PermissionAdapter {
     private var status: PermissionStatus
     private(set) var requestCount = 0
@@ -185,4 +200,9 @@ private actor SettingsMemoryBackend: SettingsBackend {
     func replaceActive(with data: Data) throws { active = data }
 
     func quarantine(_: Data) throws {}
+}
+
+private struct SettingsTestModule: NotchModule {
+    let id: ModuleID
+    let metadata = ModuleMetadata(displayName: "Test Module")
 }

@@ -22,6 +22,7 @@ final class NotchSurfacePresentationModel {
     var isHovering = false
     var debugLabel: String?
     private(set) var theme: SettingsTheme = .system
+    private(set) var contributions: [SurfaceContributionDescriptor] = []
 
     init(sessionMotionPreference: @escaping @MainActor () -> Bool = { false }) {
         self.sessionMotionPreference = sessionMotionPreference
@@ -37,6 +38,7 @@ final class NotchSurfacePresentationModel {
     }
 
     func apply(theme: SettingsTheme) { self.theme = theme }
+    func apply(contributions: [SurfaceContributionDescriptor]) { self.contributions = contributions }
 
     var colorScheme: ColorScheme? {
         switch theme {
@@ -187,17 +189,22 @@ struct NotchSurfaceRootView: View {
             if isExpanded {
                 VStack(spacing: 8) {
                     Text("NotchHub").font(.headline)
-                    Text("Surface ready").font(.subheadline).foregroundStyle(.secondary)
+                    ForEach(model.contributions) { Text($0.text).font(.subheadline).foregroundStyle(.secondary) }
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(12)
                 .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
             } else if model.isCompactGeometry {
-                Text("Surface ready")
+                Text(model.contributions.first(where: { $0.slot == .compactStatus })?.text ?? "Surface ready")
                     .font(.subheadline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if !isExpanded, let indicator = model.contributions.first(where: { $0.slot == .indicator }) {
+                Text(indicator.text).font(.system(size: 8)).foregroundStyle(.white).frame(
+                    maxWidth: .infinity, alignment: .trailing
+                ).padding(4)
             }
             Rectangle()
                 .fill(.black)

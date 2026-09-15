@@ -29,6 +29,11 @@ public protocol SurfaceAppearanceApplying: AnyObject {
 }
 
 @MainActor
+public protocol SurfaceContributionApplying: AnyObject {
+    func apply(contributions: [SurfaceContributionDescriptor])
+}
+
+@MainActor
 public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
     NotchSurfaceDebugToggling
 {
@@ -105,6 +110,10 @@ public final class SurfaceCoordinator: NotchSurfaceLifecycleControlling,
             .init(hoverDelay: projection.hoverDelay, autoCollapseDelay: projection.autoCollapseTimeout)
         )
         (panel as? any SurfaceAppearanceApplying)?.apply(theme: projection.theme)
+    }
+
+    public func apply(contributions: [SurfaceContributionDescriptor]) {
+        (panel as? any SurfaceContributionApplying)?.apply(contributions: contributions)
     }
 
     public func stop() {

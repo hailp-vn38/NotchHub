@@ -101,17 +101,21 @@ public final class SettingsShellModel {
     fileprivate let settingsStore: SettingsStore?
     public let permissionCenter: PermissionCenterModel?
     public let shortcutPresentation: ShortcutPresentationModel?
+    public let moduleRuntime: ModuleRuntime?
+    public private(set) var moduleHealth: [ModuleHealth] = []
 
     public init(
         selectedRoute: SettingsRoute = .general,
         settingsStore: SettingsStore? = nil,
         permissionCenter: PermissionCenterModel? = nil,
-        shortcutPresentation: ShortcutPresentationModel? = nil
+        shortcutPresentation: ShortcutPresentationModel? = nil,
+        moduleRuntime: ModuleRuntime? = nil
     ) {
         self.selectedRoute = selectedRoute
         self.settingsStore = settingsStore
         self.permissionCenter = permissionCenter
         self.shortcutPresentation = shortcutPresentation
+        self.moduleRuntime = moduleRuntime
     }
 
     public func select(_ route: SettingsRoute) {
@@ -131,7 +135,7 @@ public final class SettingsShellModel {
         case .permissions:
             .init(route: route, owningPhase: .f5, isInteractive: permissionCenter != nil)
         case .modules:
-            .init(route: route, owningPhase: .f7, isInteractive: false)
+            .init(route: route, owningPhase: .f7, isInteractive: moduleRuntime != nil)
         case .diagnostics:
             .init(route: route, owningPhase: .f9, isInteractive: false)
         }
@@ -162,6 +166,27 @@ public final class SettingsShellModel {
         settings = result.settings
         recoveryOutcome = result.recovery
         await shortcutPresentation?.load()
+        await loadModuleHealth()
+    }
+
+    public func loadModuleHealth() async {
+        moduleHealth = await moduleRuntime?.healthSnapshot() ?? []
+    }
+
+    public func setModuleEnabled(_ enabled: Bool, id: ModuleID) {
+        guard let moduleRuntime else { return }
+        Task { [weak self] in
+            await moduleRuntime.setEnabled(enabled, for: id)
+            await self?.loadModuleHealth()
+        }
+    }
+
+    public func restartModule(id: ModuleID) {
+        guard let moduleRuntime else { return }
+        Task { [weak self] in
+            await moduleRuntime.restart(id)
+            await self?.loadModuleHealth()
+        }
     }
 
     public func update(_ mutation: SettingsMutation) {
@@ -426,7 +451,9 @@ private struct SettingsPageView: View {
             if let shortcutPresentation = model.shortcutPresentation {
                 ShortcutSettingsPage(model: shortcutPresentation)
             }
-        case .actions, .modules, .diagnostics:
+        case .modules:
+            ModuleSettingsPage(model: model)
+        case .actions, .diagnostics:
             EmptyView()
         }
     }
@@ -442,6 +469,36 @@ private struct SettingsPageView: View {
         case .modules: "Module runtime arrives in F7."
         case .diagnostics: "Operational diagnostics arrive in F9."
         case .about: "Application information safe to show in the foundation."
+        }
+    }
+}
+
+private struct ModuleSettingsPage: View {
+    @Bindable var model: SettingsShellModel
+
+    var body: some View {
+        SettingsSection(title: "Modules") {
+            if model.moduleHealth.isEmpty {
+                Text("No Debug modules are registered.")
+            }
+            ForEach(model.moduleHealth) { health in
+                VStack(alignment: .leading, spacing: NotchUITokens.microSpacing) {
+                    Text(health.id.rawValue).font(.headline)
+                    Text("\(health.isEnabled ? "Enabled" : "Disabled") — \(health.state.rawValue)")
+                        .accessibilityLabel(
+                            "\(health.id.rawValue) \(health.isEnabled ? "enabled" : "disabled") \(health.state.rawValue)"
+                        )
+                    if let error = health.lastError { Text(error).foregroundStyle(.red) }
+                    HStack {
+                        Button(health.isEnabled ? "Disable" : "Enable") {
+                            model.setModuleEnabled(!health.isEnabled, id: health.id)
+                        }
+                        Button("Restart") { model.restartModule(id: health.id) }
+                            .disabled(!health.isEnabled || health.state == .registered || health.state == .stopped)
+                    }
+                }
+                .accessibilityElement(children: .contain)
+            }
         }
     }
 }
