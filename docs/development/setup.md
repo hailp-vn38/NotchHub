@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Development / Architecture  
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 **Location:** `docs/development/setup.md`  
 **Related documents:** [README](../../README.md), [Vision](../product/vision.md), [Architecture Overview](../architecture/overview.md), [Testing Strategy](../quality/testing-strategy.md), [Apple APIs](../references/apple-apis.md)
 
@@ -211,7 +211,9 @@ phases.
 
 ### 8.1 Default boundary
 
-Local IPC is Unix socket and/or loopback-only HTTP/WebSocket. It must not bind to LAN interfaces.
+F8 local IPC is authenticated HTTP bound only to `127.0.0.1`; it deliberately has no Unix socket
+or WebSocket route and must not bind to LAN interfaces. The app chooses an ephemeral port and
+publishes a non-secret endpoint descriptor in its user-only Application Support location.
 
 Expected routes when implemented:
 
@@ -220,7 +222,6 @@ GET  /v1/health
 GET  /v1/status
 POST /v1/events
 POST /v1/actions/{actionID}
-WS   /v1/stream
 ```
 
 ### 8.2 `notchctl`
@@ -230,16 +231,16 @@ Intended commands:
 ```bash
 notchctl health
 notchctl status
-notchctl emit surface.compact --title "Foundation test" --message "IPC is working"
+notchctl emit system.testMessage --title "Foundation test" --message "IPC is working"
 notchctl action app.openSettings
-notchctl action surface.toggleDebugOverlay
 ```
 
 The actual command names/options are defined by the CLI implementation. Never add a command that accepts arbitrary shell/script/executable text.
 
 ### 8.3 IPC token
 
-- Store local IPC credentials in Keychain/protected storage according to `data-persistence.md`.
+- In release builds, store the token in a Keychain item shared only by the signed app and its
+  bundled `notchctl`; a user-approved protected configuration path is development-only fallback.
 - Do not put tokens in shell history, repository files, logs, screenshots, issue reports, or diagnostics exports.
 - If a token is exposed, revoke/rotate it and record a security incident as appropriate.
 

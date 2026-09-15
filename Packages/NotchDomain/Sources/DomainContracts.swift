@@ -53,7 +53,7 @@ public struct EventType: RawRepresentable, Codable, Hashable, Sendable {
     public let rawValue: String
 
     public init?(_ rawValue: String) {
-        guard Identifier.isLowercaseDotSeparated(rawValue) else { return nil }
+        guard Identifier.isDotSeparatedIdentifier(rawValue) else { return nil }
         self.rawValue = rawValue
     }
 
@@ -325,6 +325,16 @@ private enum Identifier {
                 !$0.isEmpty
                     && $0.utf8.enumerated().allSatisfy { index, byte in
                         byte.isASCIILowercase || (index > 0 && byte.isNumber)
+                    }
+            }
+    }
+
+    static func isDotSeparatedIdentifier(_ value: String) -> Bool {
+        !value.isEmpty
+            && value.split(separator: ".", omittingEmptySubsequences: false).allSatisfy {
+                !$0.isEmpty
+                    && $0.utf8.enumerated().allSatisfy { index, byte in
+                        byte.isASCIILetter || (index > 0 && byte.isNumber)
                     }
             }
     }

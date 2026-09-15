@@ -954,6 +954,7 @@ func rejectsMalformedDecodedContracts() {
 func rejectsMalformedContracts() {
     #expect(ModuleID("Demo") == nil)
     #expect(EventType("demo..changed") == nil)
+    #expect(EventType("system.testMessage") != nil)
     #expect(throws: NotchDomainError.invalidEventVersion(0)) {
         try EventEnvelope(
             version: 0,

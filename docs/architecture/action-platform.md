@@ -486,7 +486,16 @@ Forbidden request shape:
 }
 ```
 
-IPC source policy is checked before registry lookup. Unknown clients cannot invoke actions, even if they can reach a local socket path. See [`ipc.md`](ipc.md).
+IPC source policy is checked before registry lookup. Unknown clients cannot invoke actions, even if they can reach the loopback endpoint. See [`ipc.md`](ipc.md).
+
+In F8, authenticated `notchctl` is the only release IPC source permitted to invoke an Action, and
+`app.openSettings` is the only permitted Action. `surface.toggleDebugOverlay` may be invoked only
+by a DEBUG-only development route. All other foundation Action IDs, including `settings.reset` and
+`app.restartRuntime`, remain unavailable through IPC.
+
+F8 IPC requests include a UUID request ID. For five minutes, a retry of the same request ID returns
+the known successful `app.openSettings` result without invoking the Action again. This bounded
+idempotency window is retry protection, not a general exactly-once execution claim.
 
 ---
 

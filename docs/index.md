@@ -484,12 +484,12 @@ Implement the validated local event/action boundary and `notchctl`.
 | `docs/quality/testing-strategy.md` | Update | IPC/auth/flood/backpressure tests |
 | `docs/development/setup.md` | Update | Local IPC token/CLI setup |
 | `docs/references/apple-apis.md` | Update | Network API adoption record if used |
-| Relevant ADR | Update | Unix socket/loopback transport choice |
+| ADR-0005 | Update | F8 loopback-HTTP-only transport choice; Unix socket and WebSocket deferral |
 | `docs/design/notchhub-settings-ui-spec.md` | Update | Local IPC health/status presentation and safe recovery route |
 
 ### F8 gate
 
-- Local IPC is loopback/socket only.
+- Local IPC is authenticated HTTP bound only to `127.0.0.1`; F8 excludes Unix socket and WebSocket.
 - Auth/source/schema/size/rate rules pass tests.
 - `notchctl` can health/status/send a test event/invoke allowed foundation action.
 - Raw commands/executor configuration are rejected.

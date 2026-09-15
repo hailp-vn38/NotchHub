@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Security / Architecture  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-15
 **Location:** `docs/security/threat-model.md`  
 **Related documents:** [Architecture Overview](../architecture/overview.md), [C4 Context](../architecture/c4-context.md), [C4 Container](../architecture/c4-container.md), [Action Platform](../architecture/action-platform.md), [IPC](../architecture/ipc.md), [Event Protocol](../architecture/event-protocol.md), [Permissions](../platform/permissions.md), [Data Persistence](../architecture/data-persistence.md), [Testing Strategy](../quality/testing-strategy.md), [Boring Notch Reference](../references/boring-notch.md)
 
@@ -50,7 +50,7 @@ NotchHub.app
 ├── NotchSurface (NSPanel + SwiftUI)
 ├── NotchCore (runtime, state, policy, permissions, persistence)
 ├── NotchActions (registry, auth, confirmation, executors)
-├── NotchIPC (local socket/loopback server)
+├── NotchIPC (authenticated loopback HTTP server)
 ├── NotchDomain (typed contracts)
 └── Static Modules (Demo; future Xiaozhi/Media/etc.)
 ```
@@ -207,8 +207,8 @@ Risk levels:
 
 **Mitigations:**
 
-- Unix socket restrictive permissions and peer validation where available.
-- Token authentication for HTTP/WebSocket.
+- Token authentication for every loopback HTTP route, with immediate invalidation of the prior
+  token after explicit rotation.
 - Client/source allow-list enforced server-side.
 - Never trust a self-declared `clientID`.
 - Action source policy and confirmation still apply after authentication.
@@ -267,7 +267,7 @@ Risk levels:
 - Per-client/source/type rate limits.
 - Bounded queues and ring buffers.
 - Coalescing/drop policy by event priority.
-- Backpressure and slow WebSocket disconnect.
+- F8 has no stream route; a future WebSocket must define bounded backpressure and slow-consumer disconnect before release.
 - High-rate processing outside main actor.
 - Diagnostics counters.
 - Module resource budgets.
@@ -282,9 +282,9 @@ Risk levels:
 
 **Mitigations:**
 
-- `requestID` and `ActionInvocationID` correlation.
-- Idempotency policy for safe actions.
-- Bounded recent request/invocation tracking with TTL where action semantics require it.
+- UUID request IDs and `ActionInvocationID` correlation.
+- Five-minute bounded idempotency window for `system.testMessage` and `app.openSettings` retries.
+- Explicitly document that this retry protection is not an exactly-once execution guarantee.
 - Destructive actions require current user confirmation rather than trusting an old approval.
 - Rate limits by source/action.
 

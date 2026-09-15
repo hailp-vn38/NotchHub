@@ -1,9 +1,9 @@
 # Local IPC
-## NotchHub — Unix Socket, Loopback HTTP/WebSocket, Authentication, and Routing
+## NotchHub — Loopback HTTP, Authentication, and Routing
 
 **Status:** Draft v0.1  
 **Owner:** Architecture / Security  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-15
 **Related documents:** [Architecture Overview](overview.md), [C4 Container](c4-container.md), [Event Protocol](event-protocol.md), [Action Platform](action-platform.md), [State Management](state-management.md), [Threat Model](../security/threat-model.md), [Requirements §5.8](../product/requirements.md#58-local-ipc)
 
 ---
@@ -48,27 +48,25 @@ The IPC design is **local-first and deny-by-default**:
 
 ## 3. Transport decision
 
-### 3.1 Recommended order
+### 3.1 F8 decision
 
-```text
-Phase F8, first: Unix domain socket
-Phase F8/Future: loopback HTTP for simple language-neutral clients
-Phase F8/Future: loopback WebSocket for streaming adapters when needed
-```
+F8 exposes one authenticated HTTP server bound only to `127.0.0.1`. It deliberately ships neither
+a Unix domain socket nor a WebSocket stream. This keeps `notchctl`, tests, and future local
+language clients on one inspectable request/response contract while avoiding premature stream
+lifecycle and slow-consumer policy. See [ADR-0005](decisions/0005-local-ipc-before-lan-api.md).
 
 ### 3.2 Transport comparison
 
 | Transport | Strength | Weakness | Recommendation |
 |---|---|---|---|
-| Unix domain socket | Local-only, efficient, good same-user boundary, no TCP port | Less convenient from some tools/languages; needs framing | Preferred for `notchctl` and local scripts |
-| Loopback HTTP | Easy to inspect/use from Python, Node, shell, and tests | Requires token/auth and port management | Add for simple request/response integrations |
-| Loopback WebSocket | Full-duplex stream for future assistant/status relay | More lifecycle/reconnect complexity | Add only when a concrete stream consumer exists |
+| Unix domain socket | Local-only, efficient, good same-user boundary, no TCP port | Less convenient from some tools/languages; needs framing | Deferred beyond F8 |
+| Loopback HTTP | Easy to inspect/use from Python, Node, shell, and tests | Requires token/auth and port management | F8 transport |
+| Loopback WebSocket | Full-duplex stream for future assistant/status relay | More lifecycle/reconnect complexity | Deferred until a concrete stream consumer exists |
 | LAN HTTP/WS | Remote access | Larger attack surface, authentication/TLS complexity, conflicts with product scope | Not supported in current product |
 
 ### 3.3 Default binding
 
-- Unix socket path under a user-specific runtime/application support location with restrictive permissions.
-- If HTTP/WebSocket is enabled, bind only to `127.0.0.1`.
+- Bind HTTP only to `127.0.0.1`.
 - Never bind to `0.0.0.0`, wildcard IPv6, or a LAN interface by default.
 - The bound address and transport state must be shown in Diagnostics.
 
@@ -80,7 +78,7 @@ Phase F8/Future: loopback WebSocket for streaming adapters when needed
 flowchart LR
     CLI[notchctl / local script]
     Relay[Future Xiaozhi relay]
-    Transport[Unix socket / loopback HTTP/WS]
+    Transport[Loopback HTTP]
     Auth[RequestAuthenticator]
     Limits[Size + rate limits]
     Decode[Decoder]
@@ -124,20 +122,9 @@ No component in this chain directly calls an `NSPanel` or SwiftUI view.
 
 ## 5. Authentication and client identity
 
-### 5.1 Unix socket policy
+### 5.1 HTTP policy
 
-Unix socket access is local, but local processes should still be treated as conditionally trusted:
-
-- Create socket with restrictive user permissions.
-- Place it in a per-user runtime/application directory, not a world-writable shared directory.
-- Remove stale socket safely during startup after verifying ownership/identity where practical.
-- Validate peer credentials where the platform API supports it.
-- Use an application-level source identity/nonce for `notchctl` or clients that need stronger attribution.
-- Record accepted/rejected client metadata without storing sensitive command payloads.
-
-### 5.2 HTTP/WebSocket policy
-
-If loopback HTTP/WebSocket is enabled:
+F8 HTTP:
 
 - Generate a random token during first secure initialization.
 - Store the token in Keychain or a protected local credential store.
@@ -147,35 +134,28 @@ If loopback HTTP/WebSocket is enabled:
 Authorization: Bearer <token>
 ```
 
-- Require authentication during WebSocket handshake before accepting event/action messages.
 - Never print the token in logs, diagnostics, shell output, or error responses.
-- Rotate/revoke token through Settings → Security/IPC or a documented reset action.
+- Rotate/revoke the token only through an explicit Settings recovery action. Rotation atomically
+  replaces the Keychain value and invalidates the previous token immediately. Already accepted
+  requests may finish only within their ordinary timeout; every subsequent request with the old
+  token receives `401`.
 - Use constant-time token comparison where applicable.
 
-Example WebSocket handshake metadata:
+The server must map the authenticated request's source to an allow-list. A valid token alone does not allow every event family or action.
 
-```json
-{
-  "type": "client.hello",
-  "version": 1,
-  "clientID": "xiaozhi-relay",
-  "capabilities": ["assistant.events"],
-  "nonce": "server-provided-or-client-generated-nonce"
-}
-```
-
-The server must map `clientID` to an allow-list. A valid token alone does not allow every event family or action.
-
-### 5.3 Client source allow-list
+### 5.2 Client source allow-list
 
 | Client/source | Allowed operations |
 |---|---|
-| `notchctl` | Health/status; development test events; foundation actions explicitly enabled |
+| `notchctl` | Header `X-NotchHub-Source: notchctl`; authenticated health/status; `system.testMessage`; `app.openSettings` |
 | `demo.injector` | Development-only DemoModule/test events |
-| `xiaozhi.relay` (future) | `assistant.*` events and explicitly approved assistant actions |
-| Unknown client | Health may be limited; no event/action access |
+| `xiaozhi.relay` (future) | Not accepted in F8; requires its own approved source policy |
+| Unknown client | No route access |
 
-The allow-list is application policy, not client self-declaration. A client cannot claim a privileged identity just by sending a string.
+The allow-list is application policy, not client self-declaration. F8 requires the
+`X-NotchHub-Source: notchctl` header on release requests; the server accepts no other release
+source. The header cannot create privilege: the Keychain token and server-side allow-list must
+also pass. The DEBUG injector has separate development-only credential/policy.
 
 ---
 
@@ -322,13 +302,14 @@ Returns minimal process/service status, for example:
     "uptimeSeconds": 1234
   },
   "ipc": {
-    "transport": "unixSocket",
+    "transport": "loopbackHTTP",
     "ready": true
   }
 }
 ```
 
 Health output must not include secrets, full settings, personal data, or raw event history.
+It contains only protocol version, listener readiness, and uptime.
 
 ### 8.2 Status
 
@@ -340,10 +321,10 @@ Returns a sanitized snapshot:
 
 - Surface state.
 - Runtime/module health summary.
-- Permission status summary.
 - IPC counters.
-- Recent error count.
-- Performance/resource summary where enabled.
+
+It must not include event text/history, authorization headers, tokens, settings, raw payloads, or
+user content. F8 does not expose a general diagnostics export through this route.
 
 ### 8.3 Events
 
@@ -354,7 +335,8 @@ POST /v1/events
 - Requires client/source allow-list.
 - Requires valid `EventEnvelope`.
 - Returns accepted/rejected result and `requestID`.
-- Asynchronous module/presentation results are delivered through event stream or diagnostics, not by blocking the request indefinitely.
+- The route accepts only `system.testMessage`; it does not accept core-owned surface/lifecycle event types or a requested presentation level.
+- Asynchronous presentation results are observable through a bounded sanitized status/diagnostics projection, not by blocking the request indefinitely.
 
 ### 8.4 Actions
 
@@ -363,24 +345,16 @@ POST /v1/actions/{actionID}
 ```
 
 - Requires source authorization.
+- F8 permits only `app.openSettings` in release builds. `surface.toggleDebugOverlay` is DEBUG-only.
 - Input is validated against registered action schema.
 - Confirmation-required actions must surface a user confirmation flow; the request returns a pending/confirmation-required result rather than bypassing user approval.
 - Results are correlated by `requestID` and `ActionInvocationID`.
 
 ### 8.5 Stream
 
-```text
-WS /v1/stream
-```
-
-Optional until a real streaming integration requires it. If implemented:
-
-- Authenticate at handshake.
-- Send a bounded server hello/status response.
-- Apply per-client event subscription allow-list.
-- Do not stream all diagnostics/raw events by default.
-- Apply backpressure/queue limits and disconnect clients that do not consume data.
-- Do not send raw audio, authorization headers, full clipboard/file/calendar payloads, or unrestricted event history.
+No stream route exists in F8. A future WebSocket proposal must define a concrete consumer,
+handshake authentication, subscription allow-list, bounded queue, slow-consumer disconnect, and
+privacy-safe projection before adding `/v1/stream`.
 
 ---
 
@@ -405,12 +379,12 @@ Exact values are implementation choices but must be explicit and tested:
 
 | Limit | Initial target |
 |---|---:|
-| Maximum request/frame | 256 KB default |
-| Maximum event payload | 256 KB or lower per event type |
-| Maximum string field | Event/action schema-specific |
-| Maximum nested JSON depth | 16–32 levels |
-| Per-client request rate | Configured by operation/source |
-| Event stream queue | Bounded count and byte limit |
+| Maximum request/frame | 16 KiB |
+| Maximum `system.testMessage` payload | 4 KiB message plus a 160-byte title |
+| Maximum nested JSON depth | 16 levels |
+| `system.testMessage` rate | 10 accepted events per minute per source; overflow is rejected with `429` |
+| Concurrent requests | At most 2 in-flight requests per source |
+| Event stream queue | No stream route in F8 |
 | Response size | Bounded; use async event/result for large output |
 | Authentication failure burst | Small threshold then temporary backoff |
 
@@ -427,7 +401,7 @@ clientID + actionID
 Recommended behavior:
 
 - Health/status requests: moderate burst, low cost.
-- Test/status events: bounded.
+- `system.testMessage`: at most 10 accepted events per minute per source; excess requests receive `429`.
 - High-rate stream events: strict per-type limits and coalescing.
 - Actions: stricter limit to prevent repeated side effects.
 - Authentication failures: backoff and diagnostic counter.
@@ -445,9 +419,9 @@ AppCoordinator starts
         ↓
 Load secure IPC credential/policy
         ↓
-Remove/validate stale Unix socket if applicable
+Resolve the loopback endpoint descriptor
         ↓
-Create listener with restrictive permissions
+Create the `127.0.0.1` listener
         ↓
 Start accept loop
         ↓
@@ -456,6 +430,11 @@ Publish ipc.ready
 
 IPC should start only after core stores, Action Registry, EventRouter, and Diagnostics are ready. This prevents requests from reaching a partially initialized application.
 
+The listener chooses an ephemeral loopback port and writes a non-secret endpoint descriptor under
+Application Support with user-only permissions. The descriptor contains only protocol version,
+host, port, and readiness metadata; it never contains the token. It is atomically replaced once
+the listener is ready and removed during shutdown.
+
 ### 10.2 Shutdown
 
 ```text
@@ -463,11 +442,7 @@ Stop accepting new clients
         ↓
 Send/allow bounded graceful close
         ↓
-Cancel active stream tasks
-        ↓
 Cancel/finish safe request tasks
-        ↓
-Remove socket safely
         ↓
 Publish ipc.stopped
 ```
@@ -497,16 +472,15 @@ For future Xiaozhi relay:
 ```bash
 notchctl health
 notchctl status
-notchctl emit surface.compact --title "Foundation test" --message "IPC is working"
-notchctl emit demo.status.changed --json payload.json
+notchctl emit system.testMessage --title "Foundation test" --message "IPC is working"
 notchctl action app.openSettings
-notchctl action surface.toggleDebugOverlay
-notchctl modules
 ```
 
 ### 11.3 CLI security
 
-- Read token from Keychain or a user-approved secure configuration path; do not pass secrets in shell history where avoidable.
+- In a release build, read the token from the Keychain item shared only by the signed NotchHub app
+  and the `notchctl` tool distributed with it. A user-approved protected configuration path is a
+  development fallback, never a normal release credential channel.
 - Never expose raw token with normal `--verbose` output.
 - Use the same schema validator/fixture contract as other clients.
 - Do not add an `exec`, `shell`, or `script` command.

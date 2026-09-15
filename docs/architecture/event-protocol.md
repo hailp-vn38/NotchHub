@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Architecture / Integration  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-15
 **Related documents:** [Architecture Overview](overview.md), [State Management](state-management.md), [Module System](module-system.md), [Action Platform](action-platform.md), [IPC](ipc.md), [Security](../security/threat-model.md), [Requirements §5.7](../product/requirements.md#57-event-system-and-presentation-policy)
 
 ---
@@ -201,7 +201,22 @@ calendar.event.upcoming                 # future Calendar module
 
 ## 6. Foundation event types
 
-### 6.1 Application lifecycle
+### 6.1 F8 system test message
+
+```text
+system.testMessage
+```
+
+`system.testMessage` is the only external event type accepted in F8. Its bounded payload contains
+only synthetic `title` (at most 160 bytes) and `message` (at most 4 KiB) text. `notchctl` may
+submit it after token authentication and server-side source authorization, at most 10 accepted
+events per minute. It carries no surface state, priority, or presentation request. When the
+surface is not suppressed, `PresentationPolicy` presents it compactly for the configured standard
+duration; it never expands the surface. When suppressed, it is recorded only in the bounded
+sanitized projection. Core-owned surface and lifecycle event types remain non-assertable by
+external clients.
+
+### 6.2 Application lifecycle
 
 ```text
 app.lifecycle.starting
@@ -228,7 +243,7 @@ Example:
 }
 ```
 
-### 6.2 Surface
+### 6.3 Surface
 
 ```text
 surface.state.changed
@@ -240,7 +255,7 @@ surface.recovery.failed
 
 Surface events are generally produced by core, not external clients. External clients cannot directly request a native panel transition; they may invoke registered actions or publish a status event subject to Presentation Policy.
 
-### 6.3 Module lifecycle
+### 6.4 Module lifecycle
 
 ```text
 module.registered
@@ -270,7 +285,7 @@ Payload example:
 }
 ```
 
-### 6.4 Permissions
+### 6.5 Permissions
 
 ```text
 permission.status.changed
@@ -280,7 +295,7 @@ permission.request.completed
 
 Permission events must not include sensitive system data or unnecessary path/user information.
 
-### 6.5 Actions
+### 6.6 Actions
 
 ```text
 action.available.changed
@@ -295,7 +310,7 @@ action.confirmation.required
 
 Action events use `correlationID` to link start/progress/result and must include the `ActionID`, not raw executor details.
 
-### 6.6 Diagnostics/performance
+### 6.7 Diagnostics/performance
 
 ```text
 diagnostics.warning
@@ -308,7 +323,7 @@ performance.event.dropped
 
 These events are primarily diagnostic and should not normally expand the Notch.
 
-### 6.7 Demo module
+### 6.8 Demo module
 
 ```text
 demo.status.changed
@@ -414,13 +429,13 @@ Each IPC client/source has an allow-list:
 
 ```text
 notchctl
-  → health/status/test events/foundation actions
+  → authenticated health/status, `system.testMessage`, and `app.openSettings`
 
 xiaozhi.relay (future)
   → assistant.* events + explicitly approved assistant actions
 
 demo.injector (development only)
-  → demo.* and test lifecycle events
+  → development-only synthetic test events
 ```
 
 A source cannot publish arbitrary event types merely because it is authenticated.
@@ -431,8 +446,8 @@ Initial planning limits:
 
 | Item | Limit/policy |
 |---|---|
-| Maximum serialized event | 256 KB default; smaller limits for high-rate event families |
-| Maximum string field | Defined per event type; truncate/reject with schema error |
+| Maximum serialized F8 event | 16 KiB request frame; `system.testMessage` itself is bounded to a 160-byte title and 4 KiB message |
+| Maximum string field | Event schema-specific; F8 rejects rather than truncates an over-limit title or message |
 | Event history | 500–2,000 sanitized events |
 | Transcript buffer (future) | 50–200 messages or 1–5 MB |
 | High-rate event input | Per-source/per-type rate limit and coalescing policy |
@@ -446,9 +461,12 @@ Exact values are implementation/configuration details but must be explicit, test
 
 ### 9.1 Event ID deduplication
 
-- Maintain a bounded recent-ID set for sources/types that may retry requests.
-- A duplicate event ID is ignored or returns an idempotent acknowledgment according to transport semantics.
-- Deduplication state is bounded and may expire after a configured TTL.
+- F8 requires every external request to carry a UUID `id` and maintains a bounded recent-ID set
+  for five minutes.
+- A duplicate `system.testMessage` returns an idempotent acknowledgement and is not published or
+  presented again.
+- The bounded set expires entries after five minutes; this is retry safety, not an exactly-once
+  delivery guarantee.
 
 ### 9.2 Sequence ordering
 
@@ -515,7 +533,7 @@ Presentation decision
 
 | Event condition | Default presentation |
 |---|---|
-| Low-priority informational | Store only; no interruption |
+| F8 `system.testMessage` | Compact for the standard duration when not suppressed; otherwise store only; never expand |
 | User-triggered action result | Compact or expanded result |
 | High-priority recoverable error | Badge/compact plus Diagnostics route |
 | Critical app/runtime error | Menu-bar badge/notification; avoid force-expanding over active work |
@@ -571,11 +589,11 @@ The envelope is transport-independent.
 | Transport | Use | Requirements |
 |---|---|---|
 | In-process `AppEvent` | Core/module communication and tests | Typed, actor-isolated, no serialization required |
-| Unix domain socket | Local CLI/automation | File/socket permissions, framing, authenticated client policy |
-| Loopback HTTP | Simple local tools | `127.0.0.1`, token auth, body size limit, rate limit |
-| Loopback WebSocket | Streaming future relay/status | Authentication during handshake, bounded message size/rate, reconnect policy |
+| Loopback HTTP | F8 `notchctl` integration | Ephemeral `127.0.0.1` port, Keychain token, endpoint descriptor, body size and rate limits |
+| Unix domain socket | Possible future local automation | Requires a separate approved transport contract |
+| Loopback WebSocket | Possible future streaming relay/status | Requires a concrete consumer plus authentication, bounded message/rate, and reconnect policy |
 
-The foundation may implement Unix socket first and add HTTP/WebSocket when a concrete local integration needs them. Adding a LAN bind is a separate security design and is not part of this protocol.
+F8 implements loopback HTTP only. Adding a Unix socket, WebSocket, or LAN bind is a separate security design and is not part of this protocol.
 
 ---
 

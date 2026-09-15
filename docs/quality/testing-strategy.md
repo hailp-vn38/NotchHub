@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Quality / Architecture  
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 **Location:** `docs/quality/testing-strategy.md`  
 **Related documents:** [Requirements](../product/requirements.md), [Roadmap](../product/roadmap.md), [Architecture Overview](../architecture/overview.md), [State Management](../architecture/state-management.md), [Event Protocol](../architecture/event-protocol.md), [Action Platform](../architecture/action-platform.md), [IPC](../architecture/ipc.md), [Permissions](../platform/permissions.md), [Performance](../architecture/performance.md), [Boring Notch Reference](../references/boring-notch.md)
 
@@ -325,13 +325,18 @@ Required cases:
 - Health/status routes.
 - Valid event route.
 - Valid foundation action route.
+- Token rotation immediately rejects the prior token while allowing only already accepted bounded work to finish.
+- `X-NotchHub-Source: notchctl` is required; an unknown or debug source is rejected in release.
+- Duplicate request UUID within five minutes returns an idempotent result without a second event presentation or Action invocation.
+- 16 KiB frame, title/message bounds, two in-flight requests/source, and ten accepted test events/minute/source.
+- Health/status redaction excludes event text/history, settings, headers, raw payloads, and secrets.
 - Unknown action/operation rejection.
 - Raw command field rejection.
 - Oversized/deep/malformed payload.
 - Rate limiting/backpressure.
-- Slow WebSocket/client disconnect, if enabled.
+- F8 has no WebSocket route; a later stream implementation must add slow-client disconnect tests.
 - Graceful shutdown with active clients.
-- Stale Unix socket handling.
+- Ephemeral endpoint descriptor creation, replacement, and cleanup.
 
 ---
 

@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.3
 **Owner:** Product / Architecture  
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 **Related documents:** [README](../../README.md), [Vision](vision.md), [Requirements](requirements.md), [Architecture Overview](../architecture/overview.md), [Testing Strategy](../quality/testing-strategy.md), [Performance](../architecture/performance.md)
 
 ---
@@ -413,7 +413,7 @@ Create the validated data path used by future relays, scripts, tools, and module
 - Add correlation IDs, source IDs, event type naming, validation, size limits, filtering, and event diagnostics.
 - Add bounded buffers, coalescing, and backpressure metrics.
 - Implement `PresentationPolicy` for informational, compact, progress, warning/error, user-triggered, and suppressed presentation.
-- Implement local Unix socket and/or loopback HTTP server.
+- Implement authenticated HTTP server bound only to `127.0.0.1`; defer Unix socket and WebSocket until a concrete consumer justifies their separate lifecycle contracts.
 - Add authenticated local endpoints:
 
 ```text
@@ -421,10 +421,11 @@ GET  /v1/health
 GET  /v1/status
 POST /v1/events
 POST /v1/actions/{actionID}
-WS   /v1/stream
 ```
 
-- Bind listeners to `127.0.0.1` only; do not expose LAN endpoints.
+- Authenticate every endpoint with a random Keychain-backed token and authorize only fixed F8 IPC sources (`notchctl` and the development-only injector).
+- Accept only `system.testMessage` as F8 external event input; its sender cannot request a surface state or presentation level.
+- Permit only `app.openSettings` through release IPC; development overlay control remains DEBUG-only.
 - Implement random token handling and secret storage boundary.
 - Create `notchctl` developer CLI.
 - Project only bounded local IPC health/status/recovery information into Settings; no raw request,

@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.2  
 **Owner:** Product / Architecture  
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 **Related documents:** [README](../../README.md), [Vision](vision.md), [Roadmap](roadmap.md), [Architecture Overview](../architecture/overview.md), [Notch Surface](../architecture/notch-surface.md), [Action Platform](../architecture/action-platform.md), [Performance](../architecture/performance.md), [Threat Model](../security/threat-model.md)
 
 ---
@@ -348,15 +348,17 @@ demo.ping
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-IPC-001 | The app shall provide a local integration boundary before any LAN API is considered. | Must |
-| FR-IPC-002 | IPC shall use a Unix domain socket and/or a loopback-only HTTP/WebSocket listener. | Must |
+| FR-IPC-002 | F8 IPC shall use authenticated HTTP bound only to `127.0.0.1`; Unix socket and WebSocket transports are deferred until a concrete consumer has an approved transport contract. | Must |
 | FR-IPC-003 | Network listener binding shall default to `127.0.0.1`, not `0.0.0.0`. | Must |
 | FR-IPC-004 | The app shall expose health/status endpoints or equivalent commands. | Must |
 | FR-IPC-005 | The app shall accept validated external events. | Must |
 | FR-IPC-006 | The app shall optionally accept registered actions through IPC when authorization/policy permits. | Must |
-| FR-IPC-007 | IPC requests shall be authenticated with a non-hardcoded secret/token where HTTP/WebSocket is used. | Must |
+| FR-IPC-007 | Every F8 IPC request shall be authenticated with a non-hardcoded Keychain-backed token; event/action requests shall also pass a fixed server-side source allow-list. | Must |
 | FR-IPC-008 | IPC shall enforce request size limits, schema validation, timeout behavior, and rate limiting. | Must |
 | FR-IPC-009 | IPC requests shall not carry arbitrary shell commands, executable paths, or executor configuration. | Must |
-| FR-IPC-010 | The project shall provide a local `notchctl` CLI for health, status, test events, and registered actions. | Should |
+| FR-IPC-010 | The project shall provide a local `notchctl` CLI for authenticated health, status, `system.testMessage`, and the explicitly allowed `app.openSettings` action. | Should |
+| FR-IPC-011 | Every F8 request shall carry a UUID request ID; a bounded five-minute idempotency window shall acknowledge duplicate events and `app.openSettings` retries without repeating the effect. | Must |
+| FR-IPC-012 | F8 health shall expose only protocol version, readiness, and uptime; status shall expose only surface state, aggregate module health, and IPC counters. Neither may expose event text/history, secrets, headers, settings, or raw payloads. | Must |
 
 ### Suggested IPC v1 surface
 
@@ -365,10 +367,9 @@ GET  /v1/health
 GET  /v1/status
 POST /v1/events
 POST /v1/actions/{actionID}
-WS   /v1/stream
 ```
 
-Exact transport and endpoint formats may evolve, but the local-only, authenticated, validated boundary is mandatory. IPC is for desktop app integrations and future assistant relays.
+F8 intentionally excludes `/v1/stream`; it may be added only with a concrete stream consumer. Exact endpoint formats may evolve, but the loopback-only, authenticated, validated boundary is mandatory. IPC is for desktop app integrations and future assistant relays.
 
 ## 5.9 Diagnostics and logging
 

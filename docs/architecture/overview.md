@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Architecture  
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 **Related documents:** [README](../../README.md), [Vision](../product/vision.md), [Roadmap](../product/roadmap.md), [Requirements](../product/requirements.md), [Notch Surface](notch-surface.md), [Module System](module-system.md), [Event Protocol](event-protocol.md), [Action Platform](action-platform.md), [IPC](ipc.md), [Performance](performance.md), [Threat Model](../security/threat-model.md), [Boring Notch Reference](../references/boring-notch.md)
 
 ---
@@ -775,7 +775,7 @@ At that point, a Xiaozhi adapter/module can be added as an edge integration with
 
 ### Decisions already established by the current contracts
 
-1. Local IPC starts with a Unix domain socket in F8; loopback HTTP/WebSocket remains an optional later adapter.
+1. F8 local IPC is authenticated HTTP bound only to `127.0.0.1`; Unix socket and WebSocket remain deferred until a concrete consumer has an approved transport contract.
 2. Module UI contributions use declarative, testable descriptors/snapshots rather than raw module-owned window references.
 3. Long-form content belongs in dedicated application scenes and is never a `NotchSurface` state.
 

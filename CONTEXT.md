@@ -98,6 +98,34 @@ _Avoid_: hotkey command, callback shortcut
 A versioned external message wrapper carrying source, type, timestamp, correlation information, and validated payload.
 _Avoid_: raw event, untyped message
 
+**Local IPC**:
+The authenticated HTTP boundary bound only to `127.0.0.1` through which approved local clients use NotchHub's public integration contract. F8 deliberately excludes a Unix socket, LAN listener, and WebSocket stream.
+_Avoid_: trusted localhost, remote API, socket server
+
+**IPC source**:
+A server-authorized identity attached to an authenticated local IPC request. It is selected from a fixed server-side allow-list; a request cannot grant itself privileges by declaring a source string.
+_Avoid_: client-provided identity, token-only authorization
+
+**IPC credential rotation**:
+The explicit replacement of the Keychain token for local IPC. It invalidates the prior token immediately; already accepted work may finish only within its ordinary bounded timeout.
+_Avoid_: token grace period, restart-only revocation
+
+**IPC idempotency window**:
+The bounded five-minute set of recently accepted external request IDs used to acknowledge a retry without republishing an event or reinvoking an Action.
+_Avoid_: exactly-once delivery, unbounded request history
+
+**IPC health projection**:
+The smallest sanitized readiness report: protocol version, listener readiness, and uptime. It contains no state history or user/configuration data.
+_Avoid_: diagnostics dump, public discovery endpoint
+
+**IPC status projection**:
+The sanitized operational summary available to an authenticated approved IPC source: surface state, aggregate module health, and IPC counters, with no event text, secret, header, settings, or raw payload.
+_Avoid_: event history, diagnostics export
+
+**System test message**:
+The single F8 external test event, `system.testMessage`, with bounded title and message text. It is an informational input; `PresentationPolicy`, never the sender, decides whether it is shown or suppressed.
+_Avoid_: surface command, force-expand event
+
 **Presentation policy**:
 The core policy that determines whether a typed event affects the Notch surface and at what intrusiveness.
 _Avoid_: module-controlled presentation
