@@ -239,6 +239,7 @@ Required cases:
 - Schema migration for every version.
 - Unknown future schema.
 - Corrupt/truncated settings.
+- Corrupt-settings quarantine rotation (three 1 MiB files, 3 MiB total) and export exclusion.
 - Atomic write failure.
 - Debounced writes.
 - Reset scopes.

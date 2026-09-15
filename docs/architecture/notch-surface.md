@@ -212,7 +212,8 @@ public struct NotchGeometry: Sendable {
 - `SurfacePointerMonitor` observes local and global mouse movement against the visible shape in screen coordinates; it does not rely solely on SwiftUI hover callbacks.
 - F2 uses a 300 ms hover delay and an 8 pt trigger margin around the visible collapsed surface. Both values are dependency-injected test defaults, not persisted settings.
 - A hover-origin expansion gets a 100 ms close grace only after the pointer exits and no Surface interaction hold is active. Keyboard focus, popovers, drag/control tracking, confirmation, and assistive interaction all hold the surface open; ending the final hold restarts the grace if the pointer remains outside.
-- F3/F4 may expose validated hover settings; until then, the menu-bar toggle remains available.
+- F4 may expose the validated hover-delay setting; menu-bar recovery remains available regardless
+  of the preference.
 
 ### 8.2 Click
 

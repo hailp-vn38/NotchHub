@@ -1,10 +1,10 @@
 # Data Persistence
 ## NotchHub — Settings, Keychain, Caches, Logs, and Retention
 
-**Status:** Draft v0.1  
+**Status:** Draft v0.2
 **Owner:** Architecture / Security  
-**Last updated:** 2026-09-13  
-**Related documents:** [Architecture Overview](overview.md), [State Management](state-management.md), [Module System](module-system.md), [Event Protocol](event-protocol.md), [IPC](ipc.md), [Performance](performance.md), Privacy policy (planned for `docs/operations/privacy.md`), [Requirements §8](../product/requirements.md#8-data-requirements)
+**Last updated:** 2026-09-15
+**Related documents:** [Architecture Overview](overview.md), [State Management](state-management.md), [Module System](module-system.md), [Event Protocol](event-protocol.md), [IPC](ipc.md), [Performance](performance.md), [Privacy](../operations/privacy.md), [Requirements §8](../product/requirements.md#8-data-requirements)
 
 ---
 
@@ -66,7 +66,7 @@ The design must prevent secret leakage, settings corruption, unbounded memory/di
 flowchart TB
     UI[Settings / module UI]
     Core[SettingsStore actor]
-    Defaults[Typed local settings file / UserDefaults adapter]
+    Defaults[Versioned Application Support settings file]
     Keychain[macOS Keychain]
     Diag[DiagnosticsStore actor]
     Cache[Module cache manager]
@@ -87,7 +87,7 @@ flowchart TB
 | Component | Technology direction | Stores | Does not store |
 |---|---|---|---|
 | `SettingsStore` | Actor/service with typed Codable model | Non-secret app/module settings | Tokens, raw transcripts, arbitrary module data |
-| `SettingsBackend` | Versioned file or `UserDefaults` adapter | Serialized `AppSettings` | Secrets and unbounded history |
+| `SettingsBackend` | Versioned file in Application Support, atomically replaced | Serialized `AppSettings` | Secrets and unbounded history |
 | `KeychainStore` | Security framework Keychain | Tokens, credentials, IPC secret | General settings, logs, bulk user content |
 | `DiagnosticsStore` | Actor + bounded ring buffer/file sink | Sanitized errors, counters, recent summaries | Raw secrets, unlimited logs, full private content |
 | `CacheManager` | Module-owned bounded LRU/cache directory | Rebuildable thumbnails/artwork/summaries | Authoritative settings or credentials |
@@ -102,16 +102,27 @@ flowchart TB
 ```swift
 public struct AppSettings: Codable, Sendable {
     public var schemaVersion: Int
-    public var general: GeneralSettings
     public var appearance: AppearanceSettings
     public var notchBehavior: NotchBehaviorSettings
-    public var shortcuts: ShortcutSettings
-    public var diagnostics: DiagnosticsSettings
     public var modules: [ModuleID: ModuleSettingsEnvelope]
 }
 ```
 
-### 5.2 Module settings envelope
+### 5.2 F4 v1 setting set
+
+| Group | Setting | Default | F4 boundary |
+|---|---|---|
+| Appearance | Theme | System | `system`, `light`, or `dark`; no material, opacity, density, or indicator setting |
+| Appearance | Reduced Motion override | Follow system | May reduce motion, never override the system preference to add motion |
+| Notch Behavior | Hover delay | 300 ms | One of `150`, `300`, or `500` ms; hover remains enabled by the F2 interaction contract |
+| Notch Behavior | Auto-collapse timeout | 3 seconds | One of `2`, `3`, or `5` seconds; auto-collapse remains enabled by the F2 interaction contract |
+
+F4 v1 has no General preference value and no full-screen preference: full-screen suppression
+remains the F2/F4 invariant until another safe policy has native QA. General owns the import,
+export, reset, and recovery entry points, while launch-at-login and other General controls remain
+unavailable until their owners and native validation are ready.
+
+### 5.3 Module settings envelope
 
 ```swift
 public struct ModuleSettingsEnvelope: Codable, Sendable {
@@ -123,7 +134,12 @@ public struct ModuleSettingsEnvelope: Codable, Sendable {
 
 The platform owns envelope versioning and module namespace. The module owns its payload schema, defaults, migration, and validation logic through a module settings adapter.
 
-### 5.3 Settings store interface
+F4 persists only the foundation settings above. The module namespace is a platform contract but is
+empty until F7 introduces a real module owner. F6 shortcut configuration and F9 diagnostics
+policy add their own typed fields only when those phases own their behavior; F4 does not create
+placeholder values merely to reserve them.
+
+### 5.4 Settings store interface
 
 ```swift
 public protocol SettingsStore: Sendable {
@@ -138,6 +154,11 @@ public protocol SettingsStore: Sendable {
 
 Views must use a view model/projection over this interface; they must not manipulate raw persistence APIs directly.
 
+`load()` exposes a typed Settings recovery outcome to the AppCoordinator and Settings UI: normal
+load, recovery with safe defaults for corrupt or invalid current data, or read-only recovery for
+an unknown newer schema. F4 displays this outcome in the current session; F9 may later persist a
+sanitized diagnostics record for it.
+
 ---
 
 ## 6. Settings persistence lifecycle
@@ -149,7 +170,7 @@ sequenceDiagram
     participant Validate as Validator/Migrator
     participant Backend as Local settings backend
     participant Core as Runtime coordinator
-    participant Diag as DiagnosticsStore
+    participant Recovery as Recovery projection
 
     UI->>Store: Typed mutation
     Store->>Validate: Validate current schema and mutation
@@ -157,17 +178,19 @@ sequenceDiagram
     Store->>Backend: Atomic/debounced write
     Backend-->>Store: Success/failure
     Store->>Core: SettingsChanged projection/event
-    Store->>Diag: Record sanitized outcome
+    Store->>Recovery: Publish typed recovery outcome when needed
     Core-->>UI: Updated presentation state
 ```
 
 ### Rules
 
 - Mutations are applied to a copy/current valid state and validated before replacement.
-- If persistence fails, retain the last known-good state and show a recoverable Settings/Diagnostics error.
+- If persistence fails, retain the last known-good state and publish a recoverable Settings
+  recovery outcome.
 - User-visible runtime changes may apply before disk persistence completes, but failure must be observable.
 - High-frequency controls use debounced writes; reset/import operations use explicit completion.
-- Writes should be atomic: write temporary data, validate/flush as appropriate, then replace the target.
+- The settings backend writes a temporary versioned file, validates/flushes it as appropriate, then
+  atomically replaces the Application Support target.
 
 ---
 
@@ -185,7 +208,7 @@ If old → apply ordered migrations
 Validate final AppSettings
       ↓
 If valid → expose to runtime
-If invalid → safe defaults + diagnostics warning
+If invalid → quarantine corrupt snapshot + safe defaults + typed recovery outcome
       ↓
 Persist migrated form when safe
 ```
@@ -195,12 +218,17 @@ Persist migrated form when safe
 - Migrations are deterministic and ordered.
 - Each migration has unit tests with before/after fixtures.
 - A failed migration never partially mutates the active settings object.
-- Unknown future schema versions fail closed to safe defaults or a read-only recovery mode; they must not be silently reinterpreted.
+- Corrupt or invalid current-schema bytes move to a bounded, timestamped quarantine location before
+  safe defaults replace the active snapshot. Quarantine retains at most three files of at most
+  1 MiB each (3 MiB total), deleting the oldest before admitting another file. Quarantined bytes
+  are never imported or exported.
+- Unknown future schema versions enter read-only recovery. The app preserves the stored bytes,
+  does not overwrite them with defaults, and offers update or explicitly confirmed reset recovery.
 - Migrations must not require network access.
 - Secret migration is separate from ordinary settings migration.
 - Removing a module does not automatically delete its settings unless the user explicitly confirms cleanup or a documented retention policy applies.
 
-### 7.3 Example versions
+### 7.3 Schema growth
 
 ```text
 AppSettings v1: appearance + notchBehavior
@@ -209,7 +237,9 @@ AppSettings v3: adds module enablement namespace
 AppSettings v4: adds diagnostics policy
 ```
 
-The exact schema starts at v1 when implementation begins and is recorded in an ADR or settings document.
+F4 starts with v1 for Appearance and Notch Behavior. The later examples are owned schema changes
+for F6, F7, and F9, not F4 work. The exact schema starts at v1 when implementation begins and is
+recorded in an ADR or settings document.
 
 ---
 
@@ -311,14 +341,13 @@ Caches contain rebuildable data only.
 ```swift
 public enum SettingsResetScope: Sendable {
     case appearanceAndBehavior
-    case shortcuts
-    case module(ModuleID)
     case allNonSecrets
     case allIncludingCredentials
 }
 ```
 
 The UI must explain the scope and consequences. `allIncludingCredentials` is a separate destructive flow and never part of a normal reset button.
+Shortcut and module-specific reset scopes are introduced only by their F6 and F7 owners.
 
 ### 11.2 Export
 
@@ -326,10 +355,10 @@ Sanitized export may include:
 
 - Schema versions.
 - Non-secret settings.
-- Enabled modules.
-- Shortcut definitions.
 - Appearance/Notch behavior.
-- Non-sensitive diagnostic configuration.
+
+Enabled modules, shortcut definitions, and non-sensitive diagnostic configuration are included
+only after F7, F6, and F9 respectively introduce their owned typed settings.
 
 It must exclude:
 
@@ -340,16 +369,26 @@ It must exclude:
 
 ### 11.3 Import
 
-- Decode and validate before applying.
+- Decode and validate the complete F4-owned snapshot before applying.
 - Show schema/version and a summary of changes where practical.
 - Never overwrite secrets automatically.
-- Allow partial import by scope where practical.
+- Replace Appearance and Notch Behavior atomically after validation; F4 does not merge individual
+  fields or future-phase scopes.
 - Preserve the last known-good configuration if import fails.
-- Record a sanitized import result in Diagnostics.
+- Publish a typed import outcome to the current Settings UI; F9 may later persist a sanitized
+  diagnostics record for it.
 
 ### 11.4 Deletion
 
 Modules that store user content must provide explicit deletion controls and document whether deletion is immediate, bounded by cache cleanup, or requires app restart.
+
+### 11.5 Corrupt-settings quarantine
+
+When current-schema settings cannot be decoded or validated, the backend moves the original bytes
+to a timestamped quarantine location in Application Support before atomically writing safe
+defaults. Quarantine is local recovery data, excluded from normal import/export and never used as
+an active settings source. It retains at most three files of at most 1 MiB each (3 MiB total) and
+deletes the oldest file before admitting another snapshot.
 
 ---
 

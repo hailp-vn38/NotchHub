@@ -267,11 +267,19 @@ Make settings durable, safe to evolve, and independent from UI implementation de
 ### Scope
 
 - Implement typed `AppSettings` model with `schemaVersion`.
-- Add General, Appearance, Notch Behavior, Shortcut, Diagnostics, and namespaced module settings.
+- Add only the F4 v1 Appearance and Notch Behavior settings: theme, Reduced Motion override,
+  hover delay (`150`/`300`/`500` ms), and auto-collapse timeout (`2`/`3`/`5` seconds), plus the
+  empty namespaced-module envelope owned by the platform. Full-screen suppression remains an
+  invariant, not a setting, until another policy has native QA.
+- Reserve no concrete Shortcut, Diagnostics, or module setting values: F6, F9, and F7 introduce
+  those values with their owning behavior and versioned schema changes.
 - Add defaults, validation, safe reset, migration, and corrupt-data fallback.
 - Persist non-secret configuration with a storage abstraction.
-- Add debounced/atomic writes where appropriate.
+- Use one versioned Application Support settings file behind the storage abstraction; write it by
+  atomic replacement and debounce only high-frequency controls.
 - Implement sanitized import/export of non-secret settings.
+- Validate a complete F4-owned import, then atomically replace its Appearance and Notch Behavior
+  settings; preserve newer unknown schemas in read-only recovery.
 - Keep credentials and tokens out of settings; define Keychain boundary for later use.
 - Implement the Settings-spec durable rows: validated toggle/preset updates, applying/rollback
   feedback, separate destructive reset scopes, and sanitized import/export summary.
@@ -280,7 +288,7 @@ Make settings durable, safe to evolve, and independent from UI implementation de
 
 - Settings persist across restart.
 - Older schema migrates successfully in tests.
-- Corrupt data falls back safely and writes a diagnostics warning.
+- Corrupt data falls back safely and exposes a typed recovery outcome without requiring F9 diagnostics persistence.
 - Reset does not silently remove credentials or secrets.
 - Settings UI does not read/write raw `UserDefaults` keys directly.
 

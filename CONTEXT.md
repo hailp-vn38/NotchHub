@@ -28,6 +28,26 @@ _Avoid_: detail state, expanded detail
 The application-scene navigation and shared presentation components that expose configuration routes before their typed persistence and capability owners are implemented.
 _Avoid_: settings backend, fake preferences
 
+**Setting**:
+A validated, non-secret preference with a declared default and reset behavior; it is distinct from session-only presentation state and from a capability that is not yet owned.
+_Avoid_: preference key, toggle state
+
+**Settings store**:
+The single typed boundary for the current durable settings snapshot, including validation, migration, persistence, reset, and sanitized import/export.
+_Avoid_: UserDefaults wrapper, settings UI
+
+**Settings snapshot**:
+The complete validated, non-secret configuration state handled as one versioned value by the Settings store.
+_Avoid_: preference cache, partial settings write
+
+**Settings recovery outcome**:
+A typed result that tells the app whether settings loaded normally, recovered to safe defaults, or require read-only recovery without overwriting a newer snapshot.
+_Avoid_: diagnostics record, silent fallback
+
+**Secret**:
+A credential or authentication value whose disclosure could grant access or reveal protected data; it is never part of a settings snapshot.
+_Avoid_: normal setting, exported configuration
+
 **Module**:
 A compile-time feature unit that contributes declared capabilities through NotchHub contracts.
 _Avoid_: plugin, extension, widget

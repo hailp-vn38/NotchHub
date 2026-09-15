@@ -352,6 +352,7 @@ Risk levels:
 - Typed schema and validation.
 - Versioned migration.
 - Safe defaults and last-known-good state.
+- Corrupt-settings quarantine (three 1 MiB files, 3 MiB total) before safe defaults replace active bytes.
 - Sanitized import with preview/rollback.
 - Do not import secrets automatically.
 - Restrict dangerous settings and require confirmation.

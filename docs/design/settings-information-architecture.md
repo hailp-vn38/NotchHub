@@ -169,11 +169,11 @@ Controls visual presentation without changing functional security, permissions, 
 
 | Group | Settings | Default direction |
 |---|---|---|
-| Theme | System, Light, Dark | System default |
-| Notch style | Material/opacity within supported design system | Conservative dark/translucent default |
-| Layout | Compact/expanded size preset, spacing density if supported | Standard preset |
-| Motion | Reduced Motion, animation intensity if supported | Respect system reduced-motion preference; user override possible |
-| Visibility | Optional indicator style when collapsed | Minimal/quiet default |
+| Theme | System, Light, Dark | System default; F4 v1 |
+| Motion | Reduced Motion override | Follow system; F4 v1 may only reduce motion |
+| Notch style | Material/opacity within supported design system | Future; unavailable in F4 v1 |
+| Layout | Compact/expanded size preset, spacing density if supported | Future; unavailable in F4 v1 |
+| Visibility | Optional indicator style when collapsed | Future; unavailable in F4 v1 |
 
 ### Rules
 
@@ -199,11 +199,11 @@ Controls when and how the Notch surface appears and responds to interaction.
 
 | Group | Settings | Default direction |
 |---|---|---|
-| Surface | Surface is always enabled, default start state | Enabled; safe collapsed state |
-| Pointer interaction | Hover-to-expand, hover delay | Enabled with conservative delay; user can disable |
-| Collapse behavior | Auto-collapse, timeout duration | Enabled; validated preset/range |
+| Surface | Surface is always enabled, default start state | Invariant; no control |
+| Pointer interaction | Hover delay | 300 ms; F4 v1 preset: 150/300/500 ms; hover remains enabled |
+| Collapse behavior | Auto-collapse timeout | 3 seconds; F4 v1 preset: 2/3/5 seconds; auto-collapse remains enabled |
 | Keyboard/interaction | Escape/click-outside behavior | Collapse to safe state |
-| Context policy | Show during full-screen, suppression behavior | Conservative/minimal default |
+| Context policy | Full-screen suppression behavior | Suppress invariant; not a setting until another policy has native QA |
 | Display policy | Built-in display first, no-notch fallback explanation | Built-in display only in foundation |
 | Debug | Surface debug overlay | Visible only in development/debug mode |
 
@@ -211,7 +211,6 @@ Controls when and how the Notch surface appears and responds to interaction.
 
 - Explain that foundation supports the built-in MacBook display first.
 - Explain that full-screen behavior is a preference and may be constrained by macOS/system context.
-- Explain that disabling hover does not disable menu-bar or shortcut access.
 - Explain that auto-collapse improves privacy and reduces obstruction.
 
 ### Rules
@@ -818,7 +817,7 @@ The full Settings implementation is ready before real modules when:
 
 1. All nine top-level pages exist or have a deliberate, non-misleading foundation placeholder where implementation phase has not started.
 2. Settings opens from menu bar even if the Notch panel is hidden/suppressed/unavailable.
-3. General, Appearance, and Notch Behavior use typed settings and apply safe changes at runtime.
+3. F4 v1 Appearance and Notch Behavior settings use typed settings and apply safe changes at runtime.
 4. Shortcuts lists foundation actions and uses action IDs, not direct callbacks.
 5. Permissions page shows statuses without prompting at launch/open.
 6. Actions page reflects ActionRegistry metadata and confirmation/availability state.

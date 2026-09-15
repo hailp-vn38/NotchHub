@@ -106,6 +106,8 @@ docs/
 │       ├── 0011-public-apis-first.md
 │       ├── 0012-docs-as-code.md
 │       └── 0013-fixed-expanded-admission-and-native-shaped-hit-testing.md
+│       ├── 0014-always-on-surface-and-minimal-menu.md
+│       └── 0015-versioned-settings-file-and-forward-schema-recovery.md
 │
 ├── design/
 │   ├── design-system.md                  # F3
@@ -128,6 +130,7 @@ docs/
 │   ├── f1-evidence.md                 # F1 evidence
 │   ├── f2-evidence.md                 # F2 automated and manual evidence
 │   ├── f3-evidence.md                 # F3 automated evidence; native manual gate pending
+│   ├── f4-evidence.md                 # F4 persistence and recovery evidence template
 │   ├── manual-qa.md                      # F2/F10
 │   └── performance-test-plan.md          # F10; may link performance.md
 │
@@ -330,6 +333,11 @@ Make settings durable, versioned, migratable, safe to reset, and separate from s
 | `docs/security/threat-model.md` | Update | Settings tampering, secret storage, data leakage threats |
 | `docs/design/notchhub-settings-ui-spec.md` | Update | Durable setting rows, apply/rollback, reset, import, and export UX |
 | Relevant ADR | Create/Update | Settings backend, schema strategy, Keychain boundary |
+
+F4 persists only the v1 Appearance and Notch Behavior settings: theme, Reduced Motion override,
+hover delay, and auto-collapse timeout. Full-screen suppression remains an invariant. F4
+establishes an empty module namespace but does not create General, Shortcut, Diagnostics, or
+module setting values; those remain owned by their later capability phases.
 
 ### F4 gate
 

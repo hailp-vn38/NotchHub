@@ -244,8 +244,8 @@ Optional helper/error text
 Ví dụ:
 
 ```text
-Hover to expand                            [ ON ]
-Expand the Notch surface when pointer enters the hover zone.
+Example preference                          [ ON ]
+Short explanation of the setting's effect.
 ```
 
 ### Behavior
@@ -415,34 +415,15 @@ Appearance
 ( ) Dark
 ```
 
-#### Notch Style
-
-- Material preset.
-- Supported opacity preset.
-
-Không cho opacity làm text/error state mất contrast.
-
-#### Layout
-
-- Standard.
-- Compact.
-- Spacious.
-
-Dùng preset thay vì arbitrary geometry.
-
 #### Motion
 
 ```text
-Reduce Motion                           [ ON/OFF ]
-Animation intensity                     [ Subtle ▾ ]
+Reduce Motion                           [ Follow System ▾ ]
 ```
 
-System Reduce Motion phải được tôn trọng.
-
-#### Visibility
-
-- Collapsed indicator style.
-- Quiet/minimal mặc định.
+F4 chỉ cho phép Follow System hoặc Reduce Motion; không được buộc thêm motion trái với system
+preference. Material, opacity, layout density, animation intensity, và indicator style là future
+unavailable state, không phải controls F4.
 
 ---
 
@@ -460,23 +441,30 @@ Control when and how the Notch surface appears.
 #### Surface
 
 ```text
-Enable Notch surface                    [ ON ]
-Default state                           [ Collapsed ▾ ]
+Notch surface                            Always on when eligible
+Startup state                            Collapsed
 ```
+
+Đây là invariant từ ADR-0014, không phải controls. Settings không được cung cấp enable/disable,
+toggle visibility, hoặc lựa chọn startup state cho Notch surface.
 
 #### Pointer Interaction
 
 ```text
-Hover to expand                         [ ON ]
 Hover delay                             [ 300 ms ▾ ]
 ```
+
+Hover luôn enabled theo F2 interaction contract; F4 chỉ persist delay đã validate.
+Allowed presets: `150 ms`, `300 ms`, và `500 ms`; default là `300 ms`.
 
 #### Collapse Behavior
 
 ```text
-Auto-collapse                           [ ON ]
-Collapse after                          [ 5 seconds ▾ ]
+Collapse after                          [ 3 seconds ▾ ]
 ```
+
+Auto-collapse luôn enabled theo F2 interaction contract; F4 chỉ persist timeout đã validate.
+Allowed presets: `2 seconds`, `3 seconds`, và `5 seconds`; default là `3 seconds`.
 
 #### Keyboard / Interaction
 
@@ -486,8 +474,11 @@ Collapse after                          [ 5 seconds ▾ ]
 #### Context Policy
 
 ```text
-Show during full-screen                 [ Minimal ▾ ]
+Full-screen policy                      Suppress
 ```
+
+Đây là invariant, không phải F4 control. Chỉ thêm preference khi một policy khác đã native-verified
+và không ép Surface mở rộng trong khi ứng dụng khác đang full-screen.
 
 #### Display
 

@@ -261,7 +261,7 @@ later Permission, Action/Shortcut, Module, or Diagnostics phases.
 | FR-SET-003 | Settings shall include a schema version and migration path. | Must |
 | FR-SET-004 | Every setting shall have defaults, validation, and defined reset behavior. | Must |
 | FR-SET-005 | The app shall persist non-secret settings across restarts. | Must |
-| FR-SET-006 | The app shall recover from corrupt settings by using safe defaults and emitting diagnostics. | Must |
+| FR-SET-006 | The app shall recover from corrupt settings by using safe defaults and emitting a typed recoverable outcome; F9 may later persist its sanitized diagnostics record. | Must |
 | FR-SET-007 | The app shall provide sanitized import/export of non-secret configuration. | Should |
 | FR-SET-008 | Credentials, authentication tokens, and other secrets shall not be stored in ordinary settings. | Must |
 | FR-SET-009 | Module settings shall be namespaced by `ModuleID`. | Must |
