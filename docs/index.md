@@ -111,7 +111,9 @@ docs/
 │       ├── 0012-docs-as-code.md
 │       ├── 0013-fixed-expanded-admission-and-native-shaped-hit-testing.md
 │       ├── 0014-always-on-surface-and-minimal-menu.md
-│       └── 0015-versioned-settings-file-and-forward-schema-recovery.md
+│       ├── 0015-versioned-settings-file-and-forward-schema-recovery.md
+│       ├── 0016-supervised-module-lifecycle.md
+│       └── 0017-module-contract-package-boundary.md
 │
 ├── design/
 │   ├── design-system.md                  # F3
@@ -879,8 +881,8 @@ F5  [ ] permissions        [ ] user copy              [ ] API/entitlement record
 F6  [ ] action platform    [ ] shortcut UI             [ ] IPC action schema
     [ ] security tests     [ ] confirmation tests
 
-F7  [ ] module system      [ ] module template         [ ] DemoModule docs/tests
-    [ ] resource policy    [ ] failure isolation
+F7  [x] module system      [x] module template         [x] DemoModule docs/tests
+    [x] resource policy    [x] failure isolation       [ ] native Debug QA
 
 F8  [ ] event protocol     [ ] IPC contract             [ ] `notchctl` setup
     [ ] auth/threat update [ ] flood/backpressure tests
@@ -955,6 +957,8 @@ This order minimizes rework: product boundaries come before architecture, contra
 - `docs/development/contributing.md`
 - `docs/development/agent-instructions.md`
 - `docs/development/tooling/mattpocock-skills.md`
+- `docs/development/module-authoring.md`
+- `docs/modules/_template.md`
 
 ### Still to create when relevant
 
@@ -965,7 +969,6 @@ This order minimizes rework: product boundaries come before architecture, contra
 - `docs/operations/logging-diagnostics.md`.
 - `docs/operations/privacy.md`.
 - `docs/operations/release.md`.
-- `docs/development/module-authoring.md`.
 - `docs/quality/manual-qa.md`.
 - `docs/quality/performance-test-plan.md`.
 - `docs/security/ipc-security.md` if the IPC threat detail becomes large enough to extract.

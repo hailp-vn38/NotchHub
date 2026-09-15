@@ -290,11 +290,13 @@ Required cases:
 - Double start/stop.
 - Suspend/resume.
 - Enable/disable.
-- Bounded retry.
+- No automatic retry in F7; only explicit restart from `failed`.
 - Failure isolation.
 - Module health projection.
 - Resource cleanup through `ResourceTracker`.
 - Actions/subscriptions removed or unavailable after stop.
+- Disable while starting cancels startup, calls stop exactly once, and ends stopped.
+- Five-second start, two-second stop, and five-second runtime-shutdown timeout outcomes.
 
 ## 6.9 Event protocol
 
@@ -373,6 +375,13 @@ Verify all entry points use the same action implementation and that user confirm
 - Verify action removal/unavailability, surface contribution removal, subscriptions/tasks cleanup, and unchanged core health.
 - Simulate start/handler failure.
 - Verify Settings, Diagnostics, Notch core, and unrelated modules remain functional.
+
+### 7.3a F7 native Debug QA
+
+On a real macOS Debug build with `NotchDemoModule` registered, record enable →
+indicator/compact status → disable → restart → simulated failure. Confirm that
+the Settings health projection is accurate and that the Notch surface remains
+usable. This does not close any pending F2, F3, or F5 native gate.
 
 ### 7.4 Settings/permissions path
 

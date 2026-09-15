@@ -148,7 +148,7 @@ demo state, or module runtime return an explicit unavailable outcome; they do no
 | Attribute | Description |
 |---|---|
 | Technology | Pure Swift (Foundation types only where unavoidable) |
-| Responsibility | `ModuleID`, `ActionID`, `SessionID`, `SurfaceState`, `EventEnvelope`, `NotchModule` protocol, error types |
+| Responsibility | `ModuleID`, `ActionID`, `SessionID`, `SurfaceState`, `EventEnvelope`, pure module metadata/lifecycle/health types, error types |
 | Depends on | Nothing internal to the project |
 | Must not do | Import SwiftUI, AppKit, or perform I/O |
 | Delivered in phase | F0 |
@@ -157,11 +157,11 @@ demo state, or module runtime return an explicit unavailable outcome; they do no
 
 | Attribute | Description |
 |---|---|
-| Technology | Swift, implementing `NotchModule` |
+| Technology | Swift target, implementing the `NotchCore.NotchModule` contract |
 | Responsibility | Feature-specific state, settings namespace, declared permissions, registered actions, event subscriptions/publications, UI slot contributions |
 | Depends on | `NotchCore`, `NotchDomain`, and platform contracts only |
 | Must not do | Access `NSPanel` directly, access another module's internals, or bypass the Action Registry/Permission Coordinator |
-| Delivered in phase | F7 (`DemoModule`), M0–M6 (future real modules) |
+| Delivered in phase | F7 (`NotchDemoModule` in Debug/test), M0–M6 (future real modules) |
 
 ### 4.9 `notchctl` (companion CLI)
 

@@ -52,6 +52,38 @@ _Avoid_: normal setting, exported configuration
 A compile-time feature unit that contributes declared capabilities through NotchHub contracts.
 _Avoid_: plugin, extension, widget
 
+**Module runtime**:
+The actor that is the sole authority for a Module's registration, lifecycle transition, health projection, and enablement application.
+_Avoid_: module manager, module controller
+
+**Module lifetime**:
+The scoped ownership boundary supplied to a running Module for tasks, observers, subscriptions, action registrations, and surface contributions; the runtime revokes it on stop or failure.
+_Avoid_: cleanup bag, resource tracker
+
+**Module lifetime lease**:
+One revocable registration inside a Module lifetime. Revocation runs its supplied cleanup exactly once in reverse registration order; a tracker-only record is not a lease.
+_Avoid_: resource name, cleanup hint
+
+**Module enablement intent**:
+The durable user choice to enable or disable a Module, stored independently from its transient lifecycle health.
+_Avoid_: running state, module health
+
+**Module event publisher**:
+The narrow internal capability through which a Module records a declared event during F7; it is not the F8 EventBus, external envelope router, or transport.
+_Avoid_: EventBus, IPC event sender
+
+**Module metadata**:
+The static, pure declaration of a Module's identity-facing capabilities and resource policy; it is not a mutable runtime-health record.
+_Avoid_: module configuration, runtime state
+
+**Runtime restart**:
+A composition-level operation that rebuilds the lifetime of all enabled Modules; in F7 it is test-only and distinct from restarting one Module or restarting the App shell.
+_Avoid_: Restart App Shell, module restart
+
+**Surface contribution descriptor**:
+A typed, bounded description of a Module's content for a declared Surface slot; the platform renders it and retains all surface-transition authority.
+_Avoid_: module view, panel content
+
 ## Platform contracts
 
 **Action**:

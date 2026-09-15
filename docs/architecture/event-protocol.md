@@ -318,6 +318,8 @@ demo.failure.simulated
 
 `DemoModule` is the reference for testing event contracts before real modules exist.
 
+Until F8, these names are only declarations used by F7's internal `ModuleEventPublisher` recording seam. They are not external `EventEnvelope` traffic and have no IPC, EventBus, ordering, buffering, or presentation-routing behavior.
+
 ---
 
 ## 7. Future Xiaozhi event family

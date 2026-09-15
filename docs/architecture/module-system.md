@@ -31,6 +31,15 @@ This document is written before any real business module exists. It must be impl
 
 ## 3. Module contract
 
+### 3.0 Package ownership
+
+`NotchDomain` owns pure declarations: `ModuleID`, `ModuleMetadata`, lifecycle
+states, and health DTOs. `NotchCore` owns `NotchModule`, `ModuleContext`,
+`ModuleLifetime`, `ModuleRuntime`, and `ModuleEventPublisher`, because their
+capability handles are Core contracts. `NotchDemoModule` is a static target that
+depends on Core and Domain; only the composition root registers it. This avoids
+a Domain-to-Core dependency cycle and keeps concrete feature logic out of Core.
+
 ### 3.1 Core protocol
 
 ```swift
@@ -55,26 +64,25 @@ public protocol NotchModule: Sendable {
 ```swift
 public struct ModuleMetadata: Codable, Sendable {
     public let displayName: String
-    public let iconName: String
-    public let supportedSurfaces: Set<SurfaceSlot>
-    public let requiredPermissions: Set<PermissionKind>
-    public let optionalPermissions: Set<PermissionKind>
-    public let settingsRoute: SettingsRoute?
+    public let version: String
+    public let supportedSurfaceSlots: Set<SurfaceSlot>
+    public let requiredCapabilities: Set<Capability>
+    public let optionalCapabilities: Set<Capability>
     public let runtimePolicy: ModuleRuntimePolicy
-    public let priority: Int
 }
 ```
 
 | Field | Purpose |
 |---|---|
 | `displayName` | Human-readable name shown in Settings → Modules |
-| `iconName` | SF Symbol or asset name for module identity |
-| `supportedSurfaces` | Which `SurfaceSlot`s this module may contribute to (see §5) |
-| `requiredPermissions` | Capabilities without which the module cannot function; the module should degrade gracefully or refuse to start if denied |
-| `optionalPermissions` | Capabilities that enhance the module but are not mandatory |
-| `settingsRoute` | Where in Settings → Modules this module's configuration page is registered |
+| `version` | Module-owned version shown in health and future compatibility checks |
+| `supportedSurfaceSlots` | Which `SurfaceSlot`s this module may contribute to (see §5) |
+| `requiredCapabilities` | Capabilities without which the module cannot function; the module should degrade gracefully or refuse to start if denied |
+| `optionalCapabilities` | Capabilities that enhance the module but are not mandatory |
 | `runtimePolicy` | Declared resource/performance policy (see [`performance.md`](performance.md)) |
-| `priority` | Tie-breaking value used by the runtime when multiple modules compete for the same `SurfaceSlot` |
+
+F7 deliberately omits icon, Settings route, priority, and arbitration metadata.
+They are added only by a future module that demonstrates a concrete need.
 
 ### 3.3 Module context
 
@@ -99,6 +107,9 @@ public struct ModuleContext: Sendable {
 | `PermissionCoordinatorHandle` | Query current permission status; request a permission for a declared capability | Silently requesting a permission not declared in `metadata.requiredPermissions`/`optionalPermissions` |
 | `DiagnosticsReporter` | Emit structured, categorized log entries and health snapshots | Writing unredacted secrets or unbounded log volume |
 | `SurfaceContributionRegistrar` | Register a `SurfaceContribution` descriptor for a declared `SurfaceSlot` | Direct `NSPanel` manipulation or forcing surface expansion |
+
+F7 checks capability declarations only; `DemoModule` declares neither required nor
+optional capability.
 
 ---
 
@@ -126,11 +137,12 @@ stateDiagram-v2
 
 - **Registration** happens once, at the composition root, before the app finishes launching. Only statically known modules are registered; there is no runtime discovery of arbitrary code in the foundation architecture.
 - **Starting** must be idempotent from the runtime's perspective: calling `start` on an already-`running` module is a runtime error, not a module concern.
-- **A `start` timeout** must be enforced by the runtime (a module that hangs during `start` should be marked `failed`, not allowed to block application launch indefinitely).
+- **A `start` timeout** of five seconds is enforced by the runtime; a module that hangs is marked `failed` and cannot block application launch indefinitely.
+- **Lifecycle serialization** belongs exclusively to the `ModuleRuntime` actor. A disable received while `starting` cancels startup, calls `stop()` exactly once, and finishes in `stopped`. Restart is valid from `running`, `suspended`, or `failed`, and always follows `stop → starting`.
 - **Stopping** must release every task, timer, observer, subscription, socket, and cache the module created. The runtime should treat a module that leaves detectable dangling resources as a defect, verified in tests (see §9).
 - **Suspension** is a runtime-driven state (not module-initiated) used for scenarios such as low-power mode, a denied required permission, or a disabled dependency. A suspended module keeps its configuration but performs no background work.
 - **Failure isolation**: if `start()` throws or `handle()` throws unexpectedly, the runtime must catch the error, transition only that module to `failed`, log/report it, and leave all other modules and the core app unaffected.
-- **Retry policy**: automatic retries after failure must be bounded (for example, limited attempts with backoff) to avoid a crash-looping module consuming resources indefinitely.
+- **Retry policy**: F7 does not retry automatically. A failure remains `failed` until a user explicitly restarts the module or the runtime. A future automatic retry policy needs an owning module requirement and bounded backoff.
 - **Disable is user-controlled**: a module in `stopped` state due to explicit user action in Settings → Modules must not restart itself; only an explicit user action or app relaunch may re-enable it.
 
 ### 4.3 Module runtime responsibilities
@@ -145,6 +157,16 @@ public protocol ModuleRuntime: Sendable {
     func healthSnapshot() async -> [ModuleHealth]
 }
 ```
+
+`ModuleRuntime` is an actor. `stop()` is bounded to two seconds and complete runtime shutdown to five seconds. On timeout, it cancels known work, records a sanitized timeout failure, and lets the App shell continue termination; it does not claim that uncooperative code was cleaned up.
+
+### 4.4 Runtime restart boundary
+
+F7 exposes `restartRuntime()` only to the composition root and tests. It stops
+enabled Modules in reverse registration order, creates fresh Module lifetimes,
+and starts enabled Modules in registration order. It is not a menu item, an
+ActionID, or a user-facing recovery path in F7. Settings exposes only
+per-Module restart.
 
 ```swift
 public struct ModuleHealth: Codable, Sendable {
@@ -210,6 +232,7 @@ public struct SurfaceContribution: Sendable {
 ## 6. Settings integration
 
 - Each module's settings live under `AppSettings.modules[ModuleID]` as an opaque, module-owned `Codable` envelope (see [Architecture Overview §10.1](overview.md#101-settings)).
+- F7 introduces settings schema v3. `modules["demo"].isEnabled` defaults to `true` and is durable **Module enablement intent**, distinct from transient `ModuleHealth`.
 - The module declares its settings schema and default values; `NotchCore` handles versioning/migration plumbing generically, but the module owns its own internal schema version if its settings evolve independently.
 - A module's Settings UI page is registered via `metadata.settingsRoute` and rendered using `NotchUI` components — a module should not introduce a bespoke settings visual style.
 - Resetting a module's settings must not silently delete secrets stored in Keychain on the module's behalf; if a module uses Keychain-backed credentials (for example, a future relay auth token), it must expose an explicit, separate "Remove credentials" control.
@@ -228,6 +251,8 @@ public struct SurfaceContribution: Sendable {
 ## 8. Events and actions integration
 
 ### 8.1 Events
+
+F7 proves only an internal `ModuleEventPublisher` seam and a recording test implementation. It records declared lifecycle and `demo.tick` events without introducing the F8 EventBus, external `EventEnvelope` routing, buffering, inter-module delivery, or IPC transport.
 
 - A module may **publish** events onto the `EventBus` describing its own state changes (for example, a future Xiaozhi module publishing `assistant.state` transitions).
 - A module may **subscribe** to event types relevant to it, declared ahead of time; the `EventBusHandle` should not offer a raw "subscribe to everything" capability by default.
@@ -262,6 +287,7 @@ public struct ModuleRuntimePolicy: Sendable {
 
 - Any `Task`, `Timer`, `NSObject` observer, socket, or subscription a module creates in `start()` must be stored so it can be cancelled/invalidated in `stop()`.
 - The runtime should provide a lightweight `CancellationBag`-style helper so modules have an idiomatic way to register cleanup work without hand-rolling bookkeeping.
+- The supplied helper is the Module lifetime scope. It owns registered tasks, observers, subscriptions, action registrations, and surface contributions, which the runtime revokes on stop or failure.
 - A module must not schedule work that continues to fire after `stop()` returns. This is verified via the resource-cleanup tests in §11.
 - Caches (for example, a future Media module's artwork cache) must have an explicit byte/count budget and must be released or trimmed when the module is stopped or disabled, not just when memory pressure occurs.
 
@@ -325,10 +351,18 @@ This decision is recorded as ADR-0003 (see [Architecture Overview §14](overview
 - Contributes to `indicator` and `compactStatus` slots.
 - Registers a `demo.ping` action.
 - Uses a namespaced settings toggle for enable/disable.
-- Emits a periodic or manually triggered `demo.tick` event.
+- Emits `demo.tick` only when manually triggered; it has no production periodic timer.
 - Includes a debug-only "simulate failure" action to validate failure isolation.
 
+It is compiled and registered only in Debug/test builds. Release builds neither
+register it nor show it in Settings. `demo.ping` and the debug-only failure
+action have no shortcut or IPC entry point.
+
 No module beyond `DemoModule` should be started until all tests in §11.1–§11.2 pass against it.
+
+### 11.4 F7 presentation boundary
+
+`DemoModule` supplies typed descriptors for `indicator` and `compactStatus`, and NotchUI renders those two deterministic descriptors in the real Notch surface. F7 does not add multi-module arbitration, expanded module content, or a module-owned application scene; those remain contract seams until a later module needs them. A descriptor update never forces a surface transition.
 
 ---
 

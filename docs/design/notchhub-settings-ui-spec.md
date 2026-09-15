@@ -654,6 +654,10 @@ Demo Module
 
 Disabled module không được start chỉ để render Settings page.
 
+### F7 minimum
+
+F7 renders the Demo Module row/detail from a read-only runtime-health projection: enablement intent, lifecycle state, last start time, and sanitized last error. Its only controls dispatch typed Enable, Disable, or Restart intents to `ModuleRuntime`; the view never calls module lifecycle methods. F7 has no permission rows for DemoModule and no diagnostic history, export, or resource-metric UI.
+
 ---
 
 ## 7.8 Diagnostics

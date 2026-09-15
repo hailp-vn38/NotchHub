@@ -556,7 +556,7 @@ provide its executor, availability, confirmation, and audit behavior.
 |---|---|---|---|
 | `app.openSettings` | App | Never | Open Settings |
 | `app.openDiagnostics` | App | Never | Diagnostics |
-| `app.restartRuntime` | Runtime | First use/always by setting | Restart module runtime |
+| `app.restartRuntime` | Runtime | First use/always by setting | Deferred until F9 diagnostics/recovery owns a user-facing runtime restart |
 | `surface.showDemoStatus` | Surface | Never | Inject deterministic demo status |
 | `surface.toggleDebugOverlay` | Development | Never | Toggle development overlay |
 | `settings.reset` | Settings | Destructive | Reset non-secret settings |
