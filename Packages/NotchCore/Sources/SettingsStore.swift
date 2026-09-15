@@ -72,12 +72,55 @@ public struct ShortcutSettings: Codable, Equatable, Sendable {
 
 public struct ModuleEnablementSettings: Codable, Equatable, Sendable {
     public var isEnabled: Bool
-    public init(isEnabled: Bool = true) { self.isEnabled = isEnabled }
+    public var xiaozhi: XiaozhiSettings?
+
+    public init(isEnabled: Bool = true, xiaozhi: XiaozhiSettings? = nil) {
+        self.isEnabled = isEnabled
+        self.xiaozhi = xiaozhi
+    }
+}
+
+public enum XiaozhiConversationMode: String, Codable, CaseIterable, Sendable { case auto, pushToTalk }
+
+public enum XiaozhiIdentity {
+    public static let clientID = "test-client"
+    public static let defaultDeviceID = randomDeviceID()
+
+    public static func randomDeviceID() -> String {
+        var generator = SystemRandomNumberGenerator()
+        var bytes = (0..<6).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
+        bytes[0] = (bytes[0] & 0b1111_1100) | 0b0000_0010
+        return bytes.map { String(format: "%02X", $0) }.joined(separator: ":")
+    }
+
+    public static func isValidDeviceID(_ value: String) -> Bool {
+        guard
+            value.range(of: "^[0-9A-F]{2}(:[0-9A-F]{2}){5}$", options: .regularExpression) != nil,
+            let firstOctet = UInt8(value.prefix(2), radix: 16)
+        else { return false }
+        return firstOctet & 0b0000_0011 == 0b0000_0010
+    }
+}
+
+public struct XiaozhiSettings: Codable, Equatable, Sendable {
+    public var isPreparedOnLaunch: Bool
+    public var autoReconnect: Bool
+    public var conversationMode: XiaozhiConversationMode
+
+    public init(
+        isPreparedOnLaunch: Bool = true,
+        autoReconnect: Bool = true,
+        conversationMode: XiaozhiConversationMode = .auto
+    ) {
+        self.isPreparedOnLaunch = isPreparedOnLaunch
+        self.autoReconnect = autoReconnect
+        self.conversationMode = conversationMode
+    }
 }
 
 /// The complete, non-secret settings snapshot; F6 v2 adds shortcut bindings.
 public struct AppSettings: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 5
 
     public var schemaVersion: Int
     public var appearance: AppearanceSettings
@@ -97,6 +140,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.notchBehavior = notchBehavior
         self.shortcuts = shortcuts
         self.modules = modules
+    }
+
+    /// Namespaced non-secret module settings. Identity stays in Keychain.
+    public var xiaozhi: XiaozhiSettings {
+        get { modules["xiaozhi"]?.xiaozhi ?? .init() }
+        set {
+            var entry = modules["xiaozhi"] ?? .init(isEnabled: false)
+            entry.xiaozhi = newValue
+            modules["xiaozhi"] = entry
+        }
     }
 
     public static let safeDefaults = AppSettings()
@@ -137,6 +190,7 @@ public enum SettingsMutation: Sendable {
     case autoCollapseTimeout(AutoCollapseTimeout)
     case shortcutBindings([ShortcutBinding])
     case moduleEnabled(Bool, id: ModuleID)
+    case xiaozhi(XiaozhiSettings)
     case replace(AppSettings)
 }
 
@@ -235,9 +289,12 @@ public actor SettingsStore {
         case .autoCollapseTimeout(let value): candidate.notchBehavior.autoCollapseTimeout = value
         case .shortcutBindings(let value): candidate.shortcuts.bindings = value
         case .moduleEnabled(let value, let id): candidate.modules[id.rawValue] = .init(isEnabled: value)
+        case .xiaozhi(let value): candidate.xiaozhi = value
         case .replace(let value): candidate = value
         }
-        guard candidate.schemaVersion == AppSettings.currentSchemaVersion, candidate.shortcuts.isValid else {
+        guard candidate.schemaVersion == AppSettings.currentSchemaVersion,
+            candidate.shortcuts.isValid
+        else {
             return .init(settings: settings, outcome: .rejected)
         }
         do {
@@ -343,6 +400,22 @@ public actor SettingsStore {
             }
             return .current(current)
         }
+        if version == 4 {
+            let legacy = try decoder.decode(LegacySettingsV4.self, from: data)
+            var migrated = AppSettings(
+                appearance: legacy.appearance, notchBehavior: legacy.notchBehavior,
+                shortcuts: legacy.shortcuts, modules: legacy.modules)
+            migrated.xiaozhi = legacy.xiaozhi
+            return .migrated(migrated)
+        }
+        if version == 3 {
+            let legacy = try decoder.decode(LegacySettingsV3.self, from: data)
+            var migrated = AppSettings(
+                appearance: legacy.appearance, notchBehavior: legacy.notchBehavior,
+                shortcuts: legacy.shortcuts, modules: legacy.modules)
+            migrated.xiaozhi = .init()
+            return .migrated(migrated)
+        }
         if version == 2 {
             let legacy = try decoder.decode(LegacySettingsV2.self, from: data)
             return .migrated(
@@ -401,6 +474,23 @@ public actor SettingsStore {
         let appearance: AppearanceSettings
         let notchBehavior: NotchBehaviorSettings
         let shortcuts: ShortcutSettings
+    }
+
+    private struct LegacySettingsV3: Decodable {
+        let schemaVersion: Int
+        let appearance: AppearanceSettings
+        let notchBehavior: NotchBehaviorSettings
+        let shortcuts: ShortcutSettings
+        let modules: [String: ModuleEnablementSettings]
+    }
+
+    private struct LegacySettingsV4: Decodable {
+        let schemaVersion: Int
+        let appearance: AppearanceSettings
+        let notchBehavior: NotchBehaviorSettings
+        let shortcuts: ShortcutSettings
+        let modules: [String: ModuleEnablementSettings]
+        let xiaozhi: XiaozhiSettings
     }
 }
 

@@ -8,8 +8,12 @@ public final class PermissionCenterModel {
     public private(set) var notificationsGuidance = PermissionGuidance(
         reason: "", dataImplication: "", declineEffect: "", nextAction: "")
     public private(set) var isShowingExplanation = false
+    public private(set) var microphoneStatus: PermissionStatus = .notDetermined
+    public private(set) var microphoneGuidance = PermissionGuidance(
+        reason: "", dataImplication: "", declineEffect: "", nextAction: "")
+    public private(set) var isShowingMicrophoneExplanation = false
     public let informationalCapabilities: [PermissionKind] = [
-        .accessibility, .microphone, .calendar, .reminders, .camera, .screenRecording, .automation,
+        .accessibility, .calendar, .reminders, .camera, .screenRecording, .automation,
     ]
     private let coordinator: PermissionCoordinator
 
@@ -22,6 +26,9 @@ public final class PermissionCenterModel {
         let row = await coordinator.snapshot().row(for: .notifications)
         notificationsStatus = row?.status ?? .notDetermined
         notificationsGuidance = row?.guidance ?? notificationsGuidance
+        let microphone = await coordinator.snapshot().row(for: .microphone)
+        microphoneStatus = microphone?.status ?? .notDetermined
+        microphoneGuidance = microphone?.guidance ?? microphoneGuidance
     }
 
     public func beginNotificationsRecoveryOptIn() {
@@ -48,7 +55,35 @@ public final class PermissionCenterModel {
         isShowingExplanation = false
     }
 
+    public func beginXiaozhiMicrophoneConsent() {
+        isShowingMicrophoneExplanation = true
+    }
+
+    public func confirmXiaozhiMicrophoneConsent() async {
+        guard isShowingMicrophoneExplanation else { return }
+        _ = await coordinator.request(
+            .microphone,
+            context: .init(
+                featureID: PermissionFeatureID.xiaozhi,
+                reason: "Start a Xiaozhi voice conversation.",
+                initiatedByUser: true,
+                source: .settings,
+                explanationAcknowledged: true
+            )
+        )
+        isShowingMicrophoneExplanation = false
+        await load()
+    }
+
+    public func dismissMicrophoneExplanation() {
+        isShowingMicrophoneExplanation = false
+    }
+
     public func openSystemSettings() async -> Bool {
         await coordinator.openSystemSettings(for: .notifications)
+    }
+
+    public func openMicrophoneSystemSettings() async -> Bool {
+        await coordinator.openSystemSettings(for: .microphone)
     }
 }

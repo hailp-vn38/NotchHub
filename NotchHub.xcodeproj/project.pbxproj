@@ -14,10 +14,11 @@
         A20000000000000000000005 /* NotchActions in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000015 /* NotchActions */; };
 		A20000000000000000000006 /* NotchIPC in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000016 /* NotchIPC */; };
 		A20000000000000000000017 /* NotchDemoModule in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000018 /* NotchDemoModule */; };
+		A20000000000000000000019 /* XiaozhiModule in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000020 /* XiaozhiModule */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A20000000000000000000007 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A20000000000000000000001 /* NotchDomain in Frameworks */, A20000000000000000000002 /* NotchCore in Frameworks */, A20000000000000000000003 /* NotchSurface in Frameworks */, A20000000000000000000004 /* NotchUI in Frameworks */, A20000000000000000000005 /* NotchActions in Frameworks */, A20000000000000000000006 /* NotchIPC in Frameworks */, A20000000000000000000017 /* NotchDemoModule in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A20000000000000000000007 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A20000000000000000000001 /* NotchDomain in Frameworks */, A20000000000000000000002 /* NotchCore in Frameworks */, A20000000000000000000003 /* NotchSurface in Frameworks */, A20000000000000000000004 /* NotchUI in Frameworks */, A20000000000000000000005 /* NotchActions in Frameworks */, A20000000000000000000006 /* NotchIPC in Frameworks */, A20000000000000000000017 /* NotchDemoModule in Frameworks */, A20000000000000000000019 /* XiaozhiModule in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -32,7 +33,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A10000000000000000000007 /* NotchHub */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000008 /* Build configuration list for PBXNativeTarget "NotchHub" */; buildPhases = (A10000000000000000000009 /* Sources */, A20000000000000000000007 /* Frameworks */, ); buildRules = (); dependencies = (); name = NotchHub; packageProductDependencies = (A20000000000000000000011 /* NotchDomain */, A20000000000000000000012 /* NotchCore */, A20000000000000000000013 /* NotchSurface */, A20000000000000000000014 /* NotchUI */, A20000000000000000000015 /* NotchActions */, A20000000000000000000016 /* NotchIPC */, A20000000000000000000018 /* NotchDemoModule */, ); productName = NotchHub; productReference = A10000000000000000000003 /* NotchHub.app */; productType = "com.apple.product-type.application"; };
+		A10000000000000000000007 /* NotchHub */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000008 /* Build configuration list for PBXNativeTarget "NotchHub" */; buildPhases = (A10000000000000000000009 /* Sources */, A20000000000000000000007 /* Frameworks */, ); buildRules = (); dependencies = (); name = NotchHub; packageProductDependencies = (A20000000000000000000011 /* NotchDomain */, A20000000000000000000012 /* NotchCore */, A20000000000000000000013 /* NotchSurface */, A20000000000000000000014 /* NotchUI */, A20000000000000000000015 /* NotchActions */, A20000000000000000000016 /* NotchIPC */, A20000000000000000000018 /* NotchDemoModule */, A20000000000000000000020 /* XiaozhiModule */, ); productName = NotchHub; productReference = A10000000000000000000003 /* NotchHub.app */; productType = "com.apple.product-type.application"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -67,6 +68,7 @@
         A20000000000000000000015 /* NotchActions */ = {isa = XCSwiftPackageProductDependency; package = A20000000000000000000010 /* XCLocalSwiftPackageReference "NotchHub" */; productName = NotchActions; };
 		A20000000000000000000016 /* NotchIPC */ = {isa = XCSwiftPackageProductDependency; package = A20000000000000000000010 /* XCLocalSwiftPackageReference "NotchHub" */; productName = NotchIPC; };
 		A20000000000000000000018 /* NotchDemoModule */ = {isa = XCSwiftPackageProductDependency; package = A20000000000000000000010 /* XCLocalSwiftPackageReference "NotchHub" */; productName = NotchDemoModule; };
+		A20000000000000000000020 /* XiaozhiModule */ = {isa = XCSwiftPackageProductDependency; package = A20000000000000000000010 /* XCLocalSwiftPackageReference "NotchHub" */; productName = XiaozhiModule; };
 /* End XCSwiftPackageProductDependency section */
     };
     rootObject = A10000000000000000000010 /* Project object */;

@@ -74,8 +74,30 @@ func keepsPermissionsPassiveUntilConfirmation() async {
     #expect(permissions.notificationsGuidance.nextAction == "Recovery notifications are enabled")
     #expect(
         permissions.informationalCapabilities == [
-            .accessibility, .microphone, .calendar, .reminders, .camera, .screenRecording, .automation,
+            .accessibility, .calendar, .reminders, .camera, .screenRecording, .automation,
         ])
+}
+
+@Test("Xiaozhi microphone explanation stays passive until a user confirms it")
+@MainActor
+func keepsXiaozhiMicrophonePassiveUntilConfirmation() async {
+    let adapter = SettingsPermissionAdapter()
+    let permissions = PermissionCenterModel(
+        coordinator: PermissionCoordinator(
+            adapter: adapter,
+            requirements: [.init(featureID: PermissionFeatureID.xiaozhi, kind: .microphone)]
+        )
+    )
+
+    await permissions.load()
+    #expect(permissions.microphoneStatus == .notDetermined)
+    permissions.beginXiaozhiMicrophoneConsent()
+    #expect(permissions.isShowingMicrophoneExplanation)
+    #expect(await adapter.requestCount == 0)
+
+    await permissions.confirmXiaozhiMicrophoneConsent()
+    #expect(await adapter.requestCount == 1)
+    #expect(permissions.microphoneStatus == .authorized)
 }
 
 @Test("Permissions model projects a restricted state without a System Settings recovery action")

@@ -500,6 +500,47 @@ private struct ModuleSettingsPage: View {
                 .accessibilityElement(children: .contain)
             }
         }
+        SettingsSection(title: "Native Xiaozhi Client") {
+            Toggle(
+                "Prepare Xiaozhi at launch",
+                isOn: Binding(
+                    get: { model.settings.xiaozhi.isPreparedOnLaunch },
+                    set: { value in
+                        var settings = model.settings.xiaozhi
+                        settings.isPreparedOnLaunch = value
+                        model.update(.xiaozhi(settings))
+                    }
+                )
+            )
+            Toggle(
+                "Reconnect automatically",
+                isOn: Binding(
+                    get: { model.settings.xiaozhi.autoReconnect },
+                    set: { value in
+                        var settings = model.settings.xiaozhi
+                        settings.autoReconnect = value
+                        model.update(.xiaozhi(settings))
+                    }
+                )
+            )
+            Picker(
+                "Conversation mode",
+                selection: Binding(
+                    get: { model.settings.xiaozhi.conversationMode },
+                    set: { value in
+                        var settings = model.settings.xiaozhi
+                        settings.conversationMode = value
+                        model.update(.xiaozhi(settings))
+                    }
+                )
+            ) {
+                Text("Auto").tag(XiaozhiConversationMode.auto)
+                Text("Push-to-Talk").tag(XiaozhiConversationMode.pushToTalk)
+            }
+            Text("Device identity and credentials are stored separately in Keychain and are never exported.")
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+        }
     }
 }
 
@@ -595,6 +636,31 @@ private struct PermissionCenterPage: View {
                 .foregroundStyle(NotchUITokens.contentSecondary)
             permissionAction
         }
+        SettingsSection(title: "Native Xiaozhi Client") {
+            HStack(alignment: .top, spacing: NotchUITokens.rowSpacing) {
+                Image(systemName: "mic.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.purple.gradient, in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: NotchUITokens.microSpacing) {
+                    Text("Microphone").font(.headline)
+                    Text("Only requested after you choose to start Xiaozhi voice")
+                        .font(.subheadline)
+                        .foregroundStyle(NotchUITokens.contentSecondary)
+                }
+                Spacer()
+                PermissionStatusBadge(status: model.microphoneStatus, text: microphoneStatusText)
+            }
+            Divider()
+            PermissionDetailRow(title: "Why", detail: model.microphoneGuidance.reason)
+            PermissionDetailRow(title: "Privacy", detail: model.microphoneGuidance.dataImplication)
+            Text(model.microphoneGuidance.declineEffect)
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+            microphoneAction
+        }
         SettingsSection(title: "Not used by enabled features") {
             Text("NotchHub will not request these permissions until an enabled feature needs them.")
                 .font(.caption)
@@ -618,6 +684,20 @@ private struct PermissionCenterPage: View {
         } message: {
             Text("NotchHub will use Notifications only for concise permission recovery messages.")
         }
+        .confirmationDialog(
+            "Allow Xiaozhi to use the microphone?",
+            isPresented: Binding(
+                get: { model.isShowingMicrophoneExplanation },
+                set: { if !$0 { model.dismissMicrophoneExplanation() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Allow Microphone") {
+                Task { await model.confirmXiaozhiMicrophoneConsent() }
+            }
+        } message: {
+            Text("Microphone audio is sent only during an active Xiaozhi conversation. Xiaozhi never starts capture at launch.")
+        }
     }
 
     private var statusText: String {
@@ -638,6 +718,29 @@ private struct PermissionCenterPage: View {
             Button("Enable recovery notifications") { model.beginNotificationsRecoveryOptIn() }
         case .authorized, .restricted, .unavailable:
             Text(model.notificationsGuidance.nextAction)
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+        }
+    }
+
+    private var microphoneStatusText: String {
+        switch model.microphoneStatus {
+        case .notDetermined: "Not enabled"
+        case .authorized: "Enabled"
+        case .denied: "Not allowed"
+        case .restricted: "Restricted"
+        case .unavailable: "Unavailable"
+        }
+    }
+
+    @ViewBuilder private var microphoneAction: some View {
+        switch model.microphoneStatus {
+        case .denied:
+            Button("Open System Settings") { Task { _ = await model.openMicrophoneSystemSettings() } }
+        case .notDetermined:
+            Button("Allow Xiaozhi microphone") { model.beginXiaozhiMicrophoneConsent() }
+        case .authorized, .restricted, .unavailable:
+            Text(model.microphoneGuidance.nextAction)
                 .font(.caption)
                 .foregroundStyle(NotchUITokens.contentSecondary)
         }

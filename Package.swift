@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "NotchActions", targets: ["NotchActions"]),
         .library(name: "NotchIPC", targets: ["NotchIPC"]),
         .library(name: "NotchDemoModule", targets: ["NotchDemoModule"]),
+        .library(name: "XiaozhiModule", targets: ["XiaozhiModule"]),
         .executable(name: "notchctl", targets: ["notchctl"]),
     ],
     targets: [
@@ -49,6 +50,11 @@ let package = Package(
             dependencies: ["NotchCore", "NotchDomain"],
             path: "Packages/NotchDemoModule/Sources"
         ),
+        .target(
+            name: "XiaozhiModule",
+            dependencies: ["NotchCore", "NotchDomain"],
+            path: "Packages/XiaozhiModule/Sources"
+        ),
         .executableTarget(
             name: "notchctl",
             dependencies: ["NotchIPC"],
@@ -68,6 +74,11 @@ let package = Package(
             name: "NotchCoreTests",
             dependencies: ["NotchCore", "NotchDomain", "NotchDemoModule"],
             path: "Tests/NotchCoreTests"
+        ),
+        .testTarget(
+            name: "XiaozhiModuleTests",
+            dependencies: ["XiaozhiModule", "NotchCore", "NotchDomain"],
+            path: "Tests/XiaozhiModuleTests"
         ),
         .testTarget(
             name: "NotchActionsTests",

@@ -99,6 +99,24 @@ func migratesF4SnapshotToShortcutSchema() async throws {
     #expect(result.settings.shortcuts.bindings.isEmpty)
 }
 
+@Test("Settings store migrates v3 settings into the Xiaozhi module namespace")
+func migratesV3SettingsToXiaozhiSchema() async throws {
+    let v3 = try JSONSerialization.data(withJSONObject: [
+        "schemaVersion": 3,
+        "appearance": ["theme": "dark", "reducedMotion": "followSystem"],
+        "notchBehavior": ["hoverDelay": 300, "autoCollapseTimeout": 3],
+        "shortcuts": ["bindings": []],
+        "modules": ["demo": ["isEnabled": true]],
+    ])
+    let backend = MemorySettingsBackend(active: v3)
+    let migrated = await SettingsStore(backend: backend).load()
+
+    #expect(migrated.recovery == .loaded)
+    #expect(migrated.settings.modules["xiaozhi"]?.xiaozhi == migrated.settings.xiaozhi)
+    #expect((try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active))).modules["xiaozhi"]?.xiaozhi == migrated.settings.xiaozhi)
+    #expect((await SettingsStore(backend: backend).load()).settings.xiaozhi == migrated.settings.xiaozhi)
+}
+
 @Test("Settings store publishes the complete valid runtime projection")
 func publishesCompleteRuntimeProjection() async {
     let runtime = RecordingRuntime()
@@ -133,13 +151,13 @@ func quarantinesCorruptSnapshot() async throws {
 
 @Test("Future schema is read-only and original bytes remain untouched")
 func preservesFutureSchema() async throws {
-    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 4, "future": true])
+    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 6, "future": true])
     let backend = MemorySettingsBackend(active: future)
     let store = SettingsStore(backend: backend)
     let loaded = await store.load()
     let mutation = await store.mutate(.theme(.dark))
 
-    #expect(loaded.recovery == .readOnlyFutureSchema(version: 4))
+    #expect(loaded.recovery == .readOnlyFutureSchema(version: 6))
     #expect(mutation.outcome == .readOnly)
     #expect(await backend.active == future)
     #expect(await backend.quarantined.isEmpty)

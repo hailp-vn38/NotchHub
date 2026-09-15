@@ -28,6 +28,7 @@ public enum PermissionRequestSource: String, Codable, Sendable {
 
 public enum PermissionFeatureID {
     public static let recoveryNotifications = "permission.recoveryNotifications"
+    public static let xiaozhi = "xiaozhi"
 }
 
 /// Declares the one F5 capability that is allowed to reach a platform adapter.
@@ -165,6 +166,28 @@ public protocol PermissionAdapter: Sendable {
     func openSystemSettings(for kind: PermissionKind) async -> Bool
 }
 
+/// Routes each declared capability to its platform-specific adapter while
+/// preserving Permission Coordinator as the sole request boundary.
+public struct PermissionAdapterRegistry: PermissionAdapter {
+    private let adapters: [PermissionKind: any PermissionAdapter]
+
+    public init(_ adapters: [PermissionKind: any PermissionAdapter]) {
+        self.adapters = adapters
+    }
+
+    public func status(for kind: PermissionKind) async -> PermissionStatus {
+        await adapters[kind]?.status(for: kind) ?? .unavailable
+    }
+
+    public func requestAuthorization(for kind: PermissionKind) async -> PermissionStatus {
+        await adapters[kind]?.requestAuthorization(for: kind) ?? .unavailable
+    }
+
+    public func openSystemSettings(for kind: PermissionKind) async -> Bool {
+        await adapters[kind]?.openSystemSettings(for: kind) ?? false
+    }
+}
+
 public actor PermissionCoordinator {
     private let adapter: any PermissionAdapter
     private let auditSink: (any PermissionAuditSinking)?
@@ -204,8 +227,6 @@ public actor PermissionCoordinator {
         }
         guard context.source != .recovery else { return .rejected(.recoveryCannotPrompt) }
         guard context.source == .settings else { return .rejected(.sourceNotAllowed) }
-        guard kind == .notifications else { return .rejected(.unsupportedCapability) }
-
         let before: PermissionStatus
         if let cached = statuses[kind] {
             before = cached
@@ -242,22 +263,19 @@ public actor PermissionCoordinator {
     }
 
     public func refresh() async {
-        statuses[.notifications] = await adapter.status(for: .notifications)
+        for kind in Set(requirements.map(\.kind)) { statuses[kind] = await adapter.status(for: kind) }
     }
 
     public func openSystemSettings(for kind: PermissionKind) async -> Bool {
-        guard kind == .notifications else { return false }
+        guard requirements.contains(where: { $0.kind == kind }) else { return false }
         return await adapter.openSystemSettings(for: kind)
     }
 
     public func snapshot() -> PermissionSnapshot {
-        .init(rows: [
-            .init(
-                kind: .notifications,
-                status: statuses[.notifications] ?? .notDetermined,
-                guidance: Self.notificationsGuidance(for: statuses[.notifications] ?? .notDetermined)
-            )
-        ])
+        .init(rows: Set(requirements.map(\.kind)).sorted { $0.rawValue < $1.rawValue }.map { kind in
+            let status = statuses[kind] ?? .notDetermined
+            return .init(kind: kind, status: status, guidance: Self.guidance(for: kind, status: status))
+        })
     }
 
     private static func result(for status: PermissionStatus) -> PermissionRequestResult {
@@ -297,6 +315,17 @@ public actor PermissionCoordinator {
                 reason: reason, dataImplication: dataImplication,
                 declineEffect: "Notifications are unavailable on this Mac.",
                 nextAction: "No recovery action is available")
+        }
+    }
+
+    private static func guidance(for kind: PermissionKind, status: PermissionStatus) -> PermissionGuidance {
+        guard kind != .notifications else { return notificationsGuidance(for: status) }
+        let reason = "Used only after the user starts Xiaozhi voice."
+        return switch status {
+        case .notDetermined: .init(reason: reason, dataImplication: "Microphone audio is sent only during an active Xiaozhi conversation.", declineEffect: "Xiaozhi voice cannot start.", nextAction: "Allow Microphone")
+        case .authorized: .init(reason: reason, dataImplication: "Microphone audio is sent only during an active Xiaozhi conversation.", declineEffect: "No action is needed.", nextAction: "Microphone is enabled")
+        case .denied: .init(reason: reason, dataImplication: "No audio is captured.", declineEffect: "Xiaozhi voice cannot start.", nextAction: "Open System Settings")
+        case .restricted, .unavailable: .init(reason: reason, dataImplication: "No audio is captured.", declineEffect: "Microphone is unavailable.", nextAction: "No recovery action is available")
         }
     }
 }

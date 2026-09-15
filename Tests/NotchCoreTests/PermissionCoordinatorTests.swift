@@ -194,6 +194,36 @@ func projectsGuidanceAndReportsSettingsFailure() async {
     #expect(await coordinator.openSystemSettings(for: .notifications) == false)
 }
 
+@Test("Permission Coordinator keeps Xiaozhi microphone consent user initiated and offers denial recovery")
+func coordinatesXiaozhiMicrophoneConsent() async {
+    let adapter = RecordingPermissionAdapter(status: .notDetermined, requestResult: .denied)
+    let coordinator = PermissionCoordinator(
+        adapter: adapter,
+        requirements: [.init(featureID: PermissionFeatureID.xiaozhi, kind: .microphone)]
+    )
+    let context = PermissionRequestContext(
+        featureID: PermissionFeatureID.xiaozhi,
+        reason: "Start a Xiaozhi voice conversation.",
+        initiatedByUser: false,
+        source: .settings,
+        explanationAcknowledged: true
+    )
+
+    #expect(await coordinator.request(.microphone, context: context) == .rejected(.userInitiationRequired))
+    #expect(await adapter.requestCount == 0)
+
+    let confirmed = PermissionRequestContext(
+        featureID: context.featureID,
+        reason: context.reason,
+        initiatedByUser: true,
+        source: context.source,
+        explanationAcknowledged: context.explanationAcknowledged
+    )
+    #expect(await coordinator.request(.microphone, context: confirmed) == .denied)
+    #expect(await coordinator.snapshot().row(for: .microphone)?.guidance.nextAction == "Open System Settings")
+    #expect(await adapter.requestCount == 1)
+}
+
 private actor RecordingPermissionAdapter: PermissionAdapter {
     private var statusValue: PermissionStatus
     private let requestResult: PermissionStatus

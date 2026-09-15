@@ -5,6 +5,7 @@ import NotchSurface
 import NotchUI
 import ServiceManagement
 import SwiftUI
+import XiaozhiModule
 
 #if DEBUG
     import NotchDemoModule
@@ -72,7 +73,16 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
         settingsStore = SettingsStore(backend: backend, runtime: settingsRuntime)
         moduleRuntime = ModuleRuntime(settingsStore: settingsStore)
         shortcutBindings = ShortcutBindingStore(settingsStore: settingsStore)
-        permissionCoordinator = PermissionCoordinator(adapter: NotificationsPermissionAdapter())
+        permissionCoordinator = PermissionCoordinator(
+            adapter: PermissionAdapterRegistry([
+                .notifications: NotificationsPermissionAdapter(),
+                .microphone: XiaozhiMicrophonePermissionAdapter(),
+            ]),
+            requirements: [
+                .init(featureID: PermissionFeatureID.recoveryNotifications, kind: .notifications),
+                .init(featureID: PermissionFeatureID.xiaozhi, kind: .microphone),
+            ]
+        )
         permissionCenter = PermissionCenterModel(coordinator: permissionCoordinator)
         settingsShell = SettingsShellModel(
             settingsStore: settingsStore,
@@ -87,6 +97,15 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
         settingsRuntime.surface = notchSurface
         Task {
             let settings = await settingsStore.load().settings
+            let xiaozhi = XiaozhiModule()
+            await moduleRuntime.register(
+                xiaozhi,
+                enabled: settings.modules[xiaozhi.id.rawValue]?.isEnabled ?? false
+            )
+            if settings.modules[xiaozhi.id.rawValue]?.isEnabled == true,
+               settings.xiaozhi.isPreparedOnLaunch {
+                await moduleRuntime.start(xiaozhi.id)
+            }
             #if DEBUG
                 let demo = NotchDemoModule()
                 await moduleRuntime.register(demo, enabled: settings.modules[demo.id.rawValue]?.isEnabled ?? true)
