@@ -72,9 +72,35 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setSceneOpener(_ openWindow: OpenWindowAction) {
-        openScene = { scene in
+        openScene = { [weak self] scene in
             openWindow(id: scene.windowID)
+
+            guard scene == .settings else { return }
+            self?.focusSettingsWindowWhenReady()
         }
+    }
+
+    /// `openWindow(id:)` activates a scene, but the native window can be
+    /// materialized one run-loop turn later. Re-apply key/front focus once it
+    /// exists so repeated menu-bar selections also restore the existing window.
+    /// This intentionally does not change the window level, so Settings is not
+    /// made permanently always-on-top.
+    private func focusSettingsWindowWhenReady(attemptsRemaining: Int = 3) {
+        guard
+            let window = NSApp.windows.first(where: { window in
+                window.title == AppShellPlaceholderScene.settings.title
+                    || window.identifier?.rawValue == AppShellPlaceholderScene.settings.windowID
+            })
+        else {
+            guard attemptsRemaining > 0 else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.focusSettingsWindowWhenReady(attemptsRemaining: attemptsRemaining - 1)
+            }
+            return
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
