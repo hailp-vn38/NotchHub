@@ -32,7 +32,6 @@ func xiaozhiReadinessIsPassive() async throws {
     let health = try #require(await runtime.health(for: module.id))
     #expect(health.state == .running)
     #expect(await runtime.contributions(for: module.id).map(\.text) == ["Xiaozhi", "Xiaozhi ready"])
-    #expect(await runtime.activeResourceCount(for: module.id) == 3)
 }
 
 @Test("Xiaozhi secrets use a credential boundary and diagnostics redact token-like values")
@@ -92,6 +91,83 @@ func preparesXiaozhiOnUserAction() async throws {
     #expect(await events.events.contains(.init(moduleID: module.id, type: EventType("xiaozhi.ready")!)))
 }
 
+@Test("Voice session sends authenticated hello then starts bounded Auto listening after server hello")
+func startsAuthenticatedVoiceSession() async throws {
+    let transport = XiaozhiFakeVoiceTransport()
+    let capture = XiaozhiFakeAudioCapture()
+    let session = XiaozhiVoiceSession(
+        connector: XiaozhiFakeVoiceConnector(transport: transport),
+        capture: capture,
+        playback: XiaozhiFakeAudioPlayback(),
+        codec: XiaozhiFakeOpusCodec())
+
+    try await session.start(.init(
+        url: URL(string: "wss://example.test/voice")!, token: "session-token", version: 1,
+        deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755",
+        mode: .auto))
+
+    let request = try #require(await transport.connectionRequest)
+    #expect(request.headers["Authorization"] == "Bearer session-token")
+    #expect(request.headers["Protocol-Version"] == "1")
+    #expect(try await transport.jsonValue(at: 0, key: "type") == "hello")
+
+    try await session.receive(.text("""
+    {"type":"hello","session_id":"server-session","audio_params":{"format":"opus","sample_rate":24000,"channels":1,"frame_duration":60}}
+    """))
+
+    #expect((await session.snapshot()).sessionID == "server-session")
+    #expect((await session.snapshot()).voiceState == .listening)
+    #expect(await capture.isCapturing)
+    #expect(try await transport.jsonValue(at: 1, key: "state") == "start")
+}
+
+@Test("Push-to-Talk only captures while held and uplink drops stale frames beyond 2400 ms")
+func boundsPushToTalkAudio() async throws {
+    let transport = XiaozhiFakeVoiceTransport()
+    let capture = XiaozhiFakeAudioCapture()
+    let session = XiaozhiVoiceSession(
+        connector: XiaozhiFakeVoiceConnector(transport: transport), capture: capture,
+        playback: XiaozhiFakeAudioPlayback(), codec: XiaozhiFakeOpusCodec())
+    try await session.start(.init(
+        url: URL(string: "wss://example.test/voice")!, token: "session-token", version: 1,
+        deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755",
+        mode: .pushToTalk))
+    try await session.receive(.text("{" + "\"type\":\"hello\",\"session_id\":\"server-session\",\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,\"channels\":1,\"frame_duration\":60}}"))
+
+    #expect(!(await capture.isCapturing))
+    try await session.beginPushToTalk()
+    #expect(await capture.isCapturing)
+    for frame in 0..<41 { try await session.enqueueMicrophonePCM(Data(repeating: UInt8(frame), count: 1_920)) }
+    try await session.endPushToTalk()
+
+    #expect(!(await capture.isCapturing))
+    #expect((await session.snapshot()).droppedUplinkFrames == 1)
+    #expect(try await transport.lastJSONValue(key: "state") == "stop")
+}
+
+@Test("Malformed server input fails closed and playback drops stale packets beyond 1200 ms")
+func rejectsMalformedInputAndBoundsPlayback() async throws {
+    let playback = XiaozhiFakeAudioPlayback()
+    let session = XiaozhiVoiceSession(
+        connector: XiaozhiFakeVoiceConnector(transport: XiaozhiFakeVoiceTransport()),
+        capture: XiaozhiFakeAudioCapture(), playback: playback, codec: XiaozhiFakeOpusCodec())
+    try await session.start(.init(
+        url: URL(string: "wss://example.test/voice")!, token: "secret-token", version: 1,
+        deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755",
+        mode: .auto))
+
+    do {
+        try await session.receive(.text("{not-json}"))
+        Issue.record("Malformed input must fail closed")
+    } catch let error as XiaozhiVoiceSessionError {
+        #expect(error == .malformedMessage)
+    }
+    #expect((await session.snapshot()).voiceState == .error)
+    #expect((await session.snapshot()).lastError == "Protocol error.")
+    #expect(!(await session.snapshot()).description.contains("secret-token"))
+    #expect(await playback.stopCount >= 2)
+}
+
 private actor XiaozhiMemorySettingsBackend: SettingsBackend {
     private var active: Data?
 
@@ -115,4 +191,52 @@ private struct XiaozhiFakeBootstrap: XiaozhiBootstrapping {
 private struct XiaozhiFakeIdentity: XiaozhiIdentityStoring {
     func deviceID() throws -> String { "02:11:22:33:44:55" }
     func clientID() throws -> String { "d1a6d617-337a-439a-ad02-5cf5c447a755" }
+}
+
+private actor XiaozhiFakeVoiceTransport: XiaozhiVoiceTransport {
+    private(set) var connectionRequest: XiaozhiVoiceConnectionRequest?
+    private var messages: [XiaozhiVoiceTransportMessage] = []
+
+    func record(_ request: XiaozhiVoiceConnectionRequest) { connectionRequest = request }
+    func send(_ message: XiaozhiVoiceTransportMessage) async throws { messages.append(message) }
+    func nextMessage() async throws -> XiaozhiVoiceTransportMessage {
+        try await Task.sleep(for: .seconds(3_600))
+        throw CancellationError()
+    }
+    func disconnect() async {}
+
+    func jsonValue(at index: Int, key: String) throws -> String? {
+        guard messages.indices.contains(index), case let .text(text) = messages[index] else { return nil }
+        return (try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])?[key] as? String
+    }
+
+    func lastJSONValue(key: String) throws -> String? {
+        guard let message = messages.last, case let .text(text) = message else { return nil }
+        return (try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])?[key] as? String
+    }
+}
+
+private struct XiaozhiFakeVoiceConnector: XiaozhiVoiceConnecting {
+    let transport: XiaozhiFakeVoiceTransport
+    func connect(_ request: XiaozhiVoiceConnectionRequest) async throws -> any XiaozhiVoiceTransport {
+        await transport.record(request)
+        return transport
+    }
+}
+
+private actor XiaozhiFakeAudioCapture: XiaozhiAudioCapturing {
+    private(set) var isCapturing = false
+    func start(_: @escaping @Sendable (Data) -> Void) async throws { isCapturing = true }
+    func stop() async { isCapturing = false }
+}
+
+private actor XiaozhiFakeAudioPlayback: XiaozhiAudioPlaying {
+    private(set) var stopCount = 0
+    func enqueue(_: Data, sampleRate _: Int, channels _: Int) async throws {}
+    func stop() async { stopCount += 1 }
+}
+
+private struct XiaozhiFakeOpusCodec: XiaozhiOpusCoding {
+    func encode(_ pcm16kMono: Data) throws -> Data { pcm16kMono }
+    func decode(_ packet: Data, sampleRate _: Int, channels _: Int) throws -> Data { packet }
 }

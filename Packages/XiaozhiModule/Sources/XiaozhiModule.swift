@@ -249,15 +249,27 @@ public actor XiaozhiModule: NotchModule {
     private let bootstrap: any XiaozhiBootstrapping
     private let credentials: any XiaozhiCredentialStoring
     private let identity: any XiaozhiIdentityStoring
+    private let voiceFactory: @Sendable () throws -> XiaozhiVoiceSession
+    private let permissionCoordinator: PermissionCoordinator?
+    private let modeProvider: @Sendable () async -> XiaozhiConversationMode
+    private var voice: XiaozhiVoiceSession?
 
     public init(
         bootstrap: any XiaozhiBootstrapping = XiaozhiCloudBootstrapClient(),
         credentials: any XiaozhiCredentialStoring = KeychainXiaozhiCredentialStore(),
-        identity: any XiaozhiIdentityStoring = KeychainXiaozhiIdentityStore()
+        identity: any XiaozhiIdentityStoring = KeychainXiaozhiIdentityStore(),
+        permissionCoordinator: PermissionCoordinator? = nil,
+        modeProvider: @escaping @Sendable () async -> XiaozhiConversationMode = { .auto },
+        voiceFactory: @escaping @Sendable () throws -> XiaozhiVoiceSession = {
+            try XiaozhiVoiceSession(connector: XiaozhiURLSessionVoiceConnector(), capture: XiaozhiAVAudioCapture(), playback: XiaozhiAVAudioPlayback(), codec: XiaozhiOpusCodec())
+        }
     ) {
         self.bootstrap = bootstrap
         self.credentials = credentials
         self.identity = identity
+        self.voiceFactory = voiceFactory
+        self.permissionCoordinator = permissionCoordinator
+        self.modeProvider = modeProvider
     }
 
     public func start(context: ModuleContext) async throws {
@@ -270,6 +282,22 @@ public actor XiaozhiModule: NotchModule {
             }
         )
         _ = await context.actions.register(prepare, lifetime: context.lifetime)
+        let start = ModuleAction(
+            definition: .init(id: ActionID("xiaozhi.start")!, title: "Start Xiaozhi"),
+            invoke: { [weak self, eventPublisher = context.eventPublisher] in
+                await self?.startVoice(eventPublisher: eventPublisher)
+            }
+        )
+        _ = await context.actions.register(start, lifetime: context.lifetime)
+        for (id, title) in [("xiaozhi.pttBegin", "Begin Xiaozhi Push-to-Talk"), ("xiaozhi.pttEnd", "End Xiaozhi Push-to-Talk"), ("xiaozhi.abort", "Abort Xiaozhi"), ("xiaozhi.reconnect", "Reconnect Xiaozhi")] {
+            let action = ModuleAction(definition: .init(id: ActionID(id)!, title: title), invoke: { [weak self, eventPublisher = context.eventPublisher] in
+                await self?.control(id, eventPublisher: eventPublisher)
+            })
+            _ = await context.actions.register(action, lifetime: context.lifetime)
+        }
+        await context.lifetime.register(.socket, named: "xiaozhi.voice") { [weak self] in
+            await self?.voice?.stop()
+        }
     }
 
     private func prepare(eventPublisher: any ModuleEventPublisher) async {
@@ -283,4 +311,47 @@ public actor XiaozhiModule: NotchModule {
             await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.bootstrapFailed")!))
         }
     }
+
+    private func startVoice(eventPublisher: any ModuleEventPublisher) async {
+        do {
+            if let permissionCoordinator {
+                await permissionCoordinator.refresh()
+                guard await permissionCoordinator.snapshot().row(for: .microphone)?.status == .authorized else {
+                    await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.microphoneDenied")!)); return
+                }
+            }
+            let deviceID = try identity.deviceID()
+            let clientID = try identity.clientID()
+            let response = try await bootstrap.bootstrap(.init(deviceID: deviceID, clientID: clientID, appVersion: "0.1.0"))
+            guard let websocket = response.websocket else {
+                await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.activationRequired")!))
+                return
+            }
+            try credentials.saveCredential(websocket.token)
+            let voice = try voiceFactory()
+            self.voice = voice
+            try await voice.start(.init(url: websocket.url, token: websocket.token, version: websocket.version,
+                                        deviceID: deviceID, clientID: clientID, mode: await modeProvider()))
+            await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connecting")!))
+        } catch {
+            await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connectionFailed")!))
+        }
+    }
+
+    private func control(_ action: String, eventPublisher: any ModuleEventPublisher) async {
+        do {
+            switch action {
+            case "xiaozhi.pttBegin": try await voice?.beginPushToTalk()
+            case "xiaozhi.pttEnd": try await voice?.endPushToTalk()
+            case "xiaozhi.abort": try await voice?.abort()
+            case "xiaozhi.reconnect": try await voice?.reconnect()
+            default: return
+            }
+            if let state = await voice?.snapshot().voiceState {
+                await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.\(state.rawValue)")!))
+            }
+        } catch { await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connectionFailed")!)) }
+    }
+
+    public func stop() async { await voice?.stop(); voice = nil }
 }

@@ -97,7 +97,10 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
         settingsRuntime.surface = notchSurface
         Task {
             let settings = await settingsStore.load().settings
-            let xiaozhi = XiaozhiModule()
+            let xiaozhi = XiaozhiModule(
+                permissionCoordinator: permissionCoordinator,
+                modeProvider: { await self.settingsStore.load().settings.xiaozhi.conversationMode }
+            )
             await moduleRuntime.register(
                 xiaozhi,
                 enabled: settings.modules[xiaozhi.id.rawValue]?.isEnabled ?? false

@@ -19,6 +19,8 @@ let package = Package(
         .executable(name: "notchctl", targets: ["notchctl"]),
     ],
     targets: [
+        .binaryTarget(name: "OpusC", path: "Vendor/Opus.xcframework"),
+        .target(name: "OpusBridge", dependencies: ["OpusC"], path: "Packages/XiaozhiModule/OpusBridge"),
         .target(name: "NotchDomain", path: "Packages/NotchDomain/Sources"),
         .target(
             name: "NotchCore",
@@ -52,7 +54,7 @@ let package = Package(
         ),
         .target(
             name: "XiaozhiModule",
-            dependencies: ["NotchCore", "NotchDomain"],
+            dependencies: ["NotchCore", "NotchDomain", "OpusBridge"],
             path: "Packages/XiaozhiModule/Sources"
         ),
         .executableTarget(
