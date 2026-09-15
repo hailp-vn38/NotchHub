@@ -313,6 +313,17 @@ public actor XiaozhiModule: NotchModule {
             }
         )
         _ = await context.actions.register(start, lifetime: context.lifetime)
+        for (id, title) in [
+            ("xiaozhi.abort", "Abort Xiaozhi"),
+            ("xiaozhi.retry", "Retry Xiaozhi"),
+        ] {
+            let action = ModuleAction(
+                definition: .init(id: ActionID(id)!, title: title),
+                invoke: { [weak self, eventPublisher = context.eventPublisher] in
+                    await self?.control(id, eventPublisher: eventPublisher)
+                })
+            _ = await context.actions.register(action, lifetime: context.lifetime)
+        }
         await context.lifetime.register(.socket, named: "xiaozhi.voice") { [weak self] in
             await self?.stopVoiceSession()
         }
@@ -404,13 +415,26 @@ public actor XiaozhiModule: NotchModule {
         await publishPresentation()
     }
 
+    private func control(_ action: String, eventPublisher: any ModuleEventPublisher) async {
+        switch action {
+        case "xiaozhi.abort":
+            try? await voice?.abort()
+            await returnHomeNow()
+            await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.aborted")!))
+        case "xiaozhi.retry":
+            await returnHomeNow()
+            await startVoice(eventPublisher: eventPublisher)
+        default: break
+        }
+    }
+
     private func publishPresentation() async {
         guard let lifetime else { return }
         await lifetime.update(.init(moduleID: id, slot: .compactStatus, text: presentation.compactText))
         await lifetime.update(
             .init(
                 moduleID: id, slot: .expandedContent, text: presentation.expandedText,
-                actions: isVoiceMode ? [] : presentation.actions,
+                actions: presentation.actions,
                 content: isVoiceMode
                     ? presentation.surfaceContent(ttsMuted: sessionTTSMuted, assistantText: assistantText)
                     : .home))
@@ -494,7 +518,8 @@ public enum XiaozhiConversationPresentation: Equatable, Sendable {
         let make = { (id: String, title: String) in SurfaceActionDescriptor(actionID: ActionID(id)!, title: title) }
         return switch self {
         case .ready: [make("xiaozhi.start", "Start")]
-        case .connecting, .listening, .thinking, .speaking, .error: []
+        case .connecting, .listening, .thinking, .speaking: [make("xiaozhi.abort", "Abort")]
+        case .error: [make("xiaozhi.retry", "Retry")]
         }
     }
 

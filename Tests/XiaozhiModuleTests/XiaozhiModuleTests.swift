@@ -132,8 +132,8 @@ func projectsHomeActionAndTypedVoicePresentation() async throws {
     #expect(await runtime.actions.definitions().isEmpty)
 }
 
-@Test("Home action enters muted voice mode without exposing manual controls")
-func homeActionEntersMutedVoiceMode() async throws {
+@Test("Home Start explicitly opens Xiaozhi and retains an Abort control on the surface")
+func homeStartConnectsXiaozhiWithAbortControl() async throws {
     let transport = XiaozhiFakeVoiceTransport()
     let session = XiaozhiVoiceSession(
         connector: XiaozhiFakeVoiceConnector(transport: transport),
@@ -151,12 +151,12 @@ func homeActionEntersMutedVoiceMode() async throws {
     await runtime.actions.invoke(try #require(ActionID("xiaozhi.start")))
 
     let expanded = try #require(await runtime.contributions(for: module.id).first { $0.slot == .expandedContent })
-    #expect(expanded.actions.isEmpty)
+    #expect(expanded.actions.map(\.actionID) == [try #require(ActionID("xiaozhi.abort"))])
     #expect(expanded.content == .voice(.init(state: .connecting)))
-    #expect(
-        Set((await runtime.actions.definitions()).map(\.id)) == [
-            try #require(ActionID("xiaozhi.prepare")), try #require(ActionID("xiaozhi.start")),
-        ])
+    #expect(Set((await runtime.actions.definitions()).map(\.id)) == [
+        try #require(ActionID("xiaozhi.prepare")), try #require(ActionID("xiaozhi.start")),
+        try #require(ActionID("xiaozhi.abort")), try #require(ActionID("xiaozhi.retry")),
+    ])
     await runtime.shutdown()
 }
 

@@ -180,9 +180,9 @@ struct NotchSurfaceRootView: View {
         isExpanded ? "expanded" : model.isCompactGeometry ? "compact" : "collapsed"
     }
 
-    private var voicePresentation: SurfaceVoicePresentation? {
+    private var voiceContribution: SurfaceContributionDescriptor? {
         for contribution in model.contributions {
-            if case .voice(let presentation) = contribution.content { return presentation }
+            if case .voice = contribution.content { return contribution }
         }
         return nil
     }
@@ -195,8 +195,12 @@ struct NotchSurfaceRootView: View {
         ZStack(alignment: .top) {
             shape.fill(.black)
             if isExpanded {
-                if let voicePresentation {
-                    SurfaceVoiceModeView(presentation: voicePresentation, reduceMotion: reduceMotion)
+                if let voiceContribution, case let .voice(voicePresentation) = voiceContribution.content {
+                    SurfaceVoiceModeView(
+                        presentation: voicePresentation,
+                        actions: voiceContribution.actions,
+                        reduceMotion: reduceMotion,
+                        invokeAction: invokeAction)
                         .transition(.opacity)
                 } else {
                     VStack(spacing: 8) {
@@ -253,6 +257,9 @@ struct NotchSurfaceRootView: View {
                 .onHover(perform: handleHover)
                 .onTapGesture { send(.clicked) }
                 .accessibilityHidden(true)
+                // The expanded surface contains real SwiftUI controls. Its
+                // transparent interaction layer must not consume their taps.
+                .allowsHitTesting(!isExpanded)
         }
         .shadow(color: isExpanded || model.isHovering ? .black.opacity(0.7) : .clear, radius: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -290,7 +297,9 @@ struct NotchSurfaceRootView: View {
 
 private struct SurfaceVoiceModeView: View {
     let presentation: SurfaceVoicePresentation
+    let actions: [SurfaceActionDescriptor]
     let reduceMotion: Bool
+    let invokeAction: (ActionID) -> Void
 
     private var status: String {
         switch presentation.state {
@@ -334,7 +343,18 @@ private struct SurfaceVoiceModeView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
+        .overlay(alignment: .bottomTrailing) {
+            if !actions.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(actions) { action in
+                        Button(action.title) { invokeAction(action.actionID) }
+                            .accessibilityLabel(action.title)
+                    }
+                }
+                .padding(12)
+            }
+        }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(status)
         .accessibilityValue(presentation.assistantText ?? "")
     }

@@ -126,9 +126,7 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
                 xiaozhi,
                 enabled: settings.modules[xiaozhi.id.rawValue]?.isEnabled ?? false
             )
-            if settings.modules[xiaozhi.id.rawValue]?.isEnabled == true,
-                settings.xiaozhi.isPreparedOnLaunch
-            {
+            if settings.modules[xiaozhi.id.rawValue]?.isEnabled == true {
                 await moduleRuntime.start(xiaozhi.id)
             }
             #if DEBUG
