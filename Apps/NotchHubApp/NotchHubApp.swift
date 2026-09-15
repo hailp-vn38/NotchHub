@@ -1,4 +1,5 @@
 import AppKit
+import NotchActions
 import NotchCore
 import NotchSurface
 import NotchUI
@@ -43,6 +44,7 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     private let settingsRuntime = SurfaceSettingsRuntime()
     private let settingsStore: SettingsStore
     private let permissionCoordinator: PermissionCoordinator
+    private let shortcutBindings: ShortcutBindingStore
     let permissionCenter: PermissionCenterModel
     let settingsShell: SettingsShellModel
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
@@ -63,11 +65,13 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
     override init() {
         let backend = FileSettingsBackend.applicationSupport()
         settingsStore = SettingsStore(backend: backend, runtime: settingsRuntime)
+        shortcutBindings = ShortcutBindingStore(settingsStore: settingsStore)
         permissionCoordinator = PermissionCoordinator(adapter: NotificationsPermissionAdapter())
         permissionCenter = PermissionCenterModel(coordinator: permissionCoordinator)
         settingsShell = SettingsShellModel(
             settingsStore: settingsStore,
-            permissionCenter: permissionCenter
+            permissionCenter: permissionCenter,
+            shortcutPresentation: ShortcutPresentationModel(bindingStore: shortcutBindings)
         )
         super.init()
     }

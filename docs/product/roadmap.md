@@ -345,7 +345,8 @@ Create one safe, typed action system for every entry point before introducing mo
 - Add shortcut conflict checks and disabled capability state.
 - Implement the Settings-spec Action and Shortcut rows, including availability reason, result,
   confirmation route, clear-binding behavior, and conflict feedback.
-- Register base actions:
+- Define the planned base-action ownership catalogue; do not register an Action until its owner
+  can provide a complete executor, availability, confirmation, and audit contract:
 
 ```text
 app.openSettings
@@ -362,7 +363,9 @@ development hooks, not exposed in `MenuBarExtra`.
 
 ### Exit criteria
 
-- The same action can be invoked from menu bar, Notch button, shortcut, and internal test command.
+- A registered action can be invoked from its permitted entry points through the same registry path.
+- Before an action is registered, the shortcut framework shows no assignable action and retains
+  any persisted unknown binding as unavailable.
 - Entry points do not duplicate action business logic.
 - Side-effecting actions use confirmation policy.
 - Unknown/invalid Action IDs are rejected safely.

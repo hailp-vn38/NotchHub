@@ -503,29 +503,39 @@ Surface Debug Overlay                   [ OFF ]
 
 ```text
 Shortcuts
-Assign keyboard shortcuts to registered actions.
+Shortcut bindings will be available to future app-active actions. No keyboard input is captured yet.
 ```
 
-### Row
+### Initial state
 
 ```text
-Toggle Notch Surface             [ ⌥⌘Space ]
-Show or hide the Notch surface.
+No shortcut-capable actions are available yet.
+Actions appear here when their owning feature registers them.
+```
 
-Open Settings                    [ Record… ]
-Open NotchHub Settings.
+### Registered action row
 
-Open Diagnostics                 [ Record… ]
-Open diagnostics and recovery.
+```text
+{Action title}                    [ Record… ]
+{Availability explanation}
+```
+
+### Unavailable binding row
+
+```text
+{ActionID}                        Unavailable   [ Clear ]
+This action is not registered in the current app state.
 ```
 
 ### Rules
 
 - Shortcut bind với `ActionID`.
 - Validate conflict trước khi save.
+- Conflict từ chối binding mới, giữ nguyên binding hiện có; không auto-replace.
 - Clear shortcut chỉ remove binding.
 - Action vẫn tồn tại.
 - Unavailable action vẫn có thể hiển thị nhưng disabled + reason.
+- F6 chưa capture phím; future app-active Action owner mới nhận phím. UI không hiển thị global shortcut control và không yêu cầu Accessibility.
 
 ---
 
@@ -551,7 +561,7 @@ Privacy Information
 
 ```text
 Accessibility                              Enabled
-Used by global shortcut functionality.
+Not used by the app-active shortcut framework.
 
 Microphone                                 Not used
 No enabled module currently uses microphone access.
@@ -575,20 +585,15 @@ Actions
 Registered operations available across NotchHub.
 ```
 
-### Example row
+### Initial state
 
 ```text
-Toggle Notch Surface                   [ Run ]
-app.toggleSurface
-
-Available
-Shortcut: ⌥⌘Space
-Confirmation: Not required
+No actions are registered yet.
+Actions appear when their owning feature provides a complete typed contract.
 ```
 
-### Foundation actions
+### Future catalogue
 
-- `app.toggleSurface`
 - `app.openSettings`
 - `app.openDiagnostics`
 - `app.restartRuntime`
@@ -597,6 +602,7 @@ Confirmation: Not required
 - `settings.reset`
 - `demo.ping`
 
+Danh sách này là mục tiêu của owner tương lai, không phải action đang hoạt động hoặc được render.
 Development actions phải ẩn khỏi normal release nếu không intended cho users.
 
 ---

@@ -186,6 +186,38 @@ public struct ActionDefinition: Codable, Identifiable, Sendable {
     }
 }
 
+public enum ShortcutModifier: String, CaseIterable, Codable, Hashable, Sendable {
+    case command
+    case option
+    case control
+    case shift
+}
+
+public struct ShortcutBinding: Codable, Equatable, Sendable {
+    public let actionID: ActionID
+    public let key: String
+    public let modifiers: Set<ShortcutModifier>
+    public let isEnabled: Bool
+
+    public init(
+        actionID: ActionID,
+        key: String,
+        modifiers: Set<ShortcutModifier>,
+        isEnabled: Bool = true
+    ) {
+        self.actionID = actionID
+        self.key = key.lowercased()
+        self.modifiers = modifiers
+        self.isEnabled = isEnabled
+    }
+
+    public var isValid: Bool {
+        key.unicodeScalars.count == 1
+            && !key.unicodeScalars.allSatisfy(\.properties.isWhitespace)
+            && !modifiers.isEmpty
+    }
+}
+
 public struct ModuleMetadata: Codable, Sendable {
     public let displayName: String
     public let capabilities: Set<Capability>

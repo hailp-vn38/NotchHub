@@ -58,6 +58,10 @@ _Avoid_: plugin, extension, widget
 A registered, typed operation identified by an `ActionID` and invoked only through the Action Registry.
 _Avoid_: command, arbitrary operation
 
+**Shortcut binding**:
+A user-configured keyboard input route to an already registered Action; it neither defines an Action nor owns its execution.
+_Avoid_: hotkey command, callback shortcut
+
 **Event envelope**:
 A versioned external message wrapper carrying source, type, timestamp, correlation information, and validated payload.
 _Avoid_: raw event, untyped message

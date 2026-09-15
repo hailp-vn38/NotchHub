@@ -2,7 +2,7 @@ import Foundation
 import NotchCore
 import Testing
 
-@Test("Settings store persists every accepted F4 v1 value across relaunch")
+@Test("Settings store persists every accepted F6 v2 value across relaunch")
 func persistsAcceptedSettingsAcrossRelaunch() async throws {
     let backend = MemorySettingsBackend()
     let store = SettingsStore(backend: backend)
@@ -82,6 +82,23 @@ func preservesLegacySnapshotWhenMigrationWriteFails() async throws {
     #expect(await backend.quarantined.isEmpty)
 }
 
+@Test("Settings store migrates a released F4 v1 snapshot with empty shortcut bindings")
+func migratesF4SnapshotToShortcutSchema() async throws {
+    let v1 = try JSONSerialization.data(
+        withJSONObject: [
+            "schemaVersion": 1,
+            "appearance": ["theme": "dark", "reducedMotion": "followSystem"],
+            "notchBehavior": ["hoverDelay": 300, "autoCollapseTimeout": 3],
+        ]
+    )
+
+    let result = await SettingsStore(backend: MemorySettingsBackend(active: v1)).load()
+
+    #expect(result.recovery == .loaded)
+    #expect(result.settings.schemaVersion == AppSettings.currentSchemaVersion)
+    #expect(result.settings.shortcuts.bindings.isEmpty)
+}
+
 @Test("Settings store publishes the complete valid runtime projection")
 func publishesCompleteRuntimeProjection() async {
     let runtime = RecordingRuntime()
@@ -116,13 +133,13 @@ func quarantinesCorruptSnapshot() async throws {
 
 @Test("Future schema is read-only and original bytes remain untouched")
 func preservesFutureSchema() async throws {
-    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 2, "future": true])
+    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 3, "future": true])
     let backend = MemorySettingsBackend(active: future)
     let store = SettingsStore(backend: backend)
     let loaded = await store.load()
     let mutation = await store.mutate(.theme(.dark))
 
-    #expect(loaded.recovery == .readOnlyFutureSchema(version: 2))
+    #expect(loaded.recovery == .readOnlyFutureSchema(version: 3))
     #expect(mutation.outcome == .readOnly)
     #expect(await backend.active == future)
     #expect(await backend.quarantined.isEmpty)
@@ -160,7 +177,7 @@ func importsAtomically() async throws {
     #expect(valid.settings == imported)
 }
 
-@Test("Export contains exactly the non-secret F4 snapshot")
+@Test("Export contains exactly the non-secret settings snapshot")
 func exportsOnlyF4Settings() async throws {
     let store = SettingsStore(backend: MemorySettingsBackend())
     _ = await store.load()
@@ -169,7 +186,7 @@ func exportsOnlyF4Settings() async throws {
     let exported = try await store.exportSanitized()
     let object = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
 
-    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior"])
+    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts"])
     #expect((object["appearance"] as? [String: String])?["theme"] == "dark")
 }
 
@@ -195,6 +212,27 @@ func rejectsImportWithUnknownScope() async throws {
     #expect(try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active)) == before.settings)
 }
 
+@Test("Import rejects shortcut bindings with a duplicate enabled chord")
+func rejectsDuplicateShortcutChordOnImport() async throws {
+    let store = SettingsStore(backend: MemorySettingsBackend())
+    _ = await store.load()
+    let duplicate = try JSONSerialization.data(
+        withJSONObject: [
+            "schemaVersion": AppSettings.currentSchemaVersion,
+            "appearance": ["theme": "system", "reducedMotion": "followSystem"],
+            "notchBehavior": ["hoverDelay": 300, "autoCollapseTimeout": 3],
+            "shortcuts": [
+                "bindings": [
+                    ["actionID": "app.openSettings", "key": "s", "modifiers": ["command"], "isEnabled": true],
+                    ["actionID": "app.openDiagnostics", "key": "s", "modifiers": ["command"], "isEnabled": true],
+                ]
+            ],
+        ]
+    )
+
+    #expect((await store.importSanitized(duplicate)).outcome == .rejected)
+}
+
 @Test("A failed import replacement retains last known good settings")
 func retainsLastKnownGoodOnImportWriteFailure() async throws {
     let backend = MemorySettingsBackend()
@@ -210,7 +248,7 @@ func retainsLastKnownGoodOnImportWriteFailure() async throws {
     #expect(try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active)) == before.settings)
 }
 
-@Test("Normal reset replaces only the F4 snapshot with safe defaults")
+@Test("Normal reset replaces the settings snapshot with safe defaults")
 func normalResetRestoresF4Defaults() async throws {
     let store = SettingsStore(backend: MemorySettingsBackend())
     _ = await store.load()
@@ -223,7 +261,7 @@ func normalResetRestoresF4Defaults() async throws {
 
     #expect(reset.outcome == .saved)
     #expect(reset.settings == .safeDefaults)
-    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior"])
+    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts"])
 }
 
 @Test("File backend rotates corrupt snapshots at the documented three-file one-MiB limit")

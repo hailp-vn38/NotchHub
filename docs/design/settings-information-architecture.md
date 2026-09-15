@@ -233,8 +233,8 @@ Lets the user view, assign, enable, disable, and resolve conflicts for registere
 
 | Group | Content |
 |---|---|
-| Global controls | Enable/disable global shortcut support if applicable |
-| Module actions | Actions contributed by enabled modules, grouped by module/category |
+| Active shortcuts | Registered shortcut-capable Actions, grouped by owner/category |
+| Unavailable bindings | Retained bindings whose Action is not currently registered, with clear-only recovery |
 | Conflict/help | Reserved shortcut guidance, conflict state, permission/accessibility explanation |
 
 ### Shortcut row structure
@@ -253,21 +253,27 @@ Clear/reset option
 ### Rules
 
 - A shortcut binds to an `ActionID`, not a view callback or module method.
+- F6 chưa có recorder hoặc key capture; future Action owner chỉ được dùng app-active input, không
+  được suy ra global shortcut support hoặc yêu cầu Accessibility từ stored binding.
 - The shortcut recorder validates input and reports conflicts before saving.
+- A conflict rejects the proposed binding and leaves the existing owner untouched; it never
+  silently replaces another binding.
 - Reserved/system-conflicting combinations must be rejected or clearly warned.
 - If a selected implementation requires Accessibility, show the permission requirement before enabling capture/registration.
 - A shortcut for an unavailable action remains visible but disabled, with the reason (e.g., module disabled, permission denied).
 - Clearing a shortcut does not remove the action; it removes only that input route.
 
-### Default bindings
+### Initial empty state
 
-Initial suggestion, subject to conflict check:
+Until an owner registers a shortcut-capable Action, the page explains that no actions are available
+to assign. Persisted unavailable bindings remain separately visible with their `ActionID`, reason,
+and a Clear control.
 
 ```text
-No Surface visibility toggle shortcut.
+No shortcut-capable actions are available yet.
 ```
 
-Do not assume this binding is available for every user/system configuration.
+No Surface visibility toggle shortcut exists.
 
 ---
 
@@ -322,6 +328,9 @@ See [`permissions.md`](../platform/permissions.md) for capability-level behavior
 
 Provides a user-visible catalogue of registered actions and their availability, source/confirmation behavior, and recent result summary.
 
+Until an owner registers an Action with a complete typed contract, the page displays an explicit
+empty state and offers no Run control or placeholder action.
+
 ### Content groups
 
 | Group | Content |
@@ -352,11 +361,12 @@ Reason/details link when unavailable
 - Do not add a generic “run command” field.
 - If the app supports opening a known URL/app, show user-friendly destination information rather than an editable arbitrary command input.
 
-### Foundation action catalogue
+### Future foundation action catalogue
+
+This table is a future ownership plan, not evidence that the entries are registered in F6.
 
 | Action | Category | Settings behavior |
 |---|---|---|
-| `` | App | Show current shortcut and run button |
 | `app.openSettings` | App | Informational; current page already open |
 | `app.openDiagnostics` | App | Open diagnostics route |
 | `app.restartRuntime` | Runtime | Run with policy-driven confirmation |

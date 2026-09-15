@@ -253,7 +253,7 @@ NotchHub uses `NSScreen` for:
 ### 8.1 Potential uses
 
 - Local event monitor for click-outside behavior.
-- Global shortcut/event support if the selected implementation requires it.
+- Future global shortcut/event support only after a concrete use case and permission review.
 - Keyboard/Escape handling.
 - Local/global pointer monitoring for native shape hit-testing and hover detection.
 
@@ -268,11 +268,15 @@ Apple's [`NSEvent`](https://developer.apple.com/documentation/appkit/nsevent) AP
 - Do not collect or log unrelated keystrokes/mouse events.
 - Never place raw event data in diagnostics.
 - Document whether the chosen shortcut approach requires Accessibility.
+- F6 shortcut capture is app-active only and therefore does not request Accessibility.
 - Test monitor cleanup during module/app shutdown.
 
 ### 8.3 Global shortcut boundary
 
 A global shortcut maps to an `ActionID`; it must not call a module method directly. The action still goes through availability, authorization, confirmation, and audit policy.
+
+Global registration is deferred until an owning feature demonstrates an app-active shortcut is
+insufficient; that later work must record its API and Accessibility decision before enabling it.
 
 ---
 
@@ -286,12 +290,13 @@ A global shortcut maps to an `ActionID`; it must not call a module method direct
 
 The menu bar is a recovery path and control center:
 
-- Toggle surface.
 - Open Settings.
 - Diagnostics.
 - Show current module/runtime health summary.
 - Restart runtime.
 - Quit.
+
+It does not provide a user-facing Surface visibility toggle; see ADR-0014.
 
 ### 9.3 Rules
 

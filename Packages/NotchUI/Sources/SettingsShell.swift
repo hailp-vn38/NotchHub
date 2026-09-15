@@ -1,5 +1,7 @@
 import Foundation
+import NotchActions
 import NotchCore
+import NotchDomain
 import Observation
 import SwiftUI
 import UniformTypeIdentifiers
@@ -98,15 +100,18 @@ public final class SettingsShellModel {
     public private(set) var saveOutcome: SettingsMutationOutcome?
     fileprivate let settingsStore: SettingsStore?
     public let permissionCenter: PermissionCenterModel?
+    public let shortcutPresentation: ShortcutPresentationModel?
 
     public init(
         selectedRoute: SettingsRoute = .general,
         settingsStore: SettingsStore? = nil,
-        permissionCenter: PermissionCenterModel? = nil
+        permissionCenter: PermissionCenterModel? = nil,
+        shortcutPresentation: ShortcutPresentationModel? = nil
     ) {
         self.selectedRoute = selectedRoute
         self.settingsStore = settingsStore
         self.permissionCenter = permissionCenter
+        self.shortcutPresentation = shortcutPresentation
     }
 
     public func select(_ route: SettingsRoute) {
@@ -119,7 +124,9 @@ public final class SettingsShellModel {
             .init(route: route, owningPhase: .f4, isInteractive: true)
         case .about:
             .init(route: route, owningPhase: .f3, isInteractive: true)
-        case .shortcuts, .actions:
+        case .shortcuts:
+            .init(route: route, owningPhase: .f6, isInteractive: shortcutPresentation != nil)
+        case .actions:
             .init(route: route, owningPhase: .f6, isInteractive: false)
         case .permissions:
             .init(route: route, owningPhase: .f5, isInteractive: permissionCenter != nil)
@@ -154,6 +161,7 @@ public final class SettingsShellModel {
         let result = await settingsStore.load()
         settings = result.settings
         recoveryOutcome = result.recovery
+        await shortcutPresentation?.load()
     }
 
     public func update(_ mutation: SettingsMutation) {
@@ -414,7 +422,11 @@ private struct SettingsPageView: View {
             if let permissionCenter = model.permissionCenter {
                 PermissionCenterPage(model: permissionCenter)
             }
-        case .shortcuts, .actions, .modules, .diagnostics:
+        case .shortcuts:
+            if let shortcutPresentation = model.shortcutPresentation {
+                ShortcutSettingsPage(model: shortcutPresentation)
+            }
+        case .actions, .modules, .diagnostics:
             EmptyView()
         }
     }
@@ -424,12 +436,75 @@ private struct SettingsPageView: View {
         case .general: "Application information and the current foundation boundary."
         case .appearance: "Preview visual behavior without saving a preference."
         case .notchBehavior: "Explain the current safe surface defaults."
-        case .shortcuts: "Keyboard shortcut registration arrives in F6."
+        case .shortcuts: "Shortcut bindings are ready; Action registration remains future work."
         case .permissions: "Permission Center arrives in F5."
         case .actions: "Registered actions arrive in F6."
         case .modules: "Module runtime arrives in F7."
         case .diagnostics: "Operational diagnostics arrive in F9."
         case .about: "Application information safe to show in the foundation."
+        }
+    }
+}
+
+private struct ShortcutSettingsPage: View {
+    @Bindable var model: ShortcutPresentationModel
+
+    var body: some View {
+        SettingsSection(title: "Keyboard shortcuts") {
+            Text("Shortcut bindings are ready for future app-active actions. No keyboard input is captured yet.")
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+            if let feedback = model.feedback {
+                Text(feedback)
+                    .font(.caption)
+                    .foregroundStyle(NotchUITokens.statusWarning)
+            }
+            switch model.state {
+            case .empty:
+                Text("No shortcut-capable actions are available yet.")
+            case .unavailable(let bindings, let disabled):
+                unavailableBindings(bindings)
+                disabledBindings(disabled)
+            case .available(let bindings, let unavailable, let disabled):
+                ForEach(bindings, id: \.actionID) { binding in
+                    bindingRow(binding, status: "Available")
+                }
+                unavailableBindings(unavailable)
+                disabledBindings(disabled)
+            }
+        }
+        .task { await model.load() }
+    }
+
+    @ViewBuilder
+    private func unavailableBindings(_ bindings: [ShortcutBinding]) -> some View {
+        ForEach(bindings, id: \.actionID) { binding in
+            bindingRow(binding, status: "Action unavailable")
+        }
+    }
+
+    @ViewBuilder
+    private func disabledBindings(_ bindings: [ShortcutBinding]) -> some View {
+        ForEach(bindings, id: \.actionID) { binding in
+            bindingRow(binding, status: "Disabled")
+        }
+    }
+
+    private func bindingRow(_ binding: ShortcutBinding, status: String) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(binding.actionID.rawValue)
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(NotchUITokens.contentSecondary)
+            }
+            Spacer()
+            Button(binding.isEnabled ? "Disable" : "Enable") {
+                Task { await model.setEnabled(!binding.isEnabled, for: binding.actionID) }
+            }
+            Button("Clear", role: .destructive) {
+                Task { await model.clearBinding(for: binding.actionID) }
+            }
         }
     }
 }

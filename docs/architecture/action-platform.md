@@ -421,18 +421,27 @@ public struct ShortcutBinding: Codable, Sendable {
 ### 10.2 Requirements
 
 - A shortcut binds to an `ActionID`, never directly to a module method.
+- F6 provides the binding, validation, persistence, and dispatch framework; it does not register
+  a concrete Action catalogue or invent actions merely to populate the recorder.
+- F6 reserves app-active recognition for a future Action owner; it installs no key capture or
+  dispatch without an Action. Global shortcut registration is a future, opt-in capability and is
+  not implied by a stored binding.
 - Shortcut recorder validates syntax and basic conflicts.
+- A conflicting binding is rejected before persistence; the existing binding remains unchanged.
 - A shortcut is unavailable when its action is unavailable.
+- A persisted binding whose `ActionID` is not currently registered is retained as an unavailable
+  binding. It is not dispatched and the user may clear it.
 - The user can clear or disable a binding.
 - Menu and Notch UI display shortcut hints where useful.
 - The implementation must document any Accessibility/system permission requirement.
 - Repeated global event monitoring is avoided where a narrower API is sufficient.
 
-### 10.3 Default foundation bindings
+### 10.3 Initial catalogue state
 
-No user-facing shortcut toggles Surface visibility. Shortcuts may still invoke
-registered expansion, collapse, or application-scene actions where explicitly
-defined by the owning feature.
+F6 starts with no default bindings and no shortcut-specific foundation Action. The Settings UI
+shows a clear empty state until an owning feature registers a shortcut-capable Action. No
+user-facing shortcut toggles Surface visibility. Later owners may explicitly expose a registered
+application-scene or expansion/collapse Action through the same framework.
 
 ---
 
@@ -537,7 +546,11 @@ IPC source policy is checked before registry lookup. Unknown clients cannot invo
 
 ---
 
-## 16. Foundation action catalogue
+## 16. Planned foundation action catalogue
+
+This is a future ownership catalogue, not an F6 registration list. F6 deliberately registers no
+concrete Action merely to demonstrate shortcuts; an Action appears only when its owner is ready to
+provide its executor, availability, confirmation, and audit behavior.
 
 | Action ID | Category | Confirmation | Purpose |
 |---|---|---|---|
@@ -549,7 +562,7 @@ IPC source policy is checked before registry lookup. Unknown clients cannot invo
 | `settings.reset` | Settings | Destructive | Reset non-secret settings |
 | `demo.ping` | Demo | Never | Exercise module action path |
 
-No action in the foundation starts a shell process or controls hardware/network devices.
+No future foundation Action starts a shell process or controls hardware/network devices.
 
 ---
 

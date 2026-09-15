@@ -1,4 +1,7 @@
+import Foundation
+import NotchActions
 import NotchCore
+import NotchDomain
 import NotchUI
 import Testing
 
@@ -87,6 +90,74 @@ func projectsRestrictedPermissionGuidance() async {
     #expect(permissions.notificationsGuidance.nextAction == "Contact your Mac administrator")
 }
 
+@Test("Shortcut presentation distinguishes an empty registry from an unavailable binding")
+@MainActor
+func presentsShortcutFrameworkStates() async throws {
+    let store = ShortcutBindingStore(settingsStore: SettingsStore(backend: SettingsMemoryBackend()))
+    let model = ShortcutPresentationModel(bindingStore: store)
+    let action = try #require(ActionID("app.openSettings"))
+
+    await model.load()
+    #expect(model.state == .empty)
+
+    _ = await store.bind(.init(actionID: action, key: "s", modifiers: [.command]))
+    await model.load()
+    #expect(
+        model.state
+            == .unavailable(
+                bindings: [.init(actionID: action, key: "s", modifiers: [.command])],
+                disabledBindings: []
+            ))
+}
+
+@Test("Shortcut presentation retains disabled bindings")
+@MainActor
+func presentsDisabledShortcutBinding() async throws {
+    let store = ShortcutBindingStore(settingsStore: SettingsStore(backend: SettingsMemoryBackend()))
+    let model = ShortcutPresentationModel(bindingStore: store)
+    let action = try #require(ActionID("app.openSettings"))
+    let binding = ShortcutBinding(actionID: action, key: "s", modifiers: [.command])
+
+    _ = await store.bind(binding)
+    _ = await store.setEnabled(false, for: action)
+    await model.load()
+
+    #expect(
+        model.state
+            == .unavailable(
+                bindings: [],
+                disabledBindings: [
+                    .init(actionID: action, key: "s", modifiers: [.command], isEnabled: false)
+                ]))
+}
+
+@Test("Shortcut presentation reports an enable conflict")
+@MainActor
+func reportsShortcutEnableConflict() async throws {
+    let store = ShortcutBindingStore(settingsStore: SettingsStore(backend: SettingsMemoryBackend()))
+    let model = ShortcutPresentationModel(bindingStore: store)
+    let firstAction = try #require(ActionID("app.openSettings"))
+    let secondAction = try #require(ActionID("app.openDiagnostics"))
+
+    _ = await store.bind(.init(actionID: firstAction, key: "s", modifiers: [.command]))
+    _ = await store.setEnabled(false, for: firstAction)
+    _ = await store.bind(.init(actionID: secondAction, key: "s", modifiers: [.command]))
+    await model.setEnabled(true, for: firstAction)
+
+    #expect(model.feedback == "Shortcut is already assigned to app.openDiagnostics.")
+}
+
+@Test("Settings shell activates the Shortcuts route only with its F6 presentation model")
+@MainActor
+func activatesShortcutRouteAtTheOwnedSeam() {
+    let store = ShortcutBindingStore(settingsStore: SettingsStore(backend: SettingsMemoryBackend()))
+    let shortcuts = ShortcutPresentationModel(bindingStore: store)
+    let model = SettingsShellModel(shortcutPresentation: shortcuts)
+
+    #expect(model.routeState(for: .shortcuts).isInteractive)
+    #expect(SettingsShellModel().routeState(for: .shortcuts).isInteractive == false)
+}
+
 private actor SettingsPermissionAdapter: PermissionAdapter {
     private var status: PermissionStatus
     private(set) var requestCount = 0
@@ -104,4 +175,14 @@ private actor SettingsPermissionAdapter: PermissionAdapter {
     }
 
     func openSystemSettings(for _: PermissionKind) async -> Bool { true }
+}
+
+private actor SettingsMemoryBackend: SettingsBackend {
+    private var active: Data?
+
+    func readActive() throws -> Data? { active }
+
+    func replaceActive(with data: Data) throws { active = data }
+
+    func quarantine(_: Data) throws {}
 }

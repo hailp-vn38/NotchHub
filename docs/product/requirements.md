@@ -294,9 +294,11 @@ later Permission, Action/Shortcut, Module, or Diagnostics phases.
 | FR-ACT-007 | Side-effecting/destructive actions shall require confirmation according to policy. | Must |
 | FR-ACT-008 | The app shall record sanitized action audit events for Diagnostics. | Must |
 | FR-ACT-009 | The app shall provide shortcut recording, persistence, enable/disable, and conflict validation. | Must |
-| FR-ACT-010 | Default shortcuts shall be conservative and configurable. | Must |
+| FR-ACT-010 | F6 shall create no default shortcut binding or shortcut-specific Action; later owners may add conservative, configurable bindings. | Must |
 | FR-ACT-011 | A shortcut shall become unavailable/disabled when required capability/permission is unavailable. | Should |
 | FR-ACT-012 | Foundation actions shall not expose arbitrary shell/script execution. | Must |
+| FR-ACT-013 | F6 shall reserve app-active shortcut handling for a future Action owner; global shortcut support requires a later documented API and permission decision. | Must |
+| FR-ACT-014 | An unregistered persisted `ActionID` binding shall be retained as unavailable and never dispatched; a conflict shall reject the proposed binding without replacing its owner. | Must |
 
 ### Minimum foundation actions
 

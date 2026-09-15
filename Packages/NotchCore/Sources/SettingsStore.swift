@@ -1,4 +1,5 @@
 import Foundation
+import NotchDomain
 
 public enum SettingsTheme: String, CaseIterable, Codable, Equatable, Sendable {
     case system
@@ -50,22 +51,44 @@ public struct NotchBehaviorSettings: Codable, Equatable, Sendable {
     }
 }
 
-/// The complete, non-secret F4 v1 settings snapshot.
+public struct ShortcutSettings: Codable, Equatable, Sendable {
+    public var bindings: [ShortcutBinding]
+
+    public init(bindings: [ShortcutBinding] = []) {
+        self.bindings = bindings
+    }
+
+    public var isValid: Bool {
+        bindings.enumerated().allSatisfy { index, binding in
+            binding.isValid
+                && !bindings[..<index].contains(where: { existing in
+                    existing.actionID == binding.actionID
+                        || (existing.isEnabled && binding.isEnabled
+                            && existing.key == binding.key && existing.modifiers == binding.modifiers)
+                })
+        }
+    }
+}
+
+/// The complete, non-secret settings snapshot; F6 v2 adds shortcut bindings.
 public struct AppSettings: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var appearance: AppearanceSettings
     public var notchBehavior: NotchBehaviorSettings
+    public var shortcuts: ShortcutSettings
 
     public init(
         schemaVersion: Int = AppSettings.currentSchemaVersion,
         appearance: AppearanceSettings = .init(),
-        notchBehavior: NotchBehaviorSettings = .init()
+        notchBehavior: NotchBehaviorSettings = .init(),
+        shortcuts: ShortcutSettings = .init()
     ) {
         self.schemaVersion = schemaVersion
         self.appearance = appearance
         self.notchBehavior = notchBehavior
+        self.shortcuts = shortcuts
     }
 
     public static let safeDefaults = AppSettings()
@@ -104,6 +127,7 @@ public enum SettingsMutation: Sendable {
     case reducedMotion(ReducedMotionOverride)
     case hoverDelay(HoverDelay)
     case autoCollapseTimeout(AutoCollapseTimeout)
+    case shortcutBindings([ShortcutBinding])
     case replace(AppSettings)
 }
 
@@ -200,9 +224,10 @@ public actor SettingsStore {
         case .reducedMotion(let value): candidate.appearance.reducedMotion = value
         case .hoverDelay(let value): candidate.notchBehavior.hoverDelay = value
         case .autoCollapseTimeout(let value): candidate.notchBehavior.autoCollapseTimeout = value
+        case .shortcutBindings(let value): candidate.shortcuts.bindings = value
         case .replace(let value): candidate = value
         }
-        guard candidate.schemaVersion == AppSettings.currentSchemaVersion else {
+        guard candidate.schemaVersion == AppSettings.currentSchemaVersion, candidate.shortcuts.isValid else {
             return .init(settings: settings, outcome: .rejected)
         }
         do {
@@ -303,10 +328,19 @@ public actor SettingsStore {
         if version == AppSettings.currentSchemaVersion {
             try validateCurrentSchemaFields(in: data)
             let current = try decoder.decode(AppSettings.self, from: data)
-            guard current.schemaVersion == AppSettings.currentSchemaVersion else {
+            guard current.schemaVersion == AppSettings.currentSchemaVersion, current.shortcuts.isValid else {
                 throw SettingsStoreError.invalidSnapshot
             }
             return .current(current)
+        }
+        if version == 1 {
+            let legacy = try decoder.decode(LegacySettingsV1.self, from: data)
+            return .migrated(
+                .init(
+                    appearance: legacy.appearance,
+                    notchBehavior: legacy.notchBehavior
+                )
+            )
         }
         guard version == 0 else { throw SettingsStoreError.invalidSnapshot }
         let legacy = try decoder.decode(LegacySettingsV0.self, from: data)
@@ -327,14 +361,22 @@ public actor SettingsStore {
     private func validateCurrentSchemaFields(in data: Data) throws {
         guard
             let snapshot = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            Set(snapshot.keys) == ["schemaVersion", "appearance", "notchBehavior"],
+            Set(snapshot.keys) == ["schemaVersion", "appearance", "notchBehavior", "shortcuts"],
             let appearance = snapshot["appearance"] as? [String: Any],
             Set(appearance.keys) == ["theme", "reducedMotion"],
             let notchBehavior = snapshot["notchBehavior"] as? [String: Any],
-            Set(notchBehavior.keys) == ["hoverDelay", "autoCollapseTimeout"]
+            Set(notchBehavior.keys) == ["hoverDelay", "autoCollapseTimeout"],
+            let shortcuts = snapshot["shortcuts"] as? [String: Any],
+            Set(shortcuts.keys) == ["bindings"]
         else {
             throw SettingsStoreError.invalidSnapshot
         }
+    }
+
+    private struct LegacySettingsV1: Decodable {
+        let schemaVersion: Int
+        let appearance: AppearanceSettings
+        let notchBehavior: NotchBehaviorSettings
     }
 }
 

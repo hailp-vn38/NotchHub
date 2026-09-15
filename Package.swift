@@ -29,7 +29,7 @@ let package = Package(
         ),
         .target(
             name: "NotchUI",
-            dependencies: ["NotchCore", "NotchDomain"],
+            dependencies: ["NotchActions", "NotchCore", "NotchDomain"],
             path: "Packages/NotchUI/Sources"
         ),
         .target(
@@ -49,13 +49,18 @@ let package = Package(
         ),
         .testTarget(
             name: "NotchUITests",
-            dependencies: ["NotchCore", "NotchUI"],
+            dependencies: ["NotchActions", "NotchCore", "NotchDomain", "NotchUI"],
             path: "Tests/NotchUITests"
         ),
         .testTarget(
             name: "NotchCoreTests",
             dependencies: ["NotchCore"],
             path: "Tests/NotchCoreTests"
+        ),
+        .testTarget(
+            name: "NotchActionsTests",
+            dependencies: ["NotchActions", "NotchCore", "NotchDomain"],
+            path: "Tests/NotchActionsTests"
         ),
     ]
 )
