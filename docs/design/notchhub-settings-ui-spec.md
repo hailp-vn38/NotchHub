@@ -23,12 +23,13 @@ Settings phải là **một cửa sổ macOS riêng**, không render bên trong 
 
 ### Trạng thái hiện tại
 
-Execution phase vẫn là F2 cho đến khi native manual gate được đóng. Branch hiện đã có F3 Settings
-shell: Settings mở thành application scene với 9 route, shared `NotchUI` components, navigation
-accessibility, và motion preview chỉ trong phiên. Các control, dữ liệu, và trạng thái còn lại trong
-tài liệu này là mục tiêu có chủ sở hữu theo pha bên dưới; chúng không phải bằng chứng rằng
-capability đã hoạt động. Trước khi chủ sở hữu xuất hiện, route phải dùng unavailable state rõ ràng
-và không nhận input có side effect.
+F5 Permission Center đã có automated implementation gate; native manual permission gate vẫn
+pending. F2 và F3 vẫn có native manual gate riêng chưa được đóng; F4 có evidence persistence hoàn tất. Branch đã có F3 Settings shell: Settings mở thành
+application scene với 9 route, shared `NotchUI` components, navigation accessibility, và motion
+preview chỉ trong phiên. Các control, dữ liệu, và trạng thái còn lại trong tài liệu này là mục tiêu
+có chủ sở hữu theo pha bên dưới; chúng không phải bằng chứng rằng capability đã hoạt động. Trước
+khi chủ sở hữu xuất hiện, route phải dùng unavailable state rõ ràng và không nhận input có side
+effect.
 
 ---
 
@@ -40,7 +41,7 @@ Những phần còn lại của specification này chỉ được triển khai k
 | Pha | Phần Settings UI được hiện thực | Không làm trong pha này |
 |---|---|---|
 | F4 — Typed settings | Toggle/preset row có validation; preview an toàn; applying/rollback; reset scopes; import/export non-secret; trạng thái saved/error từ `SettingsStore` | Permission request, shortcut capture, Action execution, module lifecycle, operational diagnostics |
-| F5 — Permission Center | Permission groups; friendly capability/status/reason; pre-prompt explanation; denied/revoked state; System Settings recovery | Request một capability không do user khởi tạo; module tự gọi privacy API |
+| F5 — Permission Center | Permission groups; friendly capability/status/reason; pre-prompt explanation; denied/revoked state; System Settings recovery; Notifications recovery opt-in | Request một capability không do user khởi tạo; module tự gọi privacy API; general notification policy |
 | F6 — Actions & shortcuts | Action row, result/availability, confirmation route; shortcut recorder, clear/disable/conflict state | Callback business logic trong view; arbitrary command/executor input |
 | F7 — Module runtime | Module list/detail, enablement, lifecycle/health/error projection, module settings route | Start module bị disable chỉ để render page; module tạo top-level route |
 | F8 — EventBus & local IPC | Bounded local IPC health/status and recovery summary when an owned route exists | Token, authorization header, raw request/payload, LAN control |

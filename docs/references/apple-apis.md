@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Architecture / Platform  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-15
 **Location:** `docs/references/apple-apis.md`  
 **Related documents:** [Architecture Overview](../architecture/overview.md), [C4 Container](../architecture/c4-container.md), [Notch Surface](../architecture/notch-surface.md), [State Management](../architecture/state-management.md), [Permissions](../platform/permissions.md), [Data Persistence](../architecture/data-persistence.md), [Performance](../architecture/performance.md), [Boring Notch Reference](boring-notch.md)
 
@@ -73,7 +73,7 @@ ADR required:
 | Network | Loopback IPC/WebSocket if needed | `NotchIPC` | Add when concrete use case exists |
 | Security/Keychain | IPC tokens, credentials, secrets | `NotchCore`/persistence adapter | Adopt for secrets |
 | OSLog | Structured privacy-aware logging | `NotchCore`/Diagnostics | Adopt |
-| UserNotifications | Optional notification module | Notification adapter/module | Future/opt-in |
+| UserNotifications | Permission Center recovery notification | Permission adapter | Planned F5 / explicit opt-in |
 | EventKit | Calendar/Reminders modules | Future modules only | Future/permissioned |
 | AVFoundation | Optional native microphone/audio module | Future Xiaozhi Voice module | Future/permissioned |
 | ScreenCaptureKit | Optional screen capture/OCR/context module | Future module only | Future/permissioned |
@@ -422,12 +422,13 @@ diagnostics
 
 ### Status
 
-Optional future capability, not required by the foundation.
+Planned F5 capability, limited to Permission Center recovery notifications after an explicit
+user opt-in. It is not a general notification module or event-delivery policy.
 
 ### Use
 
-- Background action result/error when user opts in.
-- Module failure or permission recovery summary.
+- Permission Center recovery notification after the user opts in.
+- Background action result/error and module failure remain future owner-specific work.
 
 ### Rules
 

@@ -97,10 +97,16 @@ public final class SettingsShellModel {
     public private(set) var recoveryOutcome: SettingsRecoveryOutcome = .loaded
     public private(set) var saveOutcome: SettingsMutationOutcome?
     fileprivate let settingsStore: SettingsStore?
+    public let permissionCenter: PermissionCenterModel?
 
-    public init(selectedRoute: SettingsRoute = .general, settingsStore: SettingsStore? = nil) {
+    public init(
+        selectedRoute: SettingsRoute = .general,
+        settingsStore: SettingsStore? = nil,
+        permissionCenter: PermissionCenterModel? = nil
+    ) {
         self.selectedRoute = selectedRoute
         self.settingsStore = settingsStore
+        self.permissionCenter = permissionCenter
     }
 
     public func select(_ route: SettingsRoute) {
@@ -116,7 +122,7 @@ public final class SettingsShellModel {
         case .shortcuts, .actions:
             .init(route: route, owningPhase: .f6, isInteractive: false)
         case .permissions:
-            .init(route: route, owningPhase: .f5, isInteractive: false)
+            .init(route: route, owningPhase: .f5, isInteractive: permissionCenter != nil)
         case .modules:
             .init(route: route, owningPhase: .f7, isInteractive: false)
         case .diagnostics:
@@ -404,7 +410,11 @@ private struct SettingsPageView: View {
                 Text("A local-first macOS platform for glanceable status and quick actions.")
                     .foregroundStyle(NotchUITokens.contentSecondary)
             }
-        case .shortcuts, .permissions, .actions, .modules, .diagnostics:
+        case .permissions:
+            if let permissionCenter = model.permissionCenter {
+                PermissionCenterPage(model: permissionCenter)
+            }
+        case .shortcuts, .actions, .modules, .diagnostics:
             EmptyView()
         }
     }
@@ -420,6 +430,87 @@ private struct SettingsPageView: View {
         case .modules: "Module runtime arrives in F7."
         case .diagnostics: "Operational diagnostics arrive in F9."
         case .about: "Application information safe to show in the foundation."
+        }
+    }
+}
+
+private struct PermissionCenterPage: View {
+    @Bindable var model: PermissionCenterModel
+
+    var body: some View {
+        SettingsSection(title: "Permission Center") {
+            SettingsStatusRow(title: "Notifications", value: statusText)
+            Text(model.notificationsGuidance.reason)
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+            Text(model.notificationsGuidance.dataImplication)
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+            Text(model.notificationsGuidance.declineEffect)
+                .font(.caption)
+                .foregroundStyle(NotchUITokens.contentSecondary)
+            if model.notificationsStatus == .denied {
+                Button("Open System Settings") {
+                    Task { _ = await model.openSystemSettings() }
+                }
+            } else if model.notificationsStatus == .authorized {
+                Text(model.notificationsGuidance.nextAction)
+                    .font(.caption)
+                    .foregroundStyle(NotchUITokens.contentSecondary)
+            } else if model.notificationsStatus == .notDetermined {
+                Button("Enable recovery notifications") {
+                    model.beginNotificationsRecoveryOptIn()
+                }
+            } else {
+                Text(model.notificationsGuidance.nextAction)
+                    .font(.caption)
+                    .foregroundStyle(NotchUITokens.contentSecondary)
+            }
+        }
+        SettingsSection(title: "Not used by enabled features") {
+            ForEach(model.informationalCapabilities, id: \.self) { capability in
+                SettingsStatusRow(title: capability.title, value: "Not used")
+            }
+        }
+        .task { await model.load() }
+        .confirmationDialog(
+            "Use notifications for Permission Center recovery?",
+            isPresented: Binding(
+                get: { model.isShowingExplanation },
+                set: { if !$0 { model.dismissExplanation() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Enable") {
+                Task { await model.confirmNotificationsRecoveryOptIn() }
+            }
+        } message: {
+            Text("NotchHub will use Notifications only for concise permission recovery messages.")
+        }
+    }
+
+    private var statusText: String {
+        switch model.notificationsStatus {
+        case .notDetermined: "Not enabled"
+        case .authorized: "Enabled"
+        case .denied: "Not allowed"
+        case .restricted: "Restricted"
+        case .unavailable: "Unavailable"
+        }
+    }
+}
+
+extension PermissionKind {
+    fileprivate var title: String {
+        switch self {
+        case .accessibility: "Accessibility"
+        case .notifications: "Notifications"
+        case .microphone: "Microphone"
+        case .calendar: "Calendar"
+        case .reminders: "Reminders"
+        case .camera: "Camera"
+        case .screenRecording: "Screen Recording"
+        case .automation: "Automation"
         }
     }
 }

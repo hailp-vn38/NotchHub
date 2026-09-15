@@ -1,3 +1,4 @@
+import NotchCore
 import NotchUI
 import Testing
 
@@ -46,4 +47,61 @@ func appliesSafeAppearancePreviewWithoutPersistence() {
     #expect(model.sessionMotionPreference == .system)
     #expect(model.isReducedMotion(systemPreference: false) == false)
     #expect(model.isReducedMotion(systemPreference: true))
+}
+
+@Test("Permissions route stays passive until the user confirms its explanation")
+@MainActor
+func keepsPermissionsPassiveUntilConfirmation() async {
+    let adapter = SettingsPermissionAdapter()
+    let permissions = PermissionCenterModel(coordinator: PermissionCoordinator(adapter: adapter))
+    let model = SettingsShellModel(permissionCenter: permissions)
+
+    model.select(.permissions)
+    #expect(model.routeState(for: .permissions).isInteractive)
+    #expect(await adapter.requestCount == 0)
+
+    await permissions.load()
+    permissions.beginNotificationsRecoveryOptIn()
+    #expect(permissions.isShowingExplanation)
+    #expect(await adapter.requestCount == 0)
+
+    await permissions.confirmNotificationsRecoveryOptIn()
+    #expect(await adapter.requestCount == 1)
+    #expect(permissions.notificationsStatus == .authorized)
+    #expect(permissions.notificationsGuidance.nextAction == "Recovery notifications are enabled")
+    #expect(
+        permissions.informationalCapabilities == [
+            .accessibility, .microphone, .calendar, .reminders, .camera, .screenRecording, .automation,
+        ])
+}
+
+@Test("Permissions model projects a restricted state without a System Settings recovery action")
+@MainActor
+func projectsRestrictedPermissionGuidance() async {
+    let permissions = PermissionCenterModel(
+        coordinator: PermissionCoordinator(adapter: SettingsPermissionAdapter(status: .restricted)))
+
+    await permissions.load()
+
+    #expect(permissions.notificationsStatus == .restricted)
+    #expect(permissions.notificationsGuidance.nextAction == "Contact your Mac administrator")
+}
+
+private actor SettingsPermissionAdapter: PermissionAdapter {
+    private var status: PermissionStatus
+    private(set) var requestCount = 0
+
+    init(status: PermissionStatus = .notDetermined) {
+        self.status = status
+    }
+
+    func status(for _: PermissionKind) async -> PermissionStatus { status }
+
+    func requestAuthorization(for _: PermissionKind) async -> PermissionStatus {
+        requestCount += 1
+        status = .authorized
+        return status
+    }
+
+    func openSystemSettings(for _: PermissionKind) async -> Bool { true }
 }

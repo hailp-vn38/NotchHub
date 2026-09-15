@@ -877,6 +877,23 @@ func forwardsF2ContextAndDebugControlsThroughTheAppShellSeam() {
     #expect(surface.lifecycleEvents == [.willSleep, .didWake])
 }
 
+@Test("App shell refreshes Permission Center only when the app becomes active")
+@MainActor
+func refreshesPermissionStatusOnActivation() {
+    let lifecycle = RecordingLifecycleObserver()
+    let permissions = RecordingPermissionStatusRefresher()
+    let coordinator = AppCoordinator(
+        lifecycleObserver: lifecycle,
+        permissionStatusRefresher: permissions
+    )
+
+    _ = coordinator.start()
+    lifecycle.send(.didWake)
+    lifecycle.send(.activated)
+
+    #expect(permissions.refreshCount == 1)
+}
+
 @Test("App shell snapshots launch-at-login status through an injected adapter")
 @MainActor
 func snapshotsLaunchAtLoginStatusWithoutRegistration() {
@@ -1004,6 +1021,15 @@ private struct FixedLaunchAtLoginController: LaunchAtLoginControlling {
 
     func status() -> LaunchAtLoginStatus {
         value
+    }
+}
+
+@MainActor
+private final class RecordingPermissionStatusRefresher: PermissionStatusRefreshing {
+    private(set) var refreshCount = 0
+
+    func refreshPermissionStatus() {
+        refreshCount += 1
     }
 }
 

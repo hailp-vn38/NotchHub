@@ -27,12 +27,13 @@ The foundation Settings app must be complete before real modules are introduced.
 
 ### Current implementation and phase boundary
 
-The current execution phase remains F2 while its native manual gate is outstanding. The branch
-contains the F3 Settings shell: the menu bar opens a nine-route application scene with shared
-`NotchUI` presentation, accessible navigation, and an explicitly session-only motion preview.
-There is still no `SettingsStore`, permission center, shortcut recorder, Action Registry UI,
-module runtime UI, or diagnostics store. This document is the target IA for those later owners,
-not evidence that they already exist.
+F4 SettingsStore and F5 Permission Center have automated implementation gates; F5 native manual
+permission QA remains pending. F2 and F3 native manual gates remain independently outstanding.
+The branch contains the F3 Settings shell: the menu bar opens a nine-route application scene with
+shared `NotchUI` presentation, accessible navigation, an explicitly session-only motion preview,
+F4 persistence, and the bounded F5 Notifications recovery-consent route. Shortcut recorder,
+Action Registry UI, module runtime UI, and diagnostics store are still future owners. This
+document remains their target IA, not evidence that those later capabilities already exist.
 
 F3 implements the **Settings shell**: nine routes, shared presentation components, accessible
 navigation, and non-misleading unavailable states. A route may explain a future capability, but
@@ -299,7 +300,8 @@ Privacy information
 ### Foundation behavior
 
 - No sensitive permission is requested at app launch.
-- Foundation may test Notifications or Accessibility only when an explicitly selected feature needs it.
+- F5 may validate Notifications only through an explicit Permission Center recovery-notification
+  opt-in. Accessibility remains deferred until F6 selects a shortcut approach that requires it.
 - Microphone, Camera, Calendar, Reminders, Screen Recording, and Automation remain informational until an in-scope module actively needs them.
 - If no enabled module needs a capability, label it “Not used by enabled features,” not “Missing permission.”
 

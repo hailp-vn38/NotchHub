@@ -302,10 +302,13 @@ Risk levels:
 - Module required/optional declaration.
 - Request context must include user initiation and reason.
 - First-launch no-prompt policy.
+- F5 only permits the explicit Settings recovery-notification opt-in for its declared
+  Notifications requirement; denied, restricted, and unavailable states never retry the prompt.
 - Permission test doubles and request audit.
 - Code review forbids direct permission API usage in modules/views.
 
-**Tests:** Automatic start request, undeclared capability request, concurrent prompt loop, denied/revoked behavior.
+**Tests:** Automatic start request, undeclared capability request, non-Settings request,
+concurrent prompt loop, denied/revoked/no-retry behavior.
 
 ## T-007 — Sensitive data in diagnostics/logs
 
@@ -471,6 +474,8 @@ Risk levels:
 - Stop capability-specific work immediately.
 - No retry/prompt loop.
 - Clear UI and System Settings recovery path.
+- For F5 Notifications, activation refresh updates the Permission Center projection; F5 owns no
+  delivery path, so external revocation cannot continue a recovery notification delivery.
 
 **Tests:** Simulated and manual revoke while active, sleep/wake, app activation, module resume after regrant.
 

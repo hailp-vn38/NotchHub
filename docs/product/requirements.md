@@ -279,6 +279,7 @@ later Permission, Action/Shortcut, Module, or Diagnostics phases.
 | FR-PERM-006 | The app shall provide an actionable recovery path when a permission is denied. | Must |
 | FR-PERM-007 | The app shall refresh relevant permission status after returning from System Settings/app activation. | Must |
 | FR-PERM-008 | The app shall document module-to-permission relationships. | Must |
+| FR-PERM-009 | F5 shall request Notifications only after the user explicitly opts into Permission Center recovery notifications; it shall not create a general notification delivery policy. | Must |
 
 ## 5.5 Actions and shortcuts
 

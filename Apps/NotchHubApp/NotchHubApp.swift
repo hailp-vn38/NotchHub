@@ -42,6 +42,8 @@ struct NotchHubApp: App {
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
     private let settingsRuntime = SurfaceSettingsRuntime()
     private let settingsStore: SettingsStore
+    private let permissionCoordinator: PermissionCoordinator
+    let permissionCenter: PermissionCenterModel
     let settingsShell: SettingsShellModel
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
     private lazy var notchSurface = SurfaceCoordinator(
@@ -53,14 +55,20 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
         scenePresenter: self,
         lifecycleObserver: lifecycleObserver,
         launchAtLoginController: SMAppServiceLaunchAtLoginController(),
-        surfaceController: notchSurface
+        surfaceController: notchSurface,
+        permissionStatusRefresher: PermissionCenterRefreshBridge(permissionCenter: permissionCenter)
     )
     private var openScene: ((AppShellPlaceholderScene) -> Void)?
 
     override init() {
         let backend = FileSettingsBackend.applicationSupport()
         settingsStore = SettingsStore(backend: backend, runtime: settingsRuntime)
-        settingsShell = SettingsShellModel(settingsStore: settingsStore)
+        permissionCoordinator = PermissionCoordinator(adapter: NotificationsPermissionAdapter())
+        permissionCenter = PermissionCenterModel(coordinator: permissionCoordinator)
+        settingsShell = SettingsShellModel(
+            settingsStore: settingsStore,
+            permissionCenter: permissionCenter
+        )
         super.init()
     }
 
@@ -121,6 +129,19 @@ private final class SurfaceSettingsRuntime: SettingsProjectionApplying {
 
     func apply(_ projection: SettingsProjection) async {
         surface?.applySettings(projection)
+    }
+}
+
+@MainActor
+private final class PermissionCenterRefreshBridge: PermissionStatusRefreshing {
+    private let permissionCenter: PermissionCenterModel
+
+    init(permissionCenter: PermissionCenterModel) {
+        self.permissionCenter = permissionCenter
+    }
+
+    func refreshPermissionStatus() {
+        Task { await permissionCenter.load() }
     }
 }
 

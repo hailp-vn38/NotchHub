@@ -7,9 +7,13 @@
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
-**Current execution phase:** F2 — Notch surface shell. F0 and F1 are complete; [F0 evidence](quality/f0-evidence.md)
-and [F1 evidence](quality/f1-evidence.md) record their passing gates. [F2 evidence](quality/f2-evidence.md)
-records passed automated verification and the remaining native manual gate.
+**Current execution phase:** F5 — Permission Center (automated implementation passed; native manual
+gate pending). [F0 evidence](quality/f0-evidence.md)
+and [F1 evidence](quality/f1-evidence.md) record passing gates; [F4 evidence](quality/f4-evidence.md)
+records the completed F4 settings gate. [F2 evidence](quality/f2-evidence.md) retains its native
+manual QA gate, and [F3 evidence](quality/f3-evidence.md) retains its native manual gate; neither
+is implied complete by the F4 result or F5 implementation. [F5 evidence](quality/f5-evidence.md)
+records the same separation for Notifications consent and recovery.
 
 ---
 
@@ -105,7 +109,7 @@ docs/
 │       ├── 0010-built-in-display-first.md
 │       ├── 0011-public-apis-first.md
 │       ├── 0012-docs-as-code.md
-│       └── 0013-fixed-expanded-admission-and-native-shaped-hit-testing.md
+│       ├── 0013-fixed-expanded-admission-and-native-shaped-hit-testing.md
 │       ├── 0014-always-on-surface-and-minimal-menu.md
 │       └── 0015-versioned-settings-file-and-forward-schema-recovery.md
 │
@@ -131,6 +135,7 @@ docs/
 │   ├── f2-evidence.md                 # F2 automated and manual evidence
 │   ├── f3-evidence.md                 # F3 automated evidence; native manual gate pending
 │   ├── f4-evidence.md                 # F4 persistence and recovery evidence template
+│   ├── f5-evidence.md                 # F5 automated and native-manual evidence
 │   ├── manual-qa.md                      # F2/F10
 │   └── performance-test-plan.md          # F10; may link performance.md
 │
@@ -368,7 +373,21 @@ Centralize permission status and on-demand permission UX.
 | `docs/quality/testing-strategy.md` | Update | Permission adapter and manual permission matrix |
 | `docs/security/threat-model.md` | Update | Permission overreach/revocation threats |
 | `docs/design/notchhub-settings-ui-spec.md` | Update | Permission page groups, status/reason copy, and recovery row UX |
-| Relevant ADR | Create/Update | Central PermissionCoordinator/on-demand policy |
+| `ADR-0008` | Update only if its accepted policy changes | Central PermissionCoordinator/on-demand policy; no new ADR for F5's bounded scope |
+
+### F5 bounded capability scope
+
+F5 is planned to validate only the **Notifications** capability, and only for a user-initiated
+Permission Center recovery-notification opt-in. It does not introduce a general background
+notification policy, event/module notifications, or a request path for Accessibility. Accessibility
+remains deferred to F6 if the selected shortcut design demonstrably requires it; Microphone,
+Camera, Calendar, Reminders, Screen Recording, and Automation remain informational future
+capabilities.
+
+F5 defines a platform-level capability requirement and validates request context. It does not
+introduce `ModuleRuntime` or a live module lifecycle; F7 connects that contract to real module
+metadata and lifecycle. Platform adapters normalize only the product-level status and keep raw
+macOS status private to the adapter.
 
 ### F5 gate
 
@@ -376,6 +395,8 @@ Centralize permission status and on-demand permission UX.
 - Request context requires user initiation/reason.
 - Denied/revoked/unavailable flows are tested.
 - Modules cannot request permissions directly.
+- The Notifications prompt is reachable only through the explicit Permission Center recovery
+  opt-in; opening Settings, onboarding, app activation, and page refresh never prompt.
 
 ---
 

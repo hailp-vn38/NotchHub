@@ -306,8 +306,11 @@ Centralize privacy permission discovery, explanation, request, denial handling, 
 - Implement `PermissionCoordinator`.
 - Add permission status refresh when app becomes active.
 - Add Permission Center UI with capability description, reason, status, pre-permission explanation, system prompt trigger, and System Settings recovery path.
-- Support capability declarations from modules.
-- Test with Notifications and only request Accessibility when a selected shortcut approach truly requires it.
+- Define a platform-level capability requirement and validate request context; F7 later connects it
+  to live module metadata and lifecycle.
+- Validate only Notifications, through an explicit Permission Center recovery-notification opt-in.
+  Do not add a general background-notification policy or request Accessibility; Accessibility stays
+  deferred to F6 if the selected shortcut approach actually requires it.
 - Implement the Settings-spec permission groups and rows: friendly capability/status/reason,
   decline effect, and System Settings recovery without an open-page prompt.
 
@@ -321,6 +324,8 @@ The base app must not ask for Camera, Microphone, Calendar, Reminders, Screen Re
 - A denied permission creates a clear usable UI state rather than a retry loop.
 - The central coordinator is the only code allowed to request permissions.
 - Permission changes after returning from System Settings are reflected in the app.
+- Opening Settings, onboarding, app activation, and a Permissions-page refresh never prompt; only
+  the explicit Notifications recovery opt-in may reach the system prompt in F5.
 
 ---
 

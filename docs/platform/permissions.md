@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.1  
 **Owner:** Platform / Security / UX  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-15
 **Location:** `docs/platform/permissions.md`  
 **Related documents:** [Architecture Overview](../architecture/overview.md), [Module System](../architecture/module-system.md), [Data Persistence](../architecture/data-persistence.md), [Action Platform](../architecture/action-platform.md), [Requirements §5.4](../product/requirements.md#54-permissions), [Vision](../product/vision.md), [Threat Model](../security/threat-model.md)
 
@@ -38,6 +38,11 @@ The foundation must provide:
 - Permission status refresh when app becomes active.
 - Diagnostics and redaction rules.
 - Tests for authorized, denied, restricted, unavailable, and not-determined states.
+
+F5's bounded implementation validates only **Notifications**, through an explicit Permission
+Center recovery-notification opt-in. It does not create a general background-notification policy
+or request Accessibility; that request remains conditional F6 work. Other entries in this document
+are future capability contracts, not permission requests made by the foundation.
 
 ### 2.2 Future capability scope
 
@@ -198,6 +203,11 @@ A request must be rejected before reaching macOS when:
 - A request is already in progress for the same capability.
 - The app is in a state where prompting would be misleading or unsafe.
 
+`onboarding` is a label for an explicit capability-specific confirmation, not an exception to the
+on-demand rule. Opening onboarding, Settings, the Permissions page, returning to the app, or
+refreshing status must never prompt by itself. `recovery` opens System Settings or refreshes state;
+it must not itself issue a new system prompt.
+
 The coordinator must deduplicate concurrent requests for the same permission and return one consistent result to awaiting callers.
 
 ---
@@ -237,7 +247,10 @@ sequenceDiagram
 
 ### First launch policy
 
-First launch may show the Permissions section as an informational overview, but it must not display system prompts for all capabilities. It may request Notifications only if the user explicitly enables notifications during onboarding or Settings.
+First launch may show the Permissions section as an informational overview, but it must not display
+system prompts. F5 may request Notifications only after the user explicitly confirms the Permission
+Center recovery-notification opt-in; an onboarding confirmation is valid only when it is that same
+capability-specific action.
 
 ### Denied flow
 
@@ -270,7 +283,7 @@ The exact API behavior may vary by macOS version and distribution mode. The modu
 | Capability | Potential feature | Foundation request? | Data/access implication | Default policy |
 |---|---|---:|---|---|
 | Accessibility | Selected global shortcuts or automation | No, unless the chosen shortcut implementation requires it | May observe/control selected user interactions | Request only when enabling dependent feature |
-| Notifications | Action errors, background status, permission result | No | Allows user-visible notifications | User opt-in |
+| Notifications | Permission Center recovery notification in F5; future owned features later | F5 only through explicit recovery opt-in | Allows user-visible notifications | User opt-in; no general background policy in F5 |
 | Microphone | Native Xiaozhi Voice | No | Captures microphone audio while active | Request when user enables Mac voice |
 | Calendar | Upcoming event module | No | Reads selected calendar/event data | Request when Calendar module is enabled/opened |
 | Reminders | Reminder module | No | Reads selected reminders | Request when Reminders module is enabled/opened |
@@ -309,15 +322,17 @@ You can change this permission later in System Settings → Privacy & Security �
 
 ### Use cases
 
-- Action completion/error when the user chooses background notifications.
-- Module failure or permission recovery message when enabled.
+- F5: a concise Permission Center recovery notification after the user explicitly opted in.
+- Later phases: action completion/error or module failure only when their owning policy and
+  user-controlled setting exist.
 
 ### Rules
 
 - Notifications are opt-in.
 - Do not use notifications for every compact event.
 - Notification content must be concise and avoid sensitive transcript/clipboard/file content by default.
-- Provide a Settings toggle and clear notification policy.
+- F5's opt-in is limited to Permission Center recovery; it does not add a general Settings toggle
+  or a delivery policy for events/modules.
 
 ## 9.3 Microphone
 
@@ -488,6 +503,8 @@ Each row should show:
 | Unavailable | Not available on this system/configuration | View alternative |
 
 The UI must not imply that a permission is required when it is only a possible future capability.
+An adapter exposes only this normalized status and a user-readable reason to the coordinator. Raw
+macOS authorization values remain adapter-private and are not rendered or written to diagnostics.
 
 ---
 
@@ -584,7 +601,7 @@ Verify:
 On a signed development/release-like build:
 
 - First launch with all permissions not determined.
-- Enable a feature that needs Notifications.
+- Explicitly enable the Permission Center recovery-notification opt-in.
 - Deny permission, close/reopen Settings, use “Open System Settings.”
 - Grant permission externally, return to app, verify refresh.
 - Revoke a permission while module is active.

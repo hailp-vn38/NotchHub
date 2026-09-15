@@ -8,17 +8,20 @@ public final class AppCoordinator {
     private let lifecycleObserver: any AppShellLifecycleObserving
     private let launchAtLoginController: any LaunchAtLoginControlling
     private let surfaceController: any NotchSurfaceLifecycleControlling
+    private let permissionStatusRefresher: any PermissionStatusRefreshing
 
     public init(
         scenePresenter: (any AppShellScenePresenter)? = nil,
         lifecycleObserver: (any AppShellLifecycleObserving)? = nil,
         launchAtLoginController: (any LaunchAtLoginControlling)? = nil,
-        surfaceController: (any NotchSurfaceLifecycleControlling)? = nil
+        surfaceController: (any NotchSurfaceLifecycleControlling)? = nil,
+        permissionStatusRefresher: (any PermissionStatusRefreshing)? = nil
     ) {
         self.scenePresenter = scenePresenter ?? NoopScenePresenter()
         self.lifecycleObserver = lifecycleObserver ?? NoopLifecycleObserver()
         self.launchAtLoginController = launchAtLoginController ?? UnavailableLaunchAtLoginController()
         self.surfaceController = surfaceController ?? UnavailableNotchSurfaceController()
+        self.permissionStatusRefresher = permissionStatusRefresher ?? NoopPermissionStatusRefresher()
     }
 
     @discardableResult
@@ -57,7 +60,11 @@ public final class AppCoordinator {
     private func handleLifecycleEvent(_ event: AppShellLifecycleEvent) {
         surfaceController.handleAppShellLifecycle(event)
         switch event {
-        case .activated, .didWake, .unlocked:
+        case .activated:
+            guard snapshot.isRunning else { return }
+            snapshot.lifecycleState = .running
+            permissionStatusRefresher.refreshPermissionStatus()
+        case .didWake, .unlocked:
             guard snapshot.isRunning else { return }
             snapshot.lifecycleState = .running
         case .deactivated:
@@ -233,10 +240,20 @@ public protocol NotchSurfaceDebugToggling: AnyObject {
 }
 
 @MainActor
+public protocol PermissionStatusRefreshing: AnyObject {
+    func refreshPermissionStatus()
+}
+
+@MainActor
 private final class UnavailableNotchSurfaceController: NotchSurfaceLifecycleControlling {
     func start() {}
     func stop() {}
     func handleAppShellLifecycle(_: AppShellLifecycleEvent) {}
+}
+
+@MainActor
+private final class NoopPermissionStatusRefresher: PermissionStatusRefreshing {
+    func refreshPermissionStatus() {}
 }
 
 public enum AppShellUnavailableFeature: Equatable, Sendable {
