@@ -250,14 +250,6 @@ struct NotchSurfaceRootView: View {
         }
         .frame(width: model.visibleSurfaceSize.width, height: model.visibleSurfaceSize.height, alignment: .top)
         .clipShape(shape)
-        .overlay {
-            shape
-                .fill(.clear)
-                .contentShape(shape)
-                .onHover(perform: handleHover)
-                .onTapGesture { send(.clicked) }
-                .accessibilityHidden(true)
-        }
         .shadow(color: isExpanded || model.isHovering ? .black.opacity(0.7) : .clear, radius: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityLabel("NotchHub \(accessibilityState) surface")
@@ -286,10 +278,6 @@ struct NotchSurfaceRootView: View {
                 : .spring(response: 0.45, dampingFraction: 1.00)
     }
 
-    private func handleHover(_ hovering: Bool) {
-        model.isHovering = hovering
-        send(hovering ? .hoverEntered : .hoverExited)
-    }
 }
 
 private struct SurfaceVoiceModeView: View {

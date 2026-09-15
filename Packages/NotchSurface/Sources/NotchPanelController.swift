@@ -24,6 +24,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private var debugOverlayEnabled = false
     private var topologyRevision: UInt64 = 0
     private var nativeMouseCaptureDepth = 0
+    private var pointerIsInsideSurface = false
 
     public init(sessionMotionPreference: @escaping @MainActor () -> Bool = { false }) {
         presentationModel = NotchSurfacePresentationModel(
@@ -64,6 +65,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
         case .hide, .suppress, .pauseInteraction:
             removeEventMonitors()
             nativeMouseCaptureDepth = 0
+            pointerIsInsideSurface = false
             panel?.ignoresMouseEvents = true
             panel?.orderOut(nil)
             restoreFocusAfterSurfaceInteraction()
@@ -226,8 +228,11 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
 
     private func installPointerMonitors() {
         removeEventMonitors()
-        let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown]) { [weak self] event in
             self?.refreshNativeHitTesting(pointerLocation: NSEvent.mouseLocation)
+            if event.type == .leftMouseDown, self?.pointerIsInsideSurface == true {
+                self?.interactionHandler?(.clicked)
+            }
             return event
         }
         let global = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
@@ -270,6 +275,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private func refreshNativeHitTesting(pointerLocation: NSPoint = NSEvent.mouseLocation) {
         guard let panel else { return }
         let inside = isPointerInsideSurface(pointerLocation: pointerLocation)
+        if inside != pointerIsInsideSurface {
+            pointerIsInsideSurface = inside
+            interactionHandler?(inside ? .hoverEntered : .hoverExited)
+        }
         panel.ignoresMouseEvents = nativeMouseCaptureDepth == 0 && !inside
     }
 
