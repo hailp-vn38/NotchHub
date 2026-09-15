@@ -33,9 +33,9 @@ its own manual macOS scenarios below before phase closure.
 | Migration | Before/after fixture for every released schema version | **PASS** — v0 fixture and failed-write preservation |
 | Corruption recovery | Fixtures quarantine original bytes, enforce 3-file/3 MiB rotation, and recover without preventing startup | **PASS** — `swift test` |
 | Forward schema | Newer-schema fixture produces read-only recovery and preserves bytes | **PASS** — `swift test` |
-| Atomic persistence | Simulated interrupted/failed replacement retains last known-good snapshot | **PASS** — `swift test` |
-| Import/export | Export excludes secrets; invalid import changes nothing; valid import atomically replaces F4 scope | **PASS** — `swift test` |
-| Reset | Normal reset excludes credentials; credential deletion remains a distinct confirmed flow | **PASS** — F4 snapshot contains no Secret field |
+| Atomic persistence | Simulated interrupted/failed replacement retains last known-good snapshot | **PASS** — `swift test`, including failed mutation and import replacement |
+| Import/export | Export excludes secrets; invalid import changes nothing; valid import atomically replaces F4 scope | **PASS** — `swift test` (64 tests): export has only `schemaVersion`, Appearance, and Notch Behavior; an extra credential/future-scope key is rejected before replacement |
+| Reset | Normal reset excludes credentials; credential deletion remains a distinct confirmed flow | **PASS (F4 boundary)** — `swift test`: reset writes only safe F4 defaults; F4 has no Secret field or credential-deletion operation. Credential deletion remains an out-of-scope, separately confirmed Secret-owner flow. |
 | Boundary | Views do not access raw persistence APIs or Keychain | **PASS** — typed store/model projection and repository checks |
 
 ## Manual macOS evidence
@@ -46,8 +46,8 @@ Record the macOS version and build used to confirm:
 2. A recovery outcome is understandable and does not claim an F9 diagnostics record exists.
 3. Import, export, normal reset, and credential deletion clearly describe distinct scopes.
 
-**Current result:** Unrun. The Debug macOS build succeeded, but a build is not evidence of these
-native UX scenarios.
+**Current result:** Unrun. `./Scripts/verify.sh` completed on 2026-09-15, including the Debug macOS
+build and 65 package tests; neither result is evidence of these native UX scenarios.
 
 ## F4 gate
 

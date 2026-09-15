@@ -301,6 +301,7 @@ public actor SettingsStore {
         let version = try decoder.decode(SchemaProbe.self, from: data).schemaVersion
         if version > AppSettings.currentSchemaVersion { return .future(version) }
         if version == AppSettings.currentSchemaVersion {
+            try validateCurrentSchemaFields(in: data)
             let current = try decoder.decode(AppSettings.self, from: data)
             guard current.schemaVersion == AppSettings.currentSchemaVersion else {
                 throw SettingsStoreError.invalidSnapshot
@@ -321,6 +322,19 @@ public actor SettingsStore {
                 )
             )
         )
+    }
+
+    private func validateCurrentSchemaFields(in data: Data) throws {
+        guard
+            let snapshot = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            Set(snapshot.keys) == ["schemaVersion", "appearance", "notchBehavior"],
+            let appearance = snapshot["appearance"] as? [String: Any],
+            Set(appearance.keys) == ["theme", "reducedMotion"],
+            let notchBehavior = snapshot["notchBehavior"] as? [String: Any],
+            Set(notchBehavior.keys) == ["hoverDelay", "autoCollapseTimeout"]
+        else {
+            throw SettingsStoreError.invalidSnapshot
+        }
     }
 }
 

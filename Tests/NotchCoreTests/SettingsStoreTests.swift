@@ -160,6 +160,72 @@ func importsAtomically() async throws {
     #expect(valid.settings == imported)
 }
 
+@Test("Export contains exactly the non-secret F4 snapshot")
+func exportsOnlyF4Settings() async throws {
+    let store = SettingsStore(backend: MemorySettingsBackend())
+    _ = await store.load()
+    _ = await store.mutate(.theme(.dark))
+
+    let exported = try await store.exportSanitized()
+    let object = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+
+    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior"])
+    #expect((object["appearance"] as? [String: String])?["theme"] == "dark")
+}
+
+@Test("Import rejects non-F4 scope without replacing last known good settings")
+func rejectsImportWithUnknownScope() async throws {
+    let backend = MemorySettingsBackend()
+    let store = SettingsStore(backend: backend)
+    _ = await store.load()
+    let before = await store.mutate(.theme(.dark))
+    let imported = try JSONSerialization.data(
+        withJSONObject: [
+            "schemaVersion": 1,
+            "appearance": ["theme": "light", "reducedMotion": "reduceMotion"],
+            "notchBehavior": ["hoverDelay": 150, "autoCollapseTimeout": 2],
+            "credential": "must-not-import",
+        ]
+    )
+
+    let result = await store.importSanitized(imported)
+
+    #expect(result.outcome == .rejected)
+    #expect(result.settings == before.settings)
+    #expect(try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active)) == before.settings)
+}
+
+@Test("A failed import replacement retains last known good settings")
+func retainsLastKnownGoodOnImportWriteFailure() async throws {
+    let backend = MemorySettingsBackend()
+    let store = SettingsStore(backend: backend)
+    _ = await store.load()
+    let before = await store.mutate(.theme(.dark))
+    await backend.failWrites()
+
+    let result = await store.importSanitized(try JSONEncoder().encode(AppSettings.safeDefaults))
+
+    #expect(result.outcome == .persistenceFailed)
+    #expect(result.settings == before.settings)
+    #expect(try JSONDecoder().decode(AppSettings.self, from: #require(await backend.active)) == before.settings)
+}
+
+@Test("Normal reset replaces only the F4 snapshot with safe defaults")
+func normalResetRestoresF4Defaults() async throws {
+    let store = SettingsStore(backend: MemorySettingsBackend())
+    _ = await store.load()
+    _ = await store.mutate(.theme(.dark))
+    _ = await store.mutate(.hoverDelay(.milliseconds150))
+
+    let reset = await store.reset()
+    let exported = try await store.exportSanitized()
+    let object = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+
+    #expect(reset.outcome == .saved)
+    #expect(reset.settings == .safeDefaults)
+    #expect(Set(object.keys) == ["schemaVersion", "appearance", "notchBehavior"])
+}
+
 @Test("File backend rotates corrupt snapshots at the documented three-file one-MiB limit")
 func rotatesQuarantine() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
