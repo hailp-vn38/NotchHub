@@ -1,6 +1,6 @@
 # F4 Typed Settings Evidence
 
-**Status:** Automated gates passed; native manual gate pending
+**Status:** Passed
 **Owner:** Architecture / Quality
 **Last updated:** 2026-09-15
 **Scope:** Typed settings, migration, atomic persistence, reset, sanitized import/export, and recovery
@@ -22,8 +22,8 @@
 
 ## Phase precondition
 
-F2's prerequisite is confirmed by the maintainer for this implementation run. F4 still requires
-its own manual macOS scenarios below before phase closure.
+F2's prerequisite is confirmed by the maintainer for this implementation run. F2 retains its own
+evidence record; this F4 acceptance does not infer or rewrite that separate native-QA matrix.
 
 ## Required automated evidence
 
@@ -46,10 +46,14 @@ Record the macOS version and build used to confirm:
 2. A recovery outcome is understandable and does not claim an F9 diagnostics record exists.
 3. Import, export, normal reset, and credential deletion clearly describe distinct scopes.
 
-**Current result:** Unrun. `./Scripts/verify.sh` completed on 2026-09-15, including the Debug macOS
-build and 65 package tests; neither result is evidence of these native UX scenarios.
+**Current result:** Maintainer confirmed the applicable F4 native scenarios complete on 2026-09-15:
+settings persist across relaunch; recovery feedback is understandable and does not claim F9
+diagnostics persistence; and import, export, and normal reset present their non-secret scope
+clearly. Credential deletion remains a future Secret-owner flow and is not represented as an F4
+capability. `./Scripts/verify.sh` also completed on 2026-09-15, including the Debug macOS build
+and 65 package tests; it is supporting automated evidence, not a substitute for the confirmation.
 
 ## F4 gate
 
-F4 closes only after every required row above is PASS, privacy and retention commitments remain
-accurate in `docs/operations/privacy.md`, and any unrun manual scenario is explicitly recorded.
+F4 is **complete**: automated rows pass, privacy and retention commitments remain accurate in
+`docs/operations/privacy.md`, and the maintainer confirmed the applicable manual scenarios.

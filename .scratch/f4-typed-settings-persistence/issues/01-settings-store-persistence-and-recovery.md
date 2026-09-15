@@ -4,7 +4,7 @@
 
 **Blocked by:** F2 ticket 06 — F2 end-to-end verification and evidence (external prerequisite).
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] Settings store là boundary typed duy nhất cho F4 v1 Appearance/Notch Behavior snapshot; Settings UI không đọc raw persistence API hoặc Keychain.
 - [x] Theme chỉ nhận System/Light/Dark; Reduced Motion chỉ Follow System/Reduce Motion; hover delay chỉ 150/300/500 ms; auto-collapse chỉ 2/3/5 seconds. Defaults giữ System, Follow System, 300 ms, và 3 seconds.
@@ -20,3 +20,6 @@
 
 2026-09-15 — Automated F4 implementation and build evidence complete. Physical macOS relaunch,
 recovery, import/export, and reset UX scenarios remain ready for human confirmation.
+
+2026-09-15 — Maintainer confirmed the applicable native F4 behavior as complete. Ticket 01 is
+resolved; the separate F2 evidence record remains independently owned.

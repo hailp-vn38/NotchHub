@@ -1,6 +1,6 @@
 # F4 Typed Settings and Persistence
 
-**Status:** ready-for-agent
+**Status:** complete
 **Phase:** F4
 **Owner:** Architecture / Security / Quality
 
@@ -68,7 +68,8 @@ outcome** trong phiên; F9 mới có thể persist diagnostics đã sanitize v�
 - Normal reset targets non-secret F4 settings. Credential deletion remains a distinct confirmed secret flow and is never bundled with normal reset.
 - Import decodes and validates the complete F4-owned snapshot, summarizes changes where practical, and atomically replaces Appearance and Notch Behavior only after validation. It neither merges individual fields nor changes secrets or future-phase scopes.
 - F4 presents typed saved/error/recovery feedback in the current Settings session. It does not construct an F9 Diagnostics store; F9 may later persist a sanitized diagnostics record.
-- F4 implementation and phase closure remain blocked on the recorded F2 physical macOS manual gate. Documentation and deterministic fixtures may be prepared beforehand, but no evidence may represent F4 as executed before that prerequisite is met.
+- The maintainer confirmed the F2 prerequisite for this F4 acceptance. F2 retains its own evidence
+  record; this confirmation does not rewrite or infer F2's separate native-QA rows.
 
 ## Testing Decisions
 
@@ -99,4 +100,5 @@ outcome** trong phiên; F9 mới có thể persist diagnostics đã sanitize v�
 
 - The current Settings shell is presentation-only; it must remain honest until the Settings store is wired.
 - The primary seam is the Settings store. `SettingsBackend` is injected only to make failure and filesystem behavior deterministic; runtime application stays at existing coordinator seams.
-- F4 has a prepared evidence template, but no implementation/manual evidence is claimed. The physical F2 native gate remains pending and is an explicit execution dependency.
+- F4 automated evidence and maintainer-confirmed manual acceptance are recorded. F2 retains its
+  separate native-QA record.
