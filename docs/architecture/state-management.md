@@ -282,6 +282,11 @@ Application-scene navigation is a user-authorized routing decision to a dedicate
 
 ## 8. Settings state management
 
+F3 Settings shell note: this section specifies the F4+ settings owner. F3 views may render
+route/placeholder state and a clearly session-only preview, but they do not instantiate a
+`SettingsStore`, write configuration, or claim a persisted setting. This preserves one source of
+truth when typed settings, migration, and validation begin in F4.
+
 ### 8.1 Settings flow
 
 ```text

@@ -24,6 +24,10 @@ _Avoid_: panel lifetime, hover session
 A dedicated application window or scene for configuration, diagnostics, or other content that does not belong in the Notch surface.
 _Avoid_: detail state, expanded detail
 
+**Settings shell**:
+The application-scene navigation and shared presentation components that expose configuration routes before their typed persistence and capability owners are implemented.
+_Avoid_: settings backend, fake preferences
+
 **Module**:
 A compile-time feature unit that contributes declared capabilities through NotchHub contracts.
 _Avoid_: plugin, extension, widget

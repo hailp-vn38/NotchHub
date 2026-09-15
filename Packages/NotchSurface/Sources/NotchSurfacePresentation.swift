@@ -13,12 +13,21 @@ enum NotchSurfaceMetrics {
 @MainActor
 @Observable
 final class NotchSurfacePresentationModel {
+    private let sessionMotionPreference: @MainActor () -> Bool
     private(set) var snapshot = SurfaceSnapshot()
     private(set) var collapsedSize = NotchSurfaceGeometry.fallbackCollapsedSize
     private(set) var isExpandedGeometry = false
     private(set) var isCompactGeometry = false
     var isHovering = false
     var debugLabel: String?
+
+    init(sessionMotionPreference: @escaping @MainActor () -> Bool = { false }) {
+        self.sessionMotionPreference = sessionMotionPreference
+    }
+
+    func usesReducedMotion(systemPreference: Bool) -> Bool {
+        systemPreference || sessionMotionPreference()
+    }
 
     func apply(_ snapshot: SurfaceSnapshot, collapsedSize: CGSize? = nil) {
         self.snapshot = snapshot
@@ -208,7 +217,7 @@ struct NotchSurfaceRootView: View {
     }
 
     private var surfaceAnimation: Animation {
-        reduceMotion
+        model.usesReducedMotion(systemPreference: reduceMotion)
             ? .easeOut(duration: 0.12)
             : isExpanded
                 ? .spring(response: 0.42, dampingFraction: 0.80)
@@ -217,9 +226,6 @@ struct NotchSurfaceRootView: View {
 
     private func handleHover(_ hovering: Bool) {
         model.isHovering = hovering
-        send(
-            hovering
-                ? (isExpanded ? .expandedHoverEntered : .hoverEntered)
-                : (isExpanded ? .expandedHoverExited : .hoverExited))
+        send(hovering ? .hoverEntered : .hoverExited)
     }
 }

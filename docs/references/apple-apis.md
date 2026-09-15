@@ -85,6 +85,20 @@ ADR required:
 
 ---
 
+### F3 implementation status
+
+The current branch uses `MenuBarExtra`, a SwiftUI `WindowGroup` Settings shell, and the
+Notch-surface SwiftUI view. `NotchUI` now owns the F3 token/component and navigation boundary.
+Its session-only motion preference is passed to the surface presentation model without creating a
+persistent settings owner. F3 still must not create a permission, shortcut, Action, Module, or
+Diagnostics owner ahead of F4–F9.
+
+The current menu has exactly Settings, Restart App Shell, and Quit. Diagnostics remains a
+separate placeholder application scene rather than a menu command until its owning experience is
+introduced; documentation and UI tests must preserve that distinction.
+
+---
+
 ## 4. SwiftUI
 
 ### 4.1 Responsibilities
@@ -109,7 +123,6 @@ NotchHub uses the menu bar as an independent recovery/control surface:
 ```text
 MenuBarExtra
 ├── Open Settings
-├── Diagnostics
 ├── Restart App Shell
 └── Quit
 ```

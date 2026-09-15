@@ -8,7 +8,7 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     SurfaceExpansionAdmitting, SurfaceFocusRestoring
 {
     private var panel: NSPanel?
-    private let presentationModel = NotchSurfacePresentationModel()
+    private let presentationModel: NotchSurfacePresentationModel
     private var hostingView: NSHostingView<NotchSurfaceRootView>?
     private var interactionHandler: (@MainActor (SurfaceIntent) -> Void)?
     private var eventMonitors: [Any] = []
@@ -22,7 +22,10 @@ public final class NotchPanelController: SurfacePanelPresenting, SurfaceInputMon
     private var topologyRevision: UInt64 = 0
     private var nativeMouseCaptureDepth = 0
 
-    public init() {
+    public init(sessionMotionPreference: @escaping @MainActor () -> Bool = { false }) {
+        presentationModel = NotchSurfacePresentationModel(
+            sessionMotionPreference: sessionMotionPreference
+        )
         let observer = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in

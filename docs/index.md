@@ -3,7 +3,7 @@
 
 **Status:** Draft v0.2
 **Owner:** Project / Architecture  
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 **Location:** `docs/index.md`  
 **Related documents:** [README](../README.md), [Vision](product/vision.md), [Roadmap](product/roadmap.md), [Requirements](product/requirements.md)
 
@@ -111,6 +111,7 @@ docs/
 │   ├── design-system.md                  # F3
 │   ├── notch-interaction.md               # F2/F3
 │   ├── settings-information-architecture.md # F3
+│   ├── notchhub-settings-ui-spec.md       # F3–F9 UI ownership
 │   └── accessibility.md                   # F3
 │
 ├── platform/
@@ -126,6 +127,7 @@ docs/
 │   ├── testing-strategy.md
 │   ├── f1-evidence.md                 # F1 evidence
 │   ├── f2-evidence.md                 # F2 automated and manual evidence
+│   ├── f3-evidence.md                 # F3 automated evidence; native manual gate pending
 │   ├── manual-qa.md                      # F2/F10
 │   └── performance-test-plan.md          # F10; may link performance.md
 │
@@ -291,6 +293,13 @@ Create consistent UI components and a complete Settings information architecture
 | `docs/references/apple-apis.md` | Update | SwiftUI, Observation, MenuBarExtra usage records |
 | `docs/product/requirements.md` | Update | Settings/UI/accessibility requirements |
 | `docs/quality/testing-strategy.md` | Update | UI/accessibility/visual testing |
+| `docs/quality/f3-evidence.md` | Required | Automated F3 evidence and explicit native manual-gate status |
+
+F3 is a Settings shell, not an acceleration of later platform work. It may expose the nine
+application-scene routes and their reusable presentation components, but a capability without
+its owning phase is an explicit unavailable/placeholder state. Typed persistence and migration
+remain F4; permission requests F5; Action Registry and shortcuts F6; module runtime F7; and
+operational diagnostics F9.
 
 ### F3 gate
 
@@ -298,6 +307,8 @@ Create consistent UI components and a complete Settings information architecture
 - All reusable controls have accessibility behavior.
 - Design tokens are used by placeholder and app shell UI.
 - Reduced Motion is documented and testable.
+- A future-phase route does not simulate persistence, request permission, capture a shortcut,
+  execute an Action, start a Module, or poll Diagnostics.
 
 ---
 
@@ -317,6 +328,7 @@ Make settings durable, versioned, migratable, safe to reset, and separate from s
 | `docs/product/requirements.md` | Update | FR-SET requirements and data requirements |
 | `docs/quality/testing-strategy.md` | Update | Migration/corruption/import/export tests |
 | `docs/security/threat-model.md` | Update | Settings tampering, secret storage, data leakage threats |
+| `docs/design/notchhub-settings-ui-spec.md` | Update | Durable setting rows, apply/rollback, reset, import, and export UX |
 | Relevant ADR | Create/Update | Settings backend, schema strategy, Keychain boundary |
 
 ### F4 gate
@@ -347,6 +359,7 @@ Centralize permission status and on-demand permission UX.
 | `docs/product/requirements.md` | Update | FR-PERM requirements |
 | `docs/quality/testing-strategy.md` | Update | Permission adapter and manual permission matrix |
 | `docs/security/threat-model.md` | Update | Permission overreach/revocation threats |
+| `docs/design/notchhub-settings-ui-spec.md` | Update | Permission page groups, status/reason copy, and recovery row UX |
 | Relevant ADR | Create/Update | Central PermissionCoordinator/on-demand policy |
 
 ### F5 gate
@@ -376,6 +389,7 @@ Create one typed, safe action model used by menu, Notch, shortcut, IPC, and futu
 | `docs/product/requirements.md` | Update | FR-ACT requirements |
 | `docs/quality/testing-strategy.md` | Update | Action/security/shortcut tests |
 | `docs/security/threat-model.md` | Update | Arbitrary execution, replay, privilege bypass threats |
+| `docs/design/notchhub-settings-ui-spec.md` | Update | Action/shortcut rows, availability, confirmation, and conflict UX |
 | Relevant ADR | Create/Update | Typed actions/confirmation/source policy |
 
 ### F6 gate
@@ -407,6 +421,7 @@ Prove module lifecycle, isolation, settings, events, actions, UI slots, and clea
 | `docs/product/requirements.md` | Update | FR-MOD requirements |
 | `docs/quality/testing-strategy.md` | Update | Module lifecycle/failure/resource tests |
 | `docs/security/threat-model.md` | Update | Module privilege/failure/UI threat coverage |
+| `docs/design/notchhub-settings-ui-spec.md` | Update | Module list/detail, enablement, health, and unavailable-state UX |
 
 ### F7 gate
 
@@ -439,6 +454,7 @@ Implement the validated local event/action boundary and `notchctl`.
 | `docs/development/setup.md` | Update | Local IPC token/CLI setup |
 | `docs/references/apple-apis.md` | Update | Network API adoption record if used |
 | Relevant ADR | Update | Unix socket/loopback transport choice |
+| `docs/design/notchhub-settings-ui-spec.md` | Update | Local IPC health/status presentation and safe recovery route |
 
 ### F8 gate
 
@@ -468,6 +484,7 @@ Make surface, runtime, settings, permissions, IPC, event, action, and performanc
 | `docs/quality/testing-strategy.md` | Update | Diagnostics/redaction tests |
 | `docs/security/threat-model.md` | Update | Information-disclosure and audit controls |
 | `docs/development/setup.md` | Update | Debug overlay/diagnostic troubleshooting |
+| `docs/design/notchhub-settings-ui-spec.md` | Update | Diagnostics health, bounded sanitized records, export, and recovery UX |
 
 ### F9 gate
 

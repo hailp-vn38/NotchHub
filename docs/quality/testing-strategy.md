@@ -387,6 +387,14 @@ Verify all entry points use the same action implementation and that user confirm
 
 ## 8. UI and accessibility testing
 
+### F3 Settings-shell boundary tests
+
+Before later feature owners exist, automate the nine Settings routes, shared component states,
+keyboard order, VoiceOver labels, contrast semantics, and Reduced Motion behavior. Assert that
+opening a placeholder route does not write settings, request a permission, capture a shortcut,
+execute an Action, start a Module, or begin diagnostics polling. Persistence, permission,
+shortcut, Action, Module, and Diagnostics behavior is verified only in F4–F9 tests.
+
 ### 8.1 UI automation scope
 
 Automate where stable:

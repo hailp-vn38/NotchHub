@@ -239,12 +239,22 @@ About
 - Add placeholder/dummy content where underlying capability is planned but not implemented.
 - Implement keyboard navigation, accessible labels, focus behavior, and reduced-motion switch.
 
+### Phase boundary
+
+F3 implements the Settings shell and reusable presentation boundary only. A page whose domain
+owner has not started shows an honest unavailable/placeholder state and must not create a
+look-alike implementation. In particular, F3 does not persist preferences or run migrations
+(F4), request permissions (F5), record/capture shortcuts or execute Actions (F6), start modules
+(F7), or collect/export operational diagnostics (F9). A session-only preview is permitted only
+when it is visibly described as resetting on relaunch.
+
 ### Exit criteria
 
 - Settings views use common UI components/tokens rather than feature-specific styles.
 - All current controls have labels and keyboard-accessible interaction paths.
 - Reduced motion affects panel animation behavior.
 - The Notch remains brief and readable.
+- Opening a future-phase Settings route does not perform a future-phase side effect.
 
 ---
 
@@ -263,6 +273,8 @@ Make settings durable, safe to evolve, and independent from UI implementation de
 - Add debounced/atomic writes where appropriate.
 - Implement sanitized import/export of non-secret settings.
 - Keep credentials and tokens out of settings; define Keychain boundary for later use.
+- Implement the Settings-spec durable rows: validated toggle/preset updates, applying/rollback
+  feedback, separate destructive reset scopes, and sanitized import/export summary.
 
 ### Exit criteria
 
@@ -288,6 +300,8 @@ Centralize privacy permission discovery, explanation, request, denial handling, 
 - Add Permission Center UI with capability description, reason, status, pre-permission explanation, system prompt trigger, and System Settings recovery path.
 - Support capability declarations from modules.
 - Test with Notifications and only request Accessibility when a selected shortcut approach truly requires it.
+- Implement the Settings-spec permission groups and rows: friendly capability/status/reason,
+  decline effect, and System Settings recovery without an open-page prompt.
 
 ### Policy
 
@@ -316,6 +330,8 @@ Create one safe, typed action system for every entry point before introducing mo
 - Add timeout, cancellation, result, and audit events.
 - Add shortcut binding persistence and recorder UI.
 - Add shortcut conflict checks and disabled capability state.
+- Implement the Settings-spec Action and Shortcut rows, including availability reason, result,
+  confirmation route, clear-binding behavior, and conflict feedback.
 - Register base actions:
 
 ```text
@@ -356,6 +372,8 @@ Prove that the application is modular before any business module creates archite
 - Add module settings namespace.
 - Add module resource ownership: tasks, timers, observers, sockets, subscriptions, and caches must be disposed during `stop()`.
 - Implement `DemoModule` with compact status, `demo.ping`, settings toggle, test event, and debug-only simulated failure.
+- Implement the Settings-spec Modules list/detail from `ModuleRuntime` projections; opening a
+  module page must not start a disabled module.
 
 ### Exit criteria
 
@@ -393,6 +411,8 @@ WS   /v1/stream
 - Bind listeners to `127.0.0.1` only; do not expose LAN endpoints.
 - Implement random token handling and secret storage boundary.
 - Create `notchctl` developer CLI.
+- Project only bounded local IPC health/status/recovery information into Settings; no raw request,
+  token, header, or payload is rendered there.
 
 ### Exit criteria
 
@@ -415,6 +435,8 @@ Make windowing, lifecycle, module, IPC, and performance failures understandable 
 - Add Diagnostics panel with application, surface, module, permission, IPC, event/action, settings, logging, and performance sections.
 - Add debug overlay and development feature flags.
 - Add clear redaction rules.
+- Implement the Settings-spec Diagnostics health, surface, module, permission, action, IPC,
+  performance, and bounded sanitized export/recovery sections.
 
 ### Exit criteria
 

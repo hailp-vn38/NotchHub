@@ -25,6 +25,20 @@ Settings is not a collection of unrelated toggles. It is the primary **control, 
 
 The foundation Settings app must be complete before real modules are introduced. Future modules may add their own settings only through the Module System contract and must follow this IA.
 
+### Current implementation and phase boundary
+
+The current execution phase remains F2 while its native manual gate is outstanding. The branch
+contains the F3 Settings shell: the menu bar opens a nine-route application scene with shared
+`NotchUI` presentation, accessible navigation, and an explicitly session-only motion preview.
+There is still no `SettingsStore`, permission center, shortcut recorder, Action Registry UI,
+module runtime UI, or diagnostics store. This document is the target IA for those later owners,
+not evidence that they already exist.
+
+F3 implements the **Settings shell**: nine routes, shared presentation components, accessible
+navigation, and non-misleading unavailable states. A route may explain a future capability, but
+may not imitate it with an enabled control. F4 owns persistence and migration; F5 permissions;
+F6 actions/shortcuts; F7 modules; F9 diagnostics.
+
 ---
 
 ## 2. Design objectives
@@ -798,9 +812,9 @@ Must avoid showing/storing full event content unless necessary and documented.
 
 ---
 
-## 14. Foundation acceptance criteria
+## 14. Foundation Settings completion criteria (F4–F9)
 
-The Settings IA is ready before real modules when:
+The full Settings implementation is ready before real modules when:
 
 1. All nine top-level pages exist or have a deliberate, non-misleading foundation placeholder where implementation phase has not started.
 2. Settings opens from menu bar even if the Notch panel is hidden/suppressed/unavailable.
@@ -815,6 +829,10 @@ The Settings IA is ready before real modules when:
 11. Opening Settings does not start disabled modules, cause high-rate polling, or create notable idle resource regression.
 12. Validation/error/recovery behavior is test-covered.
 13. Settings scope remains local macOS productivity/AI-focused and excludes ESP-IDF, ESP32, IoT, MQTT, BLE gateway, and LAN device control.
+
+F3 has a narrower exit: all nine routes are reachable, use shared `NotchUI` presentation
+components, are keyboard/VoiceOver accessible, and make no persistence, permission, shortcut,
+Action, Module, or Diagnostics side effect unless its owning later phase is implemented.
 
 ---
 

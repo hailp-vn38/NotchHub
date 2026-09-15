@@ -1,6 +1,7 @@
 import AppKit
 import NotchCore
 import NotchSurface
+import NotchUI
 import ServiceManagement
 import SwiftUI
 
@@ -23,7 +24,7 @@ struct NotchHubApp: App {
         .menuBarExtraStyle(.menu)
 
         WindowGroup("Settings", id: AppShellPlaceholderScene.settings.windowID) {
-            PlaceholderScene(scene: .settings)
+            SettingsShellView(model: appShell.settingsShell)
         }
 
         WindowGroup("Diagnostics", id: AppShellPlaceholderScene.diagnostics.windowID) {
@@ -39,8 +40,13 @@ struct NotchHubApp: App {
 
 @MainActor
 final class AppShellDelegate: NSObject, NSApplicationDelegate {
+    let settingsShell = SettingsShellModel()
     private lazy var lifecycleObserver = MacOSAppShellLifecycleObserver()
-    private lazy var notchSurface = SurfaceCoordinator(panel: NotchPanelController())
+    private lazy var notchSurface = SurfaceCoordinator(
+        panel: NotchPanelController(sessionMotionPreference: { [weak settingsShell] in
+            settingsShell?.sessionMotionPreference == .reduced
+        })
+    )
     private lazy var coordinator = AppCoordinator(
         scenePresenter: self,
         lifecycleObserver: lifecycleObserver,

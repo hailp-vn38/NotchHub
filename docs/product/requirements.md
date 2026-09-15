@@ -246,6 +246,14 @@ The user shall be able to interact with core UI through keyboard and accessibili
 
 ## 5.3 Settings and configuration
 
+### Phased delivery interpretation
+
+These are foundation requirements, not all F3 behavior. F3 satisfies the navigation portion of
+`FR-SET-001` with a Settings shell and explicit unavailable states. Typed settings, defaults,
+validation, reset, persistence, migration, recovery, import/export, and namespaces are F4 work.
+The F3 shell must not claim that a setting has been saved or trigger a side effect owned by the
+later Permission, Action/Shortcut, Module, or Diagnostics phases.
+
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-SET-001 | The app shall provide Settings sections: General, Appearance, Notch Behavior, Shortcuts, Permissions, Actions, Modules, Diagnostics, and About. | Must |
