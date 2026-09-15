@@ -250,16 +250,13 @@ struct NotchSurfaceRootView: View {
         }
         .frame(width: model.visibleSurfaceSize.width, height: model.visibleSurfaceSize.height, alignment: .top)
         .clipShape(shape)
-        .overlay {
+        .background {
             shape
                 .fill(.clear)
                 .contentShape(shape)
                 .onHover(perform: handleHover)
                 .onTapGesture { send(.clicked) }
                 .accessibilityHidden(true)
-                // The expanded surface contains real SwiftUI controls. Its
-                // transparent interaction layer must not consume their taps.
-                .allowsHitTesting(!isExpanded)
         }
         .shadow(color: isExpanded || model.isHovering ? .black.opacity(0.7) : .clear, radius: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
