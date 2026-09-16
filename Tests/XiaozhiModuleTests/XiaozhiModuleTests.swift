@@ -160,6 +160,26 @@ func homeStartConnectsXiaozhiWithAbortControl() async throws {
     await runtime.shutdown()
 }
 
+@Test("A failed Xiaozhi start stays visible on Surface with a retry action")
+func failedStartRemainsVisibleOnSurface() async throws {
+    let module = XiaozhiModule(
+        bootstrap: XiaozhiFakeBootstrap(response: .init(activation: .init(message: "Activate this Mac"))),
+        credentials: XiaozhiMemoryCredentialStore(), identity: XiaozhiFakeIdentity(),
+        completionDelay: .zero)
+    let runtime = ModuleRuntime()
+    await runtime.register(module, enabled: true)
+    await runtime.start(module.id)
+
+    await runtime.actions.invoke(try #require(ActionID("xiaozhi.start")))
+    for _ in 0..<10 { await Task.yield() }
+
+    let expanded = try #require(await runtime.contributions(for: module.id).first { $0.slot == .expandedContent })
+    #expect(await module.currentPresentation() == .error)
+    #expect(expanded.content == .voice(.init(state: .error)))
+    #expect(expanded.actions.map(\.actionID) == [try #require(ActionID("xiaozhi.retry"))])
+    await runtime.shutdown()
+}
+
 @Test("Muted completion returns the Surface contribution to home")
 func mutedCompletionReturnsSurfaceHome() async throws {
     let transport = XiaozhiFakeVoiceTransport()

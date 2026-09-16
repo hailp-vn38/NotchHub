@@ -269,6 +269,7 @@ public actor XiaozhiModule: NotchModule {
     private var isVoiceMode = false
     private var sessionTTSMuted = false
     private var assistantText: String?
+    private var voiceGeneration = 0
     private var completionTask: Task<Void, Never>?
     private var completionGeneration = 0
     private let completionDelay: Duration
@@ -338,23 +339,23 @@ public actor XiaozhiModule: NotchModule {
             let type = response.activation == nil ? "xiaozhi.ready" : "xiaozhi.activationRequired"
             await eventPublisher.publish(.init(moduleID: id, type: EventType(type)!))
         } catch {
-            await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.bootstrapFailed")!))
+            await showFailure("xiaozhi.bootstrapFailed", eventPublisher: eventPublisher)
         }
     }
 
     private func startVoice(eventPublisher: any ModuleEventPublisher) async {
         do {
+            cancelCompletion()
+            isVoiceMode = true
             if let permissionCoordinator {
                 await permissionCoordinator.refresh()
                 guard await permissionCoordinator.snapshot().row(for: .microphone)?.status == .authorized else {
-                    await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.microphoneDenied")!))
+                    await showFailure("xiaozhi.microphoneDenied", eventPublisher: eventPublisher)
                     return
                 }
             }
-            cancelCompletion()
             sessionTTSMuted = await ttsMutedProvider()
             assistantText = nil
-            isVoiceMode = true
             presentation = .connecting
             await publishPresentation()
             let deviceID = try identity.deviceID()
@@ -362,16 +363,15 @@ public actor XiaozhiModule: NotchModule {
             let response = try await bootstrap.bootstrap(
                 .init(deviceID: deviceID, clientID: clientID, appVersion: "0.1.0"))
             guard let websocket = response.websocket else {
-                presentation = .error
-                await publishPresentation()
-                await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.activationRequired")!))
-                scheduleReturnHome()
+                await showFailure("xiaozhi.activationRequired", eventPublisher: eventPublisher)
                 return
             }
             try credentials.saveCredential(websocket.token)
             let voice = try voiceFactory()
+            voiceGeneration &+= 1
+            let generation = voiceGeneration
             await voice.setEventObserver { [weak self] event in
-                await self?.receiveVoiceEvent(event)
+                await self?.receiveVoiceEvent(event, generation: generation)
             }
             self.voice = voice
             try await voice.start(
@@ -382,10 +382,7 @@ public actor XiaozhiModule: NotchModule {
             await publishPresentation()
             await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connecting")!))
         } catch {
-            presentation = .error
-            await publishPresentation()
-            await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connectionFailed")!))
-            if isVoiceMode { scheduleReturnHome() }
+            await showFailure("xiaozhi.connectionFailed", eventPublisher: eventPublisher)
         }
     }
 
@@ -402,17 +399,26 @@ public actor XiaozhiModule: NotchModule {
         }
     }
 
-    private func receiveVoiceEvent(_ event: XiaozhiVoiceSessionEvent) async {
+    private func receiveVoiceEvent(_ event: XiaozhiVoiceSessionEvent, generation: Int) async {
+        guard generation == voiceGeneration else { return }
         switch event {
         case .state(let voiceState):
             presentation = .init(voiceState: voiceState)
-            if voiceState == .error { scheduleReturnHome() }
         case .assistantText(let text): assistantText = text
         case .completed:
             presentation = .ready
             scheduleReturnHome()
         }
         await publishPresentation()
+    }
+
+    /// Publishes only a typed, retryable error state. Transport and server
+    /// details can contain sensitive values, so they remain out of Surface.
+    private func showFailure(_ eventType: String, eventPublisher: any ModuleEventPublisher) async {
+        cancelCompletion()
+        presentation = .error
+        await publishPresentation()
+        await eventPublisher.publish(.init(moduleID: id, type: EventType(eventType)!))
     }
 
     private func control(_ action: String, eventPublisher: any ModuleEventPublisher) async {
@@ -479,6 +485,7 @@ public actor XiaozhiModule: NotchModule {
 
     private func stopVoiceSession() async {
         cancelCompletion()
+        voiceGeneration &+= 1
         await voice?.stop()
         voice = nil
         assistantText = nil
