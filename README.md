@@ -132,11 +132,10 @@ NotchHub/
 | Phase | Module | Initial scope |
 |---|---|---|
 | M0 | Sample Status Module | Prove real UI-slot, event, setting, and action contracts |
-| M1 | Xiaozhi Display Companion | Voice state and text transcript through a normalized relay; no native microphone/audio initially |
+| NX | Native Xiaozhi Client | Direct bootstrap/WebSocket, microphone input, TTS playback, and bounded presentation state |
 | M2 | Media or Clipboard | A daily-use macOS productivity module |
 | M3 | Files or System Controls | Selected file/system interactions with explicit permission review |
 | M4 | Calendar or Reminders | Contextual productivity information and actions |
-| M5 | Native Xiaozhi Voice | Mac microphone/audio only if M1 proves the need |
 | M6 | Other desktop modules | Only after ADR, threat-model, permission, and performance review |
 
 ## Permissions
@@ -238,4 +237,4 @@ Documentation is part of the repository and must evolve with code. High-priority
 
 ## Project direction
 
-The foundation is the product enabler. Once the platform passes its quality gate, adding Xiaozhi becomes an ordinary integration task: a relay/adapter emits normalized events, a module renders status and text through declared UI slots, and registered actions handle controlled interactions. The same foundation can then support macOS productivity utilities without rewriting the core architecture.
+The foundation is the product enabler. Once the platform passes its quality gate, the Native Xiaozhi Client becomes an ordinary static Module: it owns the direct protocol/audio integration, projects bounded normalized state through declared UI slots, and uses registered Actions for controlled interactions. The same foundation can then support macOS productivity utilities without rewriting the core architecture.

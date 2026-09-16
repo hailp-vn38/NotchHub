@@ -2,7 +2,7 @@ import Foundation
 import NotchCore
 import NotchDomain
 import Testing
-import XiaozhiModule
+@testable import XiaozhiModule
 
 @Test("Xiaozhi identity validates generated stable IDs")
 func xiaozhiIdentity() {
@@ -12,14 +12,19 @@ func xiaozhiIdentity() {
     #expect(!XiaozhiIdentity.isValidDeviceID("03:11:22:33:44:55"))
 }
 
-@Test("Xiaozhi settings persist only non-secret prepared, reconnect, and conversation preferences")
+@Test("Production Opus codec creates the encoder required by a Settings connection test")
+func createsProductionOpusEncoder() throws {
+    _ = try XiaozhiOpusCodec()
+}
+
+@Test("Xiaozhi settings persist non-secret configuration and editable identity")
 func xiaozhiSettings() async throws {
     let store = SettingsStore(backend: XiaozhiMemorySettingsBackend())
     let settings = XiaozhiSettings(
         isPreparedOnLaunch: false, autoReconnect: false, conversationMode: .pushToTalk, ttsMuted: true)
     #expect((await store.mutate(.xiaozhi(settings))).outcome == .saved)
     let exported = try await store.exportSanitized()
-    #expect(exported.contains(Data("deviceID".utf8)) == false)
+    #expect(exported.contains(Data("deviceID".utf8)))
     #expect((await store.load()).settings.xiaozhi.ttsMuted)
 }
 
@@ -36,12 +41,8 @@ func xiaozhiReadinessIsPassive() async throws {
     #expect(await runtime.contributions(for: module.id).map(\.text) == ["Xiaozhi", "Xiaozhi Ready", "Ready"])
 }
 
-@Test("Xiaozhi secrets use a credential boundary and diagnostics redact token-like values")
+@Test("Xiaozhi session credentials are never persisted and diagnostics redact token-like values")
 func xiaozhiCredentialsAndDiagnosticsArePrivate() throws {
-    let credentials = XiaozhiMemoryCredentialStore()
-    try credentials.saveCredential("bootstrap-token")
-    #expect(try credentials.credential() == "bootstrap-token")
-
     let diagnostic =
         XiaozhiDiagnostics.redact([
             "token": "bootstrap-token",
@@ -82,9 +83,121 @@ func defaultsCloudWebSocketVersion() throws {
     #expect(response.websocket?.version == 1)
 }
 
-@Test("The user-invoked Xiaozhi preparation bootstraps and saves only a ready-session credential")
+@Test("Connection test returns the first-link six-digit activation PIN without persisting it")
+func exposesFirstLinkActivationPIN() async throws {
+    let tester = XiaozhiConnectionTester(
+        bootstrapFactory: { _ in
+            XiaozhiFakeBootstrap(response: .init(activation: .init(code: "123456")))
+        })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected an activation PIN")
+    } catch let activation as XiaozhiActivationRequired {
+        #expect(activation.code == "123456")
+    }
+}
+
+@Test("Connection test prioritizes activation over a bootstrap test WebSocket")
+func prioritizesActivationOverBootstrapWebSocket() async throws {
+    let tester = XiaozhiConnectionTester(
+        bootstrapFactory: { _ in
+            XiaozhiFakeBootstrap(response: .init(
+                activation: .init(code: "123456"),
+                websocket: .init(url: URL(string: "wss://example.test/voice")!, token: "test-token", version: 1)))
+        },
+        voiceFactory: { throw XiaozhiTestVoiceFactoryError() })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected an activation PIN")
+    } catch let activation as XiaozhiActivationRequired {
+        #expect(activation.code == "123456")
+    }
+}
+
+@Test("Connection test returns sanitized bootstrap failure details at its first step")
+func reportsBootstrapFailureDetail() async throws {
+    let tester = XiaozhiConnectionTester(bootstrapFactory: { _ in XiaozhiFailingBootstrap() })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected a bootstrap failure")
+    } catch let failure as XiaozhiConnectionTestFailure {
+        #expect(failure.detail.hasPrefix("Bootstrap request failed:"))
+    }
+}
+
+@Test("Connection test reports a sanitized HTTP rejection status")
+func reportsBootstrapHTTPStatus() async throws {
+    let tester = XiaozhiConnectionTester(bootstrapFactory: { _ in XiaozhiHTTPFailingBootstrap() })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected a bootstrap rejection")
+    } catch let failure as XiaozhiConnectionTestFailure {
+        #expect(failure.detail == "Bootstrap rejected the request (HTTP 400).")
+    }
+}
+
+@Test("Connection test turns a WebSocket opening failure into a sanitized detail")
+func reportsWebSocketOpeningFailureDetail() async throws {
+    let tester = XiaozhiConnectionTester(
+        bootstrapFactory: { _ in
+            XiaozhiFakeBootstrap(response: .init(websocket: .init(
+                url: URL(string: "wss://example.test/voice")!, token: "temporary-token", version: 1)))
+        },
+        voiceFactory: {
+            XiaozhiVoiceSession(
+                connector: XiaozhiFailingVoiceConnector(), capture: XiaozhiFakeAudioCapture(),
+                playback: XiaozhiFakeAudioPlayback(), codec: XiaozhiFakeOpusCodec())
+        })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected a WebSocket connection failure")
+    } catch let failure as XiaozhiConnectionTestFailure {
+        #expect(failure.detail == "WebSocket connection was closed before Xiaozhi could receive hello.")
+    }
+}
+
+@Test("Connection test classifies an NSURLSession NSError from the WebSocket delegate")
+func reportsBridgedWebSocketOpeningFailureDetail() async throws {
+    let tester = XiaozhiConnectionTester(
+        bootstrapFactory: { _ in
+            XiaozhiFakeBootstrap(response: .init(websocket: .init(
+                url: URL(string: "wss://example.test/voice")!, token: "temporary-token", version: 1)))
+        },
+        voiceFactory: {
+            XiaozhiVoiceSession(
+                connector: XiaozhiBridgedFailingVoiceConnector(), capture: XiaozhiFakeAudioCapture(),
+                playback: XiaozhiFakeAudioPlayback(), codec: XiaozhiFakeOpusCodec())
+        })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected a WebSocket connection failure")
+    } catch let failure as XiaozhiConnectionTestFailure {
+        #expect(failure.detail == "WebSocket connection was closed before Xiaozhi could receive hello.")
+    }
+}
+
+@Test("Connection test reports a server close before Server Hello")
+func reportsServerCloseBeforeServerHello() async throws {
+    let tester = XiaozhiConnectionTester(
+        bootstrapFactory: { _ in
+            XiaozhiFakeBootstrap(response: .init(websocket: .init(
+                url: URL(string: "wss://example.test/voice")!, token: "temporary-token", version: 1)))
+        },
+        voiceFactory: {
+            XiaozhiVoiceSession(
+                connector: XiaozhiDisconnectingVoiceConnector(), capture: XiaozhiFakeAudioCapture(),
+                playback: XiaozhiFakeAudioPlayback(), codec: XiaozhiFakeOpusCodec())
+        })
+    do {
+        _ = try await tester.testConnection(settings: .init()) { _ in }
+        Issue.record("Expected a Server Hello failure")
+    } catch let failure as XiaozhiConnectionTestFailure {
+        #expect(failure.detail == "Xiaozhi server closed the WebSocket before sending Server Hello.")
+    }
+}
+
+@Test("The user-invoked Xiaozhi preparation bootstraps without persisting a credential")
 func preparesXiaozhiOnUserAction() async throws {
-    let credentials = XiaozhiMemoryCredentialStore()
     let events = RecordingModuleEventPublisher()
     let module = XiaozhiModule(
         bootstrap: XiaozhiFakeBootstrap(
@@ -92,8 +205,7 @@ func preparesXiaozhiOnUserAction() async throws {
                 activation: nil,
                 websocket: .init(url: URL(string: "wss://example.test/voice")!, token: "temporary-token", version: 1)
             )),
-        credentials: credentials,
-        identity: XiaozhiFakeIdentity()
+        settingsProvider: { XiaozhiSettings(deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755") }
     )
     let runtime = ModuleRuntime(eventPublisher: events)
     await runtime.register(module, enabled: true)
@@ -101,7 +213,6 @@ func preparesXiaozhiOnUserAction() async throws {
 
     await runtime.actions.invoke(try #require(ActionID("xiaozhi.prepare")))
 
-    #expect(try credentials.credential() == "temporary-token")
     #expect(await events.events.contains(.init(moduleID: module.id, type: EventType("xiaozhi.ready")!)))
 }
 
@@ -143,8 +254,8 @@ func homeStartConnectsXiaozhiWithAbortControl() async throws {
             response: .init(
                 websocket: .init(
                     url: URL(string: "wss://example.test/voice")!, token: "temporary-token", version: 1))),
-        credentials: XiaozhiMemoryCredentialStore(), identity: XiaozhiFakeIdentity(),
-        ttsMutedProvider: { true }, voiceFactory: { session })
+        settingsProvider: { XiaozhiSettings(ttsMuted: true, deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755") },
+        voiceFactory: { session })
     let runtime = ModuleRuntime()
     await runtime.register(module, enabled: true)
     await runtime.start(module.id)
@@ -164,7 +275,7 @@ func homeStartConnectsXiaozhiWithAbortControl() async throws {
 func failedStartRemainsVisibleOnSurface() async throws {
     let module = XiaozhiModule(
         bootstrap: XiaozhiFakeBootstrap(response: .init(activation: .init(message: "Activate this Mac"))),
-        credentials: XiaozhiMemoryCredentialStore(), identity: XiaozhiFakeIdentity(),
+        settingsProvider: { XiaozhiSettings(deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755") },
         completionDelay: .zero)
     let runtime = ModuleRuntime()
     await runtime.register(module, enabled: true)
@@ -191,8 +302,8 @@ func mutedCompletionReturnsSurfaceHome() async throws {
             response: .init(
                 websocket: .init(
                     url: URL(string: "wss://example.test/voice")!, token: "temporary-token", version: 1))),
-        credentials: XiaozhiMemoryCredentialStore(), identity: XiaozhiFakeIdentity(),
-        ttsMutedProvider: { true }, completionDelay: .zero, voiceFactory: { session })
+        settingsProvider: { XiaozhiSettings(ttsMuted: true, deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755") },
+        completionDelay: .zero, voiceFactory: { session })
     let runtime = ModuleRuntime()
     await runtime.register(module, enabled: true)
     await runtime.start(module.id)
@@ -244,6 +355,45 @@ func startsAuthenticatedVoiceSession() async throws {
     #expect(try await transport.jsonValue(at: 1, key: "state") == "start")
 }
 
+@Test("Connection diagnostics send one microphone-free silence conversation after server hello")
+func connectionDiagnosticConversation() async throws {
+    let transport = XiaozhiFakeVoiceTransport()
+    let session = XiaozhiVoiceSession(
+        connector: XiaozhiFakeVoiceConnector(transport: transport),
+        capture: XiaozhiFakeAudioCapture(), playback: XiaozhiFakeAudioPlayback(), codec: XiaozhiFakeOpusCodec())
+    try await session.start(
+        .init(
+            url: URL(string: "wss://example.test/voice")!, token: "session-token", version: 1,
+            deviceID: "02:11:22:33:44:55", clientID: "d1a6d617-337a-439a-ad02-5cf5c447a755",
+            mode: .pushToTalk))
+    try await session.receive(
+        .text("{\"type\":\"hello\",\"session_id\":\"session-1\",\"audio_params\":{\"format\":\"opus\",\"sample_rate\":24000,\"channels\":1}}"))
+    try await session.beginConnectionTestConversation()
+
+    #expect(try await transport.jsonValue(at: 1, key: "type") == "listen")
+    #expect(try await transport.jsonValue(at: 3, key: "state") == "stop")
+    await session.stop()
+}
+
+@Test("WebSocket connector does not permit hello before the URLSession upgrade opens")
+func waitsForWebSocketUpgradeBeforeHello() async throws {
+    let gate = XiaozhiWebSocketOpenGate()
+    let started = XiaozhiBooleanRecorder()
+    let didOpen = XiaozhiBooleanRecorder()
+
+    let waiting = Task {
+        try await gate.waitUntilOpened { Task { await started.set() } }
+        await didOpen.set()
+    }
+    for _ in 0..<10 where !(await started.value) { await Task.yield() }
+    #expect(await started.value)
+    #expect(!(await didOpen.value))
+
+    await gate.opened()
+    try await waiting.value
+    #expect(await didOpen.value)
+}
+
 @Test("Muted Xiaozhi projects bounded assistant text and completes on tts stop")
 func mutedSessionProjectsTextAndCompletion() async throws {
     let transport = XiaozhiFakeVoiceTransport()
@@ -275,7 +425,7 @@ func mutedSessionProjectsTextAndCompletion() async throws {
 
     #expect(
         await events.events == [
-            .state(.listening), .assistantText("Chào bạn"), .state(.speaking), .completed, .state(.idle),
+            .state(.listening), .assistantText("Chào bạn"), .state(.speaking), .ttsStopped, .completed, .state(.idle),
         ])
     await session.stop()
 }
@@ -370,22 +520,24 @@ private actor XiaozhiMemorySettingsBackend: SettingsBackend {
     func quarantine(_: Data) async throws {}
 }
 
-private final class XiaozhiMemoryCredentialStore: XiaozhiCredentialStoring, @unchecked Sendable {
-    private var value: String?
-    func credential() throws -> String? { value }
-    func saveCredential(_ value: String) throws { self.value = value }
-    func removeCredential() throws { value = nil }
-}
-
 private struct XiaozhiFakeBootstrap: XiaozhiBootstrapping {
     let response: XiaozhiBootstrapResponse
     func bootstrap(_: XiaozhiBootstrapRequest) async throws -> XiaozhiBootstrapResponse { response }
 }
 
-private struct XiaozhiFakeIdentity: XiaozhiIdentityStoring {
-    func deviceID() throws -> String { "02:11:22:33:44:55" }
-    func clientID() throws -> String { "d1a6d617-337a-439a-ad02-5cf5c447a755" }
+private struct XiaozhiFailingBootstrap: XiaozhiBootstrapping {
+    func bootstrap(_: XiaozhiBootstrapRequest) async throws -> XiaozhiBootstrapResponse {
+        throw URLError(.notConnectedToInternet)
+    }
 }
+
+private struct XiaozhiHTTPFailingBootstrap: XiaozhiBootstrapping {
+    func bootstrap(_: XiaozhiBootstrapRequest) async throws -> XiaozhiBootstrapResponse {
+        throw XiaozhiBootstrapError.httpStatus(400)
+    }
+}
+
+private struct XiaozhiTestVoiceFactoryError: Error {}
 
 private actor XiaozhiFakeVoiceTransport: XiaozhiVoiceTransport {
     private(set) var connectionRequest: XiaozhiVoiceConnectionRequest?
@@ -418,6 +570,30 @@ private struct XiaozhiFakeVoiceConnector: XiaozhiVoiceConnecting {
     }
 }
 
+private struct XiaozhiFailingVoiceConnector: XiaozhiVoiceConnecting {
+    func connect(_: XiaozhiVoiceConnectionRequest) async throws -> any XiaozhiVoiceTransport {
+        throw URLError(.networkConnectionLost)
+    }
+}
+
+private struct XiaozhiBridgedFailingVoiceConnector: XiaozhiVoiceConnecting {
+    func connect(_: XiaozhiVoiceConnectionRequest) async throws -> any XiaozhiVoiceTransport {
+        throw NSError(domain: NSURLErrorDomain, code: URLError.networkConnectionLost.rawValue)
+    }
+}
+
+private struct XiaozhiDisconnectingVoiceConnector: XiaozhiVoiceConnecting {
+    func connect(_: XiaozhiVoiceConnectionRequest) async throws -> any XiaozhiVoiceTransport {
+        XiaozhiDisconnectingVoiceTransport()
+    }
+}
+
+private actor XiaozhiDisconnectingVoiceTransport: XiaozhiVoiceTransport {
+    func send(_: XiaozhiVoiceTransportMessage) async throws {}
+    func nextMessage() async throws -> XiaozhiVoiceTransportMessage { throw URLError(.networkConnectionLost) }
+    func disconnect() async {}
+}
+
 private actor XiaozhiFakeAudioCapture: XiaozhiAudioCapturing {
     private(set) var isCapturing = false
     func start(_: @escaping @Sendable (Data) -> Void) async throws { isCapturing = true }
@@ -442,6 +618,11 @@ private actor XiaozhiManualDrainPlayback: XiaozhiAudioPlaying {
 private actor XiaozhiVoiceEventRecorder {
     private(set) var events: [XiaozhiVoiceSessionEvent] = []
     func record(_ event: XiaozhiVoiceSessionEvent) { events.append(event) }
+}
+
+private actor XiaozhiBooleanRecorder {
+    private(set) var value = false
+    func set() { value = true }
 }
 
 private struct XiaozhiFakeOpusCodec: XiaozhiOpusCoding {

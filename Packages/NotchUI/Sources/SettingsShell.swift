@@ -102,20 +102,28 @@ public final class SettingsShellModel {
     public let permissionCenter: PermissionCenterModel?
     public let shortcutPresentation: ShortcutPresentationModel?
     public let moduleRuntime: ModuleRuntime?
+    public let xiaozhiConnectionTester: (any XiaozhiConnectionTesting)?
     public private(set) var moduleHealth: [ModuleHealth] = []
+    public private(set) var xiaozhiConnectionSteps: Set<XiaozhiConnectionTestStep> = []
+    public private(set) var xiaozhiConnectionReport: XiaozhiConnectionTestReport?
+    public private(set) var xiaozhiActivationCode: String?
+    public private(set) var xiaozhiConnectionError: String?
+    public private(set) var isTestingXiaozhiConnection = false
 
     public init(
         selectedRoute: SettingsRoute = .general,
         settingsStore: SettingsStore? = nil,
         permissionCenter: PermissionCenterModel? = nil,
         shortcutPresentation: ShortcutPresentationModel? = nil,
-        moduleRuntime: ModuleRuntime? = nil
+        moduleRuntime: ModuleRuntime? = nil,
+        xiaozhiConnectionTester: (any XiaozhiConnectionTesting)? = nil
     ) {
         self.selectedRoute = selectedRoute
         self.settingsStore = settingsStore
         self.permissionCenter = permissionCenter
         self.shortcutPresentation = shortcutPresentation
         self.moduleRuntime = moduleRuntime
+        self.xiaozhiConnectionTester = xiaozhiConnectionTester
     }
 
     public func select(_ route: SettingsRoute) {
@@ -186,6 +194,31 @@ public final class SettingsShellModel {
         Task { [weak self] in
             await moduleRuntime.restart(id)
             await self?.loadModuleHealth()
+        }
+    }
+
+    public func testXiaozhiConnection(settings: XiaozhiSettings) {
+        guard let xiaozhiConnectionTester, !isTestingXiaozhiConnection else { return }
+        isTestingXiaozhiConnection = true
+        xiaozhiConnectionSteps = []
+        xiaozhiConnectionReport = nil
+        xiaozhiActivationCode = nil
+        xiaozhiConnectionError = nil
+        Task { [weak self] in
+            do {
+                let report = try await xiaozhiConnectionTester.testConnection(settings: settings) { step in
+                    _ = await MainActor.run { self?.xiaozhiConnectionSteps.insert(step) }
+                }
+                self?.xiaozhiConnectionReport = report
+            } catch let activation as XiaozhiActivationRequired {
+                self?.xiaozhiActivationCode = activation.code
+            } catch let failure as XiaozhiConnectionTestFailure {
+                self?.xiaozhiConnectionError = failure.detail
+            } catch {
+                self?.xiaozhiConnectionError =
+                    "The connection test ended unexpectedly before Xiaozhi could complete its handshake."
+            }
+            self?.isTestingXiaozhiConnection = false
         }
     }
 
@@ -475,6 +508,11 @@ private struct SettingsPageView: View {
 
 private struct ModuleSettingsPage: View {
     @Bindable var model: SettingsShellModel
+    @State private var isXiaozhiExpanded = false
+    @State private var openSections: Set<Section> = []
+    @State private var identityDraft: XiaozhiSettings?
+
+    private enum Section: Hashable { case connection, audio, presentation, advanced }
 
     var body: some View {
         SettingsSection(title: "Modules") {
@@ -482,76 +520,208 @@ private struct ModuleSettingsPage: View {
                 Text("No Debug modules are registered.")
             }
             ForEach(model.moduleHealth) { health in
-                VStack(alignment: .leading, spacing: NotchUITokens.microSpacing) {
-                    Text(health.id.rawValue).font(.headline)
-                    Text("\(health.isEnabled ? "Enabled" : "Disabled") — \(health.state.rawValue)")
-                        .accessibilityLabel(
-                            "\(health.id.rawValue) \(health.isEnabled ? "enabled" : "disabled") \(health.state.rawValue)"
-                        )
-                    if let error = health.lastError { Text(error).foregroundStyle(.red) }
-                    HStack {
-                        Button(health.isEnabled ? "Disable" : "Enable") {
-                            model.setModuleEnabled(!health.isEnabled, id: health.id)
-                        }
-                        Button("Restart") { model.restartModule(id: health.id) }
-                            .disabled(!health.isEnabled || health.state == .registered || health.state == .stopped)
-                    }
+                if health.id.rawValue == "xiaozhi" {
+                    xiaozhiCard(health)
+                } else {
+                    SettingsStatusRow(title: health.id.rawValue, value: health.state.rawValue)
                 }
-                .accessibilityElement(children: .contain)
             }
         }
-        SettingsSection(title: "Native Xiaozhi Client") {
-            Toggle(
-                "Prepare Xiaozhi at launch",
-                isOn: Binding(
-                    get: { model.settings.xiaozhi.isPreparedOnLaunch },
-                    set: { value in
-                        var settings = model.settings.xiaozhi
-                        settings.isPreparedOnLaunch = value
-                        model.update(.xiaozhi(settings))
+    }
+
+    @ViewBuilder
+    private func xiaozhiCard(_ health: ModuleHealth) -> some View {
+        VStack(alignment: .leading, spacing: NotchUITokens.controlSpacing) {
+            HStack(alignment: .top) {
+                Button {
+                    isXiaozhiExpanded.toggle()
+                    if isXiaozhiExpanded { identityDraft = model.settings.xiaozhi }
+                } label: {
+                    HStack(alignment: .top, spacing: NotchUITokens.controlSpacing) {
+                        Image(systemName: isXiaozhiExpanded ? "chevron.down" : "chevron.right")
+                            .frame(width: 12)
+                        VStack(alignment: .leading, spacing: NotchUITokens.microSpacing) {
+                            Text("Xiaozhi").font(.headline)
+                            Text("Native Xiaozhi Client · \(displayStatus(for: health))")
+                                .font(.caption).foregroundStyle(statusColor(for: health))
+                        }
                     }
-                )
-            )
-            Toggle(
-                "Reconnect automatically",
-                isOn: Binding(
-                    get: { model.settings.xiaozhi.autoReconnect },
-                    set: { value in
-                        var settings = model.settings.xiaozhi
-                        settings.autoReconnect = value
-                        model.update(.xiaozhi(settings))
-                    }
-                )
-            )
-            Toggle(
-                "Mute Xiaozhi TTS",
-                isOn: Binding(
-                    get: { model.settings.xiaozhi.ttsMuted },
-                    set: { value in
-                        var settings = model.settings.xiaozhi
-                        settings.ttsMuted = value
-                        model.update(.xiaozhi(settings))
-                    }
-                )
-            )
-            Picker(
-                "Conversation mode",
-                selection: Binding(
-                    get: { model.settings.xiaozhi.conversationMode },
-                    set: { value in
-                        var settings = model.settings.xiaozhi
-                        settings.conversationMode = value
-                        model.update(.xiaozhi(settings))
-                    }
-                )
-            ) {
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Xiaozhi details")
+                Spacer()
+                Toggle("Enabled", isOn: Binding(
+                    get: { health.isEnabled },
+                    set: { model.setModuleEnabled($0, id: health.id) }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("Enable Xiaozhi")
+            }
+            if isXiaozhiExpanded { expandedXiaozhiContent(health) }
+        }
+        .padding(NotchUITokens.rowSpacing)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: NotchUITokens.cardCornerRadius))
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private func expandedXiaozhiContent(_ health: ModuleHealth) -> some View {
+        Divider()
+        SettingsSection(title: "General") {
+            Toggle("Prepare at launch", isOn: xiaozhiBinding(\.isPreparedOnLaunch))
+            Toggle("Reconnect automatically", isOn: xiaozhiBinding(\.autoReconnect))
+            Picker("Conversation mode", selection: xiaozhiBinding(\.conversationMode)) {
                 Text("Auto").tag(XiaozhiConversationMode.auto)
                 Text("Push-to-Talk").tag(XiaozhiConversationMode.pushToTalk)
             }
-            Text("Device identity and credentials are stored separately in Keychain and are never exported.")
-                .font(.caption)
+            Toggle("Mute Xiaozhi TTS", isOn: xiaozhiBinding(\.ttsMuted))
+        }
+        disclosure("Connection & Identity", section: .connection) { connectionContent }
+        disclosure("Audio", section: .audio) {
+            Text("Audio uses the selected macOS output device and negotiated server format.")
                 .foregroundStyle(NotchUITokens.contentSecondary)
         }
+        disclosure("Notch Presentation", section: .presentation) {
+            Text("Xiaozhi uses the existing Notch surface while a voice session is active.")
+                .foregroundStyle(NotchUITokens.contentSecondary)
+        }
+        disclosure("Advanced", section: .advanced) {
+            TextField("Bootstrap URL", text: identityBinding(\.bootstrapURL))
+                .textFieldStyle(.roundedBorder)
+            Text("Custom bootstrap endpoints are not guaranteed compatible with Xiaozhi Cloud.")
+                .font(.caption).foregroundStyle(NotchUITokens.contentSecondary)
+            applyIdentityButtons
+        }
+        Divider()
+        HStack {
+            Text("Status: \(displayStatus(for: health))")
+            Spacer()
+            Button("Restart") { model.restartModule(id: health.id) }
+                .disabled(!health.isEnabled || health.state == .registered || health.state == .stopped)
+        }
+    }
+
+    private var connectionContent: some View {
+        VStack(alignment: .leading, spacing: NotchUITokens.controlSpacing) {
+            TextField("Device ID", text: identityBinding(\.deviceID))
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Button("Generate") { identityDraft?.deviceID = XiaozhiIdentity.randomDeviceID() }
+                Button("Clear") { identityDraft?.deviceID = "" }
+            }
+            TextField("Client ID", text: identityBinding(\.clientID))
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Button("Generate UUID") { identityDraft?.clientID = UUID().uuidString.lowercased() }
+                Button("Clear") { identityDraft?.clientID = "" }
+            }
+            SettingsStatusRow(title: "Protocol Version", value: model.xiaozhiConnectionReport.map { String($0.protocolVersion) } ?? "1 (negotiated)")
+            applyIdentityButtons
+            Text("Connection")
+                .font(.headline)
+            Text(model.xiaozhiConnectionReport == nil ? "Not verified" : "Connected")
+                .foregroundStyle(model.xiaozhiConnectionReport == nil ? NotchUITokens.contentSecondary : .green)
+            Button(model.isTestingXiaozhiConnection ? "Testing…" : "Test Connection") {
+                model.testXiaozhiConnection(settings: identityDraft ?? model.settings.xiaozhi)
+            }
+            .disabled(model.isTestingXiaozhiConnection || !(identityDraft ?? model.settings.xiaozhi).isValid)
+            if let code = model.xiaozhiActivationCode {
+                VStack(alignment: .leading, spacing: NotchUITokens.microSpacing) {
+                    Text("Activation required").font(.headline)
+                    Text(code).font(.system(.title2, design: .monospaced).weight(.semibold))
+                    Text("Enter this 6-digit code in Xiaozhi to link this Mac, then test again.")
+                        .font(.caption).foregroundStyle(NotchUITokens.contentSecondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            connectionTestProgress
+        }
+    }
+
+    @ViewBuilder
+    private var connectionTestProgress: some View {
+        if let report = model.xiaozhiConnectionReport {
+            Text("Connection verified · Protocol v\(report.protocolVersion) · \(report.audioDescription)")
+                .foregroundStyle(.green)
+        }
+        if model.isTestingXiaozhiConnection || !model.xiaozhiConnectionSteps.isEmpty {
+            ForEach(XiaozhiConnectionTestStep.allCases, id: \.self) { step in
+                Label(step.title, systemImage: model.xiaozhiConnectionSteps.contains(step) ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(model.xiaozhiConnectionSteps.contains(step) ? .green : NotchUITokens.contentSecondary)
+                    .font(.caption)
+            }
+        }
+        if let error = model.xiaozhiConnectionError {
+            Divider()
+            Text("Error details: \(error)")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .textSelection(.enabled)
+        }
+    }
+
+    private var applyIdentityButtons: some View {
+        HStack {
+            Button("Revert") { identityDraft = model.settings.xiaozhi }
+            Spacer()
+            Button("Apply") {
+                guard let draft = identityDraft, draft.isValid else { return }
+                model.update(.xiaozhi(draft))
+            }
+            .disabled(!(identityDraft ?? model.settings.xiaozhi).isValid)
+        }
+    }
+
+    private func disclosure<Content: View>(
+        _ title: String, section: Section, @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        DisclosureGroup(isExpanded: Binding(
+            get: { openSections.contains(section) },
+            set: { isOpen in
+                if isOpen { openSections.insert(section) } else { openSections.remove(section) }
+            }
+        )) {
+            content().padding(.leading, NotchUITokens.contentPadding)
+        } label: { Text(title).font(.headline) }
+    }
+
+    private func xiaozhiBinding<Value>(_ keyPath: WritableKeyPath<XiaozhiSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { model.settings.xiaozhi[keyPath: keyPath] },
+            set: { value in
+                var settings = model.settings.xiaozhi
+                settings[keyPath: keyPath] = value
+                model.update(.xiaozhi(settings))
+            }
+        )
+    }
+
+    private func identityBinding(_ keyPath: WritableKeyPath<XiaozhiSettings, String>) -> Binding<String> {
+        Binding(
+            get: { (identityDraft ?? model.settings.xiaozhi)[keyPath: keyPath] },
+            set: { value in
+                if identityDraft == nil { identityDraft = model.settings.xiaozhi }
+                identityDraft?[keyPath: keyPath] = value
+            }
+        )
+    }
+
+    private func runtimeStatus(for health: ModuleHealth) -> String {
+        guard health.isEnabled else { return "Disabled" }
+        return switch health.state {
+        case .starting, .stopping: "Connecting…"
+        case .running: "Running"
+        case .failed: "⚠ Connection failed"
+        case .registered, .stopped, .suspended: "Disabled"
+        }
+    }
+
+    private func displayStatus(for health: ModuleHealth) -> String {
+        model.xiaozhiActivationCode == nil ? runtimeStatus(for: health) : "Activation required"
+    }
+
+    private func statusColor(for health: ModuleHealth) -> Color {
+        health.state == .failed ? .red : NotchUITokens.contentSecondary
     }
 }
 
@@ -695,22 +865,6 @@ private struct PermissionCenterPage: View {
         } message: {
             Text("NotchHub will use Notifications only for concise permission recovery messages.")
         }
-        .confirmationDialog(
-            "Allow Xiaozhi to use the microphone?",
-            isPresented: Binding(
-                get: { model.isShowingMicrophoneExplanation },
-                set: { if !$0 { model.dismissMicrophoneExplanation() } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Allow Microphone") {
-                Task { await model.confirmXiaozhiMicrophoneConsent() }
-            }
-        } message: {
-            Text(
-                "Microphone audio is sent only during an active Xiaozhi conversation. Xiaozhi never starts capture at launch."
-            )
-        }
     }
 
     private var statusText: String {
@@ -751,7 +905,7 @@ private struct PermissionCenterPage: View {
         case .denied:
             Button("Open System Settings") { Task { _ = await model.openMicrophoneSystemSettings() } }
         case .notDetermined:
-            Button("Allow Xiaozhi microphone") { model.beginXiaozhiMicrophoneConsent() }
+            Button("Allow Xiaozhi microphone") { Task { await model.requestXiaozhiMicrophone() } }
         case .authorized, .restricted, .unavailable:
             Text(model.microphoneGuidance.nextAction)
                 .font(.caption)

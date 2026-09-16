@@ -78,9 +78,9 @@ func keepsPermissionsPassiveUntilConfirmation() async {
         ])
 }
 
-@Test("Xiaozhi microphone explanation stays passive until a user confirms it")
+@Test("Xiaozhi microphone request calls the permission adapter from its Settings action")
 @MainActor
-func keepsXiaozhiMicrophonePassiveUntilConfirmation() async {
+func requestsXiaozhiMicrophoneFromSettingsAction() async {
     let adapter = SettingsPermissionAdapter()
     let permissions = PermissionCenterModel(
         coordinator: PermissionCoordinator(
@@ -91,13 +91,43 @@ func keepsXiaozhiMicrophonePassiveUntilConfirmation() async {
 
     await permissions.load()
     #expect(permissions.microphoneStatus == .notDetermined)
-    permissions.beginXiaozhiMicrophoneConsent()
-    #expect(permissions.isShowingMicrophoneExplanation)
-    #expect(await adapter.requestCount == 0)
-
-    await permissions.confirmXiaozhiMicrophoneConsent()
+    await permissions.requestXiaozhiMicrophone()
     #expect(await adapter.requestCount == 1)
     #expect(permissions.microphoneStatus == .authorized)
+}
+
+@Test("Denied Xiaozhi microphone consent opens its System Settings recovery pane")
+@MainActor
+func opensMicrophoneSystemSettingsAfterDeniedConsent() async {
+    let adapter = SettingsPermissionAdapter(requestResult: .denied)
+    let permissions = PermissionCenterModel(
+        coordinator: PermissionCoordinator(
+            adapter: adapter,
+            requirements: [.init(featureID: PermissionFeatureID.xiaozhi, kind: .microphone)]
+        )
+    )
+
+    await permissions.requestXiaozhiMicrophone()
+
+    #expect(permissions.microphoneStatus == .denied)
+    #expect(await adapter.openSettingsCount == 1)
+}
+
+@Test("Unavailable Xiaozhi microphone request still opens its System Settings recovery pane")
+@MainActor
+func opensMicrophoneSystemSettingsAfterUnavailableConsent() async {
+    let adapter = SettingsPermissionAdapter(requestResult: .unavailable)
+    let permissions = PermissionCenterModel(
+        coordinator: PermissionCoordinator(
+            adapter: adapter,
+            requirements: [.init(featureID: PermissionFeatureID.xiaozhi, kind: .microphone)]
+        )
+    )
+
+    await permissions.requestXiaozhiMicrophone()
+
+    #expect(permissions.microphoneStatus == .unavailable)
+    #expect(await adapter.openSettingsCount == 1)
 }
 
 @Test("Permissions model projects a restricted state without a System Settings recovery action")
@@ -195,23 +225,41 @@ func projectsModuleRuntimeHealth() async throws {
     #expect(model.moduleHealth.first?.state == .running)
 }
 
+@Test("Settings exposes a sanitized Xiaozhi connection failure instead of a generic error")
+@MainActor
+func exposesXiaozhiConnectionFailureDetail() async {
+    let model = SettingsShellModel(xiaozhiConnectionTester: SettingsFailingXiaozhiConnectionTester())
+
+    model.testXiaozhiConnection(settings: .init())
+    for _ in 0..<20 where model.isTestingXiaozhiConnection { await Task.yield() }
+
+    #expect(model.isTestingXiaozhiConnection == false)
+    #expect(model.xiaozhiConnectionError == "The connection test ended unexpectedly before Xiaozhi could complete its handshake.")
+}
+
 private actor SettingsPermissionAdapter: PermissionAdapter {
     private var status: PermissionStatus
+    private let requestResult: PermissionStatus
     private(set) var requestCount = 0
+    private(set) var openSettingsCount = 0
 
-    init(status: PermissionStatus = .notDetermined) {
+    init(status: PermissionStatus = .notDetermined, requestResult: PermissionStatus = .authorized) {
         self.status = status
+        self.requestResult = requestResult
     }
 
     func status(for _: PermissionKind) async -> PermissionStatus { status }
 
     func requestAuthorization(for _: PermissionKind) async -> PermissionStatus {
         requestCount += 1
-        status = .authorized
+        status = requestResult
         return status
     }
 
-    func openSystemSettings(for _: PermissionKind) async -> Bool { true }
+    func openSystemSettings(for _: PermissionKind) async -> Bool {
+        openSettingsCount += 1
+        return true
+    }
 }
 
 private actor SettingsMemoryBackend: SettingsBackend {
@@ -228,3 +276,14 @@ private struct SettingsTestModule: NotchModule {
     let id: ModuleID
     let metadata = ModuleMetadata(displayName: "Test Module")
 }
+
+private struct SettingsFailingXiaozhiConnectionTester: XiaozhiConnectionTesting {
+    func testConnection(
+        settings _: XiaozhiSettings,
+        progress _: @escaping @Sendable (XiaozhiConnectionTestStep) async -> Void
+    ) async throws -> XiaozhiConnectionTestReport {
+        throw SettingsSyntheticConnectionError()
+    }
+}
+
+private struct SettingsSyntheticConnectionError: Error {}

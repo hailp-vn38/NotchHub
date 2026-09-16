@@ -97,6 +97,8 @@ public struct XiaozhiVoiceSessionConfiguration: Sendable {
 public enum XiaozhiVoiceSessionEvent: Equatable, Sendable {
     case state(XiaozhiVoiceState)
     case assistantText(String)
+    case opusReceived
+    case ttsStopped
     case completed
 }
 
@@ -219,6 +221,16 @@ public actor XiaozhiVoiceSession {
         state = .thinking
     }
 
+    /// Runs a bounded, microphone-free conversation so Settings can verify the
+    /// complete TTS path without changing the active Module session.
+    public func beginConnectionTestConversation() async throws {
+        guard let sessionID else { throw XiaozhiVoiceSessionError.noSession }
+        try await sendJSON(["session_id": sessionID, "type": "listen", "state": "start", "mode": "manual"])
+        try await transport?.send(.binary(try codec.encode(Data(repeating: 0, count: 1_920))))
+        try await sendJSON(["session_id": sessionID, "type": "listen", "state": "stop"])
+        state = .thinking
+    }
+
     public func enqueueMicrophonePCM(_ pcm: Data) throws {
         guard pcm.count == 1_920 else { throw XiaozhiVoiceSessionError.audioFrame }
         if uplink.count == Self.uplinkFrameLimit {
@@ -296,6 +308,7 @@ public actor XiaozhiVoiceSession {
             case "stop":
                 didReceiveTTSStop = true
                 await capture.stop()
+                await emit(.ttsStopped)
                 await publishCompletionIfReady()
             default: throw XiaozhiVoiceSessionError.malformedMessage
             }
@@ -322,6 +335,7 @@ public actor XiaozhiVoiceSession {
     private func receiveAudio(_ packet: Data) async throws {
         guard outputSampleRate != nil else { throw XiaozhiVoiceSessionError.noSession }
         guard configuration?.ttsMuted != true else { return }
+        await emit(.opusReceived)
         isPlaybackDrained = false
         if downlink.count == Self.downlinkFrameLimit {
             downlink.removeFirst()

@@ -1,16 +1,97 @@
 @preconcurrency import AVFoundation
 @preconcurrency import Foundation
 
-public struct XiaozhiURLSessionVoiceConnector: XiaozhiVoiceConnecting {
-    private let session: URLSession
+/// Holds `connect` until URLSession has completed the WebSocket upgrade.
+/// Sending `hello` immediately after `URLSessionWebSocketTask.resume()` races
+/// the upgrade and can fail with "Socket is not connected".
+actor XiaozhiWebSocketOpenGate {
+    private var continuation: CheckedContinuation<Void, Error>?
 
-    public init(session: URLSession = .shared) { self.session = session }
+    func waitUntilOpened(start: @escaping @Sendable () -> Void) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            start()
+        }
+    }
+
+    func opened() {
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func failed(_ error: Error) {
+        continuation?.resume(throwing: error)
+        continuation = nil
+    }
+}
+
+private final class XiaozhiURLSessionWebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var gates: [Int: XiaozhiWebSocketOpenGate] = [:]
+
+    func register(_ gate: XiaozhiWebSocketOpenGate, for task: URLSessionWebSocketTask) {
+        lock.lock()
+        gates[task.taskIdentifier] = gate
+        lock.unlock()
+    }
+
+    func removeGate(for task: URLSessionTask) -> XiaozhiWebSocketOpenGate? {
+        lock.lock()
+        defer { lock.unlock() }
+        return gates.removeValue(forKey: task.taskIdentifier)
+    }
+
+    func urlSession(
+        _: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol _: String?
+    ) {
+        guard let gate = removeGate(for: webSocketTask) else { return }
+        Task { await gate.opened() }
+    }
+
+    func urlSession(
+        _: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard let gate = removeGate(for: task) else { return }
+        Task { await gate.failed(error ?? URLError(.networkConnectionLost)) }
+    }
+
+    func urlSession(
+        _: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith _: URLSessionWebSocketTask.CloseCode,
+        reason _: Data?
+    ) {
+        guard let gate = removeGate(for: webSocketTask) else { return }
+        Task { await gate.failed(URLError(.networkConnectionLost)) }
+    }
+}
+
+public final class XiaozhiURLSessionVoiceConnector: XiaozhiVoiceConnecting, @unchecked Sendable {
+    private let session: URLSession
+    private let delegate: XiaozhiURLSessionWebSocketDelegate
+
+    public init(configuration: URLSessionConfiguration = .default) {
+        let delegate = XiaozhiURLSessionWebSocketDelegate()
+        self.delegate = delegate
+        self.session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+    }
 
     public func connect(_ request: XiaozhiVoiceConnectionRequest) async throws -> any XiaozhiVoiceTransport {
         var urlRequest = URLRequest(url: request.url)
         for (field, value) in request.headers { urlRequest.setValue(value, forHTTPHeaderField: field) }
         let task = session.webSocketTask(with: urlRequest)
-        task.resume()
+        let gate = XiaozhiWebSocketOpenGate()
+        delegate.register(gate, for: task)
+        do {
+            try await gate.waitUntilOpened { task.resume() }
+        } catch {
+            task.cancel(with: .goingAway, reason: nil)
+            throw error
+        }
         return XiaozhiURLSessionVoiceTransport(task: task)
     }
 }
@@ -36,6 +117,13 @@ public actor XiaozhiURLSessionVoiceTransport: XiaozhiVoiceTransport {
     }
 
     public func disconnect() async { task.cancel(with: .goingAway, reason: nil) }
+}
+
+/// A diagnostic test sends its own bounded silence frame and never opens the microphone.
+public actor XiaozhiSilentAudioCapture: XiaozhiAudioCapturing {
+    public init() {}
+    public func start(_: @escaping @Sendable (Data) -> Void) async throws {}
+    public func stop() async {}
 }
 
 public actor XiaozhiAVAudioCapture: XiaozhiAudioCapturing {

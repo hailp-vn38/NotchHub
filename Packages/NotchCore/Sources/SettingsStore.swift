@@ -108,23 +108,38 @@ public struct XiaozhiSettings: Codable, Equatable, Sendable {
     public var autoReconnect: Bool
     public var conversationMode: XiaozhiConversationMode
     public var ttsMuted: Bool
+    public var bootstrapURL: String
+    public var deviceID: String
+    public var clientID: String
 
     public init(
         isPreparedOnLaunch: Bool = true,
         autoReconnect: Bool = true,
         conversationMode: XiaozhiConversationMode = .auto,
-        ttsMuted: Bool = false
+        ttsMuted: Bool = false,
+        bootstrapURL: String = "https://api.tenclass.net/xiaozhi/ota/",
+        deviceID: String = XiaozhiIdentity.randomDeviceID(),
+        clientID: String = UUID().uuidString.lowercased()
     ) {
         self.isPreparedOnLaunch = isPreparedOnLaunch
         self.autoReconnect = autoReconnect
         self.conversationMode = conversationMode
         self.ttsMuted = ttsMuted
+        self.bootstrapURL = bootstrapURL
+        self.deviceID = deviceID
+        self.clientID = clientID
+    }
+
+    public var isValid: Bool {
+        URL(string: bootstrapURL)?.scheme?.lowercased() == "https"
+            && XiaozhiIdentity.isValidDeviceID(deviceID)
+            && XiaozhiIdentity.isValidClientID(clientID)
     }
 }
 
 /// The complete, non-secret settings snapshot; F6 v2 adds shortcut bindings.
 public struct AppSettings: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     public var schemaVersion: Int
     public var appearance: AppearanceSettings
@@ -146,7 +161,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.modules = modules
     }
 
-    /// Namespaced non-secret module settings. Identity stays in Keychain.
+    /// Namespaced, non-secret Xiaozhi configuration, including its editable identity.
     public var xiaozhi: XiaozhiSettings {
         get { modules["xiaozhi"]?.xiaozhi ?? .init() }
         set {
@@ -203,6 +218,59 @@ public enum SettingsMutationOutcome: Equatable, Sendable {
     case rejected
     case readOnly
     case persistenceFailed
+}
+
+public enum XiaozhiConnectionTestStep: String, CaseIterable, Equatable, Hashable, Sendable {
+    case configurationValid
+    case webSocketConnected
+    case helloSent
+    case serverHelloReceived
+    case testConversationStarted
+    case ttsStarted
+    case opusReceived
+    case ttsStopped
+    case playbackDrained
+
+    public var title: String {
+        switch self {
+        case .configurationValid: "Configuration valid"
+        case .webSocketConnected: "WebSocket connected"
+        case .helloSent: "Hello sent"
+        case .serverHelloReceived: "Server hello received"
+        case .testConversationStarted: "Test conversation started"
+        case .ttsStarted: "TTS started"
+        case .opusReceived: "Opus audio received"
+        case .ttsStopped: "TTS stopped"
+        case .playbackDrained: "Playback drained"
+        }
+    }
+}
+
+public struct XiaozhiConnectionTestReport: Equatable, Sendable {
+    public let protocolVersion: Int
+    public let audioDescription: String
+
+    public init(protocolVersion: Int, audioDescription: String) {
+        self.protocolVersion = protocolVersion
+        self.audioDescription = audioDescription
+    }
+}
+
+public struct XiaozhiActivationRequired: Error, Equatable, Sendable {
+    public let code: String
+    public init(code: String) { self.code = code }
+}
+
+public struct XiaozhiConnectionTestFailure: Error, Equatable, Sendable {
+    public let detail: String
+    public init(detail: String) { self.detail = detail }
+}
+
+public protocol XiaozhiConnectionTesting: Sendable {
+    func testConnection(
+        settings: XiaozhiSettings,
+        progress: @escaping @Sendable (XiaozhiConnectionTestStep) async -> Void
+    ) async throws -> XiaozhiConnectionTestReport
 }
 
 public struct SettingsMutationResult: Equatable, Sendable {
@@ -292,12 +360,16 @@ public actor SettingsStore {
         case .hoverDelay(let value): candidate.notchBehavior.hoverDelay = value
         case .autoCollapseTimeout(let value): candidate.notchBehavior.autoCollapseTimeout = value
         case .shortcutBindings(let value): candidate.shortcuts.bindings = value
-        case .moduleEnabled(let value, let id): candidate.modules[id.rawValue] = .init(isEnabled: value)
+        case .moduleEnabled(let value, let id):
+            var entry = candidate.modules[id.rawValue] ?? .init(isEnabled: value)
+            entry.isEnabled = value
+            candidate.modules[id.rawValue] = entry
         case .xiaozhi(let value): candidate.xiaozhi = value
         case .replace(let value): candidate = value
         }
         guard candidate.schemaVersion == AppSettings.currentSchemaVersion,
-            candidate.shortcuts.isValid
+            candidate.shortcuts.isValid,
+            candidate.xiaozhi.isValid
         else {
             return .init(settings: settings, outcome: .rejected)
         }
@@ -403,6 +475,24 @@ public actor SettingsStore {
                 throw SettingsStoreError.invalidSnapshot
             }
             return .current(current)
+        }
+        if version == 6 {
+            let legacy = try decoder.decode(LegacySettingsV6.self, from: data)
+            let modules: [String: ModuleEnablementSettings] = legacy.modules.mapValues { entry in
+                .init(
+                    isEnabled: entry.isEnabled,
+                    xiaozhi: entry.xiaozhi.map {
+                        XiaozhiSettings(
+                            isPreparedOnLaunch: $0.isPreparedOnLaunch,
+                            autoReconnect: $0.autoReconnect,
+                            conversationMode: $0.conversationMode,
+                            ttsMuted: $0.ttsMuted)
+                    })
+            }
+            return .migrated(
+                .init(
+                    appearance: legacy.appearance, notchBehavior: legacy.notchBehavior,
+                    shortcuts: legacy.shortcuts, modules: modules))
         }
         if version == 5 {
             let legacy = try decoder.decode(LegacySettingsV5.self, from: data)
@@ -521,6 +611,26 @@ public actor SettingsStore {
         let notchBehavior: NotchBehaviorSettings
         let shortcuts: ShortcutSettings
         let modules: [String: LegacyModuleEnablementSettingsV5]
+    }
+
+    private struct LegacySettingsV6: Decodable {
+        let schemaVersion: Int
+        let appearance: AppearanceSettings
+        let notchBehavior: NotchBehaviorSettings
+        let shortcuts: ShortcutSettings
+        let modules: [String: LegacyModuleEnablementSettingsV6]
+    }
+
+    private struct LegacyModuleEnablementSettingsV6: Decodable {
+        let isEnabled: Bool
+        let xiaozhi: LegacyXiaozhiSettingsV6?
+    }
+
+    private struct LegacyXiaozhiSettingsV6: Decodable {
+        let isPreparedOnLaunch: Bool
+        let autoReconnect: Bool
+        let conversationMode: XiaozhiConversationMode
+        let ttsMuted: Bool
     }
 
     private struct LegacyModuleEnablementSettingsV5: Decodable {

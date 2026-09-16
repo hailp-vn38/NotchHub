@@ -1,137 +1,6 @@
 import Foundation
 import NotchCore
 import NotchDomain
-import Security
-
-public protocol XiaozhiCredentialStoring: Sendable {
-    func credential() throws -> String?
-    func saveCredential(_ value: String) throws
-    func removeCredential() throws
-}
-
-public enum XiaozhiCredentialStoreError: Error, Equatable, Sendable {
-    case invalidCredential
-    case keychainFailure(OSStatus)
-}
-
-/// The only durable boundary for Xiaozhi credentials. Secrets never enter
-/// `AppSettings`, module health, surface descriptors, or diagnostics.
-public struct KeychainXiaozhiCredentialStore: XiaozhiCredentialStoring {
-    private let service = "com.notchhub.xiaozhi"
-    private let account = "credential"
-
-    public init() {}
-
-    public func credential() throws -> String? {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account,
-            kSecReturnData: true,
-            kSecMatchLimit: kSecMatchLimitOne,
-        ]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data,
-            let credential = String(data: data, encoding: .utf8)
-        else { throw XiaozhiCredentialStoreError.keychainFailure(status) }
-        return credential
-    }
-
-    public func saveCredential(_ value: String) throws {
-        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw XiaozhiCredentialStoreError.invalidCredential
-        }
-        let data = Data(value.utf8)
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account,
-        ]
-        let attributes: [CFString: Any] = [kSecValueData: data]
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            var create = query
-            create[kSecValueData] = data
-            let createStatus = SecItemAdd(create as CFDictionary, nil)
-            guard createStatus == errSecSuccess else {
-                throw XiaozhiCredentialStoreError.keychainFailure(createStatus)
-            }
-        } else if status != errSecSuccess {
-            throw XiaozhiCredentialStoreError.keychainFailure(status)
-        }
-    }
-
-    public func removeCredential() throws {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account,
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw XiaozhiCredentialStoreError.keychainFailure(status)
-        }
-    }
-}
-
-public protocol XiaozhiIdentityStoring: Sendable {
-    func deviceID() throws -> String
-    func clientID() throws -> String
-}
-
-/// Generates one locally-administered unicast MAC ID, then keeps it in
-/// Keychain so identity is stable without becoming Settings/export data.
-public struct KeychainXiaozhiIdentityStore: XiaozhiIdentityStoring {
-    private let service = "com.notchhub.xiaozhi"
-
-    public init() {}
-
-    public func deviceID() throws -> String {
-        try persistentValue(account: "device-id", isValid: XiaozhiIdentity.isValidDeviceID) {
-            XiaozhiIdentity.randomDeviceID()
-        }
-    }
-
-    public func clientID() throws -> String {
-        try persistentValue(account: "client-id", isValid: XiaozhiIdentity.isValidClientID) {
-            UUID().uuidString.lowercased()
-        }
-    }
-
-    private func persistentValue(
-        account: String,
-        isValid: (String) -> Bool,
-        generate: () -> String
-    ) throws -> String {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account,
-            kSecReturnData: true,
-            kSecMatchLimit: kSecMatchLimitOne,
-        ]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecSuccess, let data = result as? Data,
-            let existing = String(data: data, encoding: .utf8), XiaozhiIdentity.isValidDeviceID(existing)
-        {
-            return existing
-        }
-        guard status == errSecItemNotFound else { throw XiaozhiCredentialStoreError.keychainFailure(status) }
-        let generated = generate()
-        var create = query
-        create.removeValue(forKey: kSecReturnData)
-        create.removeValue(forKey: kSecMatchLimit)
-        create[kSecValueData] = Data(generated.utf8)
-        let createStatus = SecItemAdd(create as CFDictionary, nil)
-        guard createStatus == errSecSuccess else {
-            throw XiaozhiCredentialStoreError.keychainFailure(createStatus)
-        }
-        return generated
-    }
-}
 
 public enum XiaozhiDiagnostics {
     private static let secretKeys: Set<String> = ["authorization", "credential", "secret", "token"]
@@ -222,6 +91,10 @@ public protocol XiaozhiBootstrapping: Sendable {
     func bootstrap(_ request: XiaozhiBootstrapRequest) async throws -> XiaozhiBootstrapResponse
 }
 
+public enum XiaozhiBootstrapError: Error, Equatable, Sendable {
+    case httpStatus(Int)
+}
+
 /// Direct HTTP bootstrap boundary. The returned token is deliberately kept in
 /// the response only; callers store it in Keychain when persistence is needed.
 public struct XiaozhiCloudBootstrapClient: XiaozhiBootstrapping {
@@ -240,12 +113,13 @@ public struct XiaozhiCloudBootstrapClient: XiaozhiBootstrapping {
         urlRequest.setValue("1", forHTTPHeaderField: "Activation-Version")
         urlRequest.setValue(request.deviceID, forHTTPHeaderField: "Device-Id")
         urlRequest.setValue(request.clientID, forHTTPHeaderField: "Client-Id")
+        urlRequest.setValue("NotchHub/\(request.appVersion) macOS", forHTTPHeaderField: "User-Agent")
+        urlRequest.setValue(request.language, forHTTPHeaderField: "Accept-Language")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
         let (data, response) = try await session.data(for: urlRequest)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
-        }
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard 200..<300 ~= http.statusCode else { throw XiaozhiBootstrapError.httpStatus(http.statusCode) }
         return try JSONDecoder().decode(XiaozhiBootstrapResponse.self, from: data)
     }
 }
@@ -258,11 +132,10 @@ public actor XiaozhiModule: NotchModule {
         requiredCapabilities: [Capability("microphone")!])
 
     private let bootstrap: any XiaozhiBootstrapping
-    private let credentials: any XiaozhiCredentialStoring
-    private let identity: any XiaozhiIdentityStoring
+    private let bootstrapFactory: (@Sendable (URL) -> any XiaozhiBootstrapping)?
     private let voiceFactory: @Sendable () throws -> XiaozhiVoiceSession
     private let permissionCoordinator: PermissionCoordinator?
-    private let ttsMutedProvider: @Sendable () async -> Bool
+    private let settingsProvider: @Sendable () async -> XiaozhiSettings
     private var voice: XiaozhiVoiceSession?
     private var lifetime: ModuleLifetime?
     private var presentation = XiaozhiConversationPresentation.ready
@@ -276,10 +149,9 @@ public actor XiaozhiModule: NotchModule {
 
     public init(
         bootstrap: any XiaozhiBootstrapping = XiaozhiCloudBootstrapClient(),
-        credentials: any XiaozhiCredentialStoring = KeychainXiaozhiCredentialStore(),
-        identity: any XiaozhiIdentityStoring = KeychainXiaozhiIdentityStore(),
+        bootstrapFactory: (@Sendable (URL) -> any XiaozhiBootstrapping)? = nil,
         permissionCoordinator: PermissionCoordinator? = nil,
-        ttsMutedProvider: @escaping @Sendable () async -> Bool = { false },
+        settingsProvider: @escaping @Sendable () async -> XiaozhiSettings = { .init() },
         completionDelay: Duration = .seconds(3),
         voiceFactory: @escaping @Sendable () throws -> XiaozhiVoiceSession = {
             try XiaozhiVoiceSession(
@@ -288,11 +160,10 @@ public actor XiaozhiModule: NotchModule {
         }
     ) {
         self.bootstrap = bootstrap
-        self.credentials = credentials
-        self.identity = identity
+        self.bootstrapFactory = bootstrapFactory
         self.voiceFactory = voiceFactory
         self.permissionCoordinator = permissionCoordinator
-        self.ttsMutedProvider = ttsMutedProvider
+        self.settingsProvider = settingsProvider
         self.completionDelay = completionDelay
     }
 
@@ -332,10 +203,12 @@ public actor XiaozhiModule: NotchModule {
 
     private func prepare(eventPublisher: any ModuleEventPublisher) async {
         do {
-            let response = try await bootstrap.bootstrap(
+            let settings = await settingsProvider()
+            guard settings.isValid, let endpoint = URL(string: settings.bootstrapURL) else { throw URLError(.badURL) }
+            let client = bootstrapFactory?(endpoint) ?? bootstrap
+            let response = try await client.bootstrap(
                 .init(
-                    deviceID: try identity.deviceID(), clientID: try identity.clientID(), appVersion: "0.1.0"))
-            if let token = response.websocket?.token { try credentials.saveCredential(token) }
+                    deviceID: settings.deviceID, clientID: settings.clientID, appVersion: "0.1.0"))
             let type = response.activation == nil ? "xiaozhi.ready" : "xiaozhi.activationRequired"
             await eventPublisher.publish(.init(moduleID: id, type: EventType(type)!))
         } catch {
@@ -354,19 +227,21 @@ public actor XiaozhiModule: NotchModule {
                     return
                 }
             }
-            sessionTTSMuted = await ttsMutedProvider()
+            let settings = await settingsProvider()
+            guard settings.isValid, let endpoint = URL(string: settings.bootstrapURL) else { throw URLError(.badURL) }
+            sessionTTSMuted = settings.ttsMuted
             assistantText = nil
             presentation = .connecting
             await publishPresentation()
-            let deviceID = try identity.deviceID()
-            let clientID = try identity.clientID()
-            let response = try await bootstrap.bootstrap(
+            let deviceID = settings.deviceID
+            let clientID = settings.clientID
+            let client = bootstrapFactory?(endpoint) ?? bootstrap
+            let response = try await client.bootstrap(
                 .init(deviceID: deviceID, clientID: clientID, appVersion: "0.1.0"))
             guard let websocket = response.websocket else {
                 await showFailure("xiaozhi.activationRequired", eventPublisher: eventPublisher)
                 return
             }
-            try credentials.saveCredential(websocket.token)
             let voice = try voiceFactory()
             voiceGeneration &+= 1
             let generation = voiceGeneration
@@ -377,7 +252,7 @@ public actor XiaozhiModule: NotchModule {
             try await voice.start(
                 .init(
                     url: websocket.url, token: websocket.token, version: websocket.version,
-                    deviceID: deviceID, clientID: clientID, mode: .auto, ttsMuted: sessionTTSMuted))
+                    deviceID: deviceID, clientID: clientID, mode: settings.conversationMode, ttsMuted: sessionTTSMuted))
             presentation = .connecting
             await publishPresentation()
             await eventPublisher.publish(.init(moduleID: id, type: EventType("xiaozhi.connecting")!))
@@ -405,6 +280,7 @@ public actor XiaozhiModule: NotchModule {
         case .state(let voiceState):
             presentation = .init(voiceState: voiceState)
         case .assistantText(let text): assistantText = text
+        case .opusReceived, .ttsStopped: break
         case .completed:
             presentation = .ready
             scheduleReturnHome()
@@ -490,6 +366,176 @@ public actor XiaozhiModule: NotchModule {
         voice = nil
         assistantText = nil
     }
+}
+
+public enum XiaozhiConnectionTestError: Error, Equatable, Sendable {
+    case invalidSettings
+    case activationRequired
+    case alreadyRunning
+    case timedOut
+    case connectionFailed
+}
+
+/// A disposable Settings diagnostic. It never uses the Module runtime,
+/// microphone, surface, Keychain, or a persisted credential.
+public actor XiaozhiConnectionTester: XiaozhiConnectionTesting {
+    private let bootstrapFactory: @Sendable (URL) -> any XiaozhiBootstrapping
+    private let voiceFactory: @Sendable () throws -> XiaozhiVoiceSession
+    private var continuation: CheckedContinuation<XiaozhiConnectionTestReport, Error>?
+    private var progress: (@Sendable (XiaozhiConnectionTestStep) async -> Void)?
+    private var pendingResult: XiaozhiConnectionTestReport?
+    private var pendingError: Error?
+    private var version = 1
+
+    public init(
+        bootstrapFactory: @escaping @Sendable (URL) -> any XiaozhiBootstrapping = { XiaozhiCloudBootstrapClient(endpoint: $0) },
+        voiceFactory: @escaping @Sendable () throws -> XiaozhiVoiceSession = {
+            try XiaozhiVoiceSession(
+                connector: XiaozhiURLSessionVoiceConnector(), capture: XiaozhiSilentAudioCapture(),
+                playback: XiaozhiAVAudioPlayback(), codec: XiaozhiOpusCodec())
+        }
+    ) {
+        self.bootstrapFactory = bootstrapFactory
+        self.voiceFactory = voiceFactory
+    }
+
+    public func testConnection(
+        settings: XiaozhiSettings,
+        progress: @escaping @Sendable (XiaozhiConnectionTestStep) async -> Void
+    ) async throws -> XiaozhiConnectionTestReport {
+        guard settings.isValid, let endpoint = URL(string: settings.bootstrapURL) else {
+            throw XiaozhiConnectionTestError.invalidSettings
+        }
+        guard continuation == nil else { throw XiaozhiConnectionTestError.alreadyRunning }
+        self.progress = progress
+        await progress(.configurationValid)
+        let response: XiaozhiBootstrapResponse
+        do {
+            response = try await bootstrapFactory(endpoint).bootstrap(
+                .init(deviceID: settings.deviceID, clientID: settings.clientID, appVersion: "0.1.0"))
+        } catch let error as XiaozhiBootstrapError {
+            let detail = switch error { case .httpStatus(let status): "Bootstrap rejected the request (HTTP \(status))." }
+            throw XiaozhiConnectionTestFailure(detail: detail)
+        } catch let error as URLError {
+            throw XiaozhiConnectionTestFailure(detail: "Bootstrap request failed: \(error.localizedDescription)")
+        } catch {
+            throw XiaozhiConnectionTestFailure(detail: "Bootstrap request failed. Check the Bootstrap URL and network connection.")
+        }
+        if let code = response.activation?.code,
+            code.range(of: "^[0-9]{6}$", options: .regularExpression) != nil
+        {
+            throw XiaozhiActivationRequired(code: code)
+        }
+        guard let websocket = response.websocket else {
+            throw XiaozhiConnectionTestError.activationRequired
+        }
+        version = websocket.version
+        let voice: XiaozhiVoiceSession
+        do {
+            voice = try voiceFactory()
+            await voice.setEventObserver { [weak self, weak voice] event in
+                guard let voice else { return }
+                await self?.observe(event, voice: voice)
+            }
+            try await voice.start(
+                .init(
+                    url: websocket.url, token: websocket.token, version: websocket.version,
+                    deviceID: settings.deviceID, clientID: settings.clientID, mode: .pushToTalk))
+        } catch let error as URLError {
+            reset()
+            throw XiaozhiConnectionTestFailure(detail: Self.webSocketFailureDetail(for: error))
+        } catch {
+            reset()
+            throw XiaozhiConnectionTestFailure(
+                detail: "WebSocket connection failed before Xiaozhi could receive hello.")
+        }
+        await progress(.webSocketConnected)
+        await progress(.helloSent)
+        do {
+            let report = try await withCheckedThrowingContinuation { continuation in
+                self.continuation = continuation
+                if let pendingResult {
+                    self.pendingResult = nil
+                    self.continuation = nil
+                    continuation.resume(returning: pendingResult)
+                    return
+                }
+                if let pendingError {
+                    self.pendingError = nil
+                    self.continuation = nil
+                    continuation.resume(throwing: pendingError)
+                    return
+                }
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(20))
+                    await self?.timeout()
+                }
+            }
+            await voice.stop()
+            reset()
+            return report
+        } catch {
+            await voice.stop()
+            reset()
+            throw error
+        }
+    }
+
+    private func observe(_ event: XiaozhiVoiceSessionEvent, voice: XiaozhiVoiceSession) async {
+        switch event {
+        case .state(.idle):
+            await progress?(.serverHelloReceived)
+            do {
+                try await voice.beginConnectionTestConversation()
+                await progress?(.testConversationStarted)
+            } catch {
+                fail(XiaozhiConnectionTestFailure(
+                    detail: "Could not start the microphone-free Xiaozhi test conversation."))
+            }
+        case .state(.speaking): await progress?(.ttsStarted)
+        case .state(.error):
+            fail(XiaozhiConnectionTestFailure(
+                detail: "Xiaozhi server closed the WebSocket before sending Server Hello."))
+        case .opusReceived: await progress?(.opusReceived)
+        case .ttsStopped: await progress?(.ttsStopped)
+        case .completed:
+            await progress?(.playbackDrained)
+            succeed(.init(protocolVersion: version, audioDescription: "Opus · negotiated · Mono"))
+        case .state, .assistantText: break
+        }
+    }
+
+    private func timeout() {
+        fail(XiaozhiConnectionTestFailure(
+            detail: "Timed out waiting for Xiaozhi Server Hello."))
+    }
+
+    private static func webSocketFailureDetail(for error: URLError) -> String {
+        switch error.code {
+        case .networkConnectionLost:
+            "WebSocket connection was closed before Xiaozhi could receive hello."
+        case .notConnectedToInternet:
+            "No Internet connection is available for the Xiaozhi WebSocket test."
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            "Could not reach the Xiaozhi WebSocket host. Check the Bootstrap URL and network connection."
+        case .timedOut:
+            "WebSocket connection timed out before Xiaozhi could receive hello."
+        default:
+            "WebSocket connection failed before Xiaozhi could receive hello."
+        }
+    }
+
+    private func succeed(_ result: XiaozhiConnectionTestReport) {
+        guard let continuation else { pendingResult = result; return }
+        continuation.resume(returning: result)
+        self.continuation = nil
+    }
+    private func fail(_ error: Error) {
+        guard let continuation else { pendingError = error; return }
+        continuation.resume(throwing: error)
+        self.continuation = nil
+    }
+    private func reset() { continuation = nil; progress = nil; pendingResult = nil; pendingError = nil }
 }
 
 /// The only conversation information released to presentation. It contains no

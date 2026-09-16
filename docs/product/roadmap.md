@@ -23,7 +23,7 @@ The project will not begin by integrating Xiaozhi, media control, clipboard, fil
 - Versioned events, local IPC, validation, and security boundaries.
 - Diagnostics, observability, performance budgets, and test infrastructure.
 
-A module is added only after the foundation can host it without causing architectural rewrites. Xiaozhi is planned as a future **M1 Display Companion** module, not as a shortcut around base-platform work.
+A module is added only after the foundation can host it without causing architectural rewrites. Xiaozhi is planned as one future **NX Native Xiaozhi Client** module, not as a shortcut around base-platform work.
 
 ## 2. Delivery principles
 
@@ -73,15 +73,14 @@ The first implementation supports the built-in MacBook display only. Multi-displ
 | F9 | 3–5 days | Make failures and resource behavior observable | Diagnostics panel and structured logging |
 | F10 | 1–2 weeks | Stabilize, test, and profile the foundation | Foundation Completion Gate |
 | M0 | 3–5 days | Validate real module contribution contracts | Sample Status Module |
-| M1 | 1–2 weeks | Add Xiaozhi display integration only | Voice state and streaming text via relay |
+| NX | Variable | Add the complete Native Xiaozhi Client | Direct bootstrap/WebSocket, voice, TTS, and bounded presentation state |
 | M2 | 1–2 weeks | Validate a daily-use utility experience | Media or Clipboard module |
 | M3 | 1–2 weeks | Add selected desktop utility interactions | Files or System Controls module |
 | M4 | 1–2 weeks | Add productivity context | Calendar or Reminders module |
-| M5 | Variable | Add optional native Mac voice capability | Native Xiaozhi Voice module |
 | M6 | Variable | Add future desktop modules after review | Reviewed module expansion |
 
 **Expected foundation duration:** approximately 8–13 weeks of part-time work.  
-**Expected timing of the first real Xiaozhi UI:** after the Foundation Completion Gate, usually not before M1.
+**Expected timing of the first real Xiaozhi UI:** after the Foundation Completion Gate, during NX.
 
 ---
 
@@ -181,6 +180,8 @@ in-memory coordination; it is not the F7 `ModuleRuntime` restart.
 
 ## F2 — Notch surface shell
 
+**Status:** Complete — see [F2 evidence](../quality/f2-evidence.md).
+
 ### Goal
 
 Implement the core windowing and interaction behavior that every future module relies on.
@@ -213,6 +214,8 @@ The notch surface opens and closes smoothly around the built-in display notch, r
 ---
 
 ## F3 — Design system and Settings UI shell
+
+**Status:** Complete — see [F3 evidence](../quality/f3-evidence.md).
 
 ### Goal
 
@@ -296,6 +299,8 @@ Make settings durable, safe to evolve, and independent from UI implementation de
 
 ## F5 — Permission Center
 
+**Status:** Complete — see [F5 evidence](../quality/f5-evidence.md).
+
 ### Goal
 
 Centralize privacy permission discovery, explanation, request, denial handling, and capability availability.
@@ -330,6 +335,8 @@ The base app must not ask for Camera, Microphone, Calendar, Reminders, Screen Re
 ---
 
 ## F6 — Shared Actions and keyboard shortcuts
+
+**Status:** Complete — see [F6 evidence](../quality/f6-evidence.md).
 
 ### Goal
 
@@ -374,6 +381,8 @@ development hooks, not exposed in `MenuBarExtra`.
 ---
 
 ## F7 — Module runtime and DemoModule
+
+**Status:** Complete — see [F7 evidence](../quality/f7-evidence.md).
 
 ### Goal
 
@@ -518,35 +527,30 @@ Validate the module contribution API with a module that is more representative t
 
 ---
 
-## M1 — Xiaozhi Display Companion
+## NX — Native Xiaozhi Client
 
 ### Goal
 
-Show Xiaozhi voice/AI session state and streamed text without adding native Mac microphone, raw audio, or direct coupling to Xiaozhi protocol into the Notch surface.
+Deliver the complete direct Native Xiaozhi Client described in the module specification, without a preceding relay/display phase or a later native-voice phase.
 
 ### Scope
 
-- Create a relay or adapter that transforms Xiaozhi protocol/events into `EventEnvelope v1`.
-- Display states: disconnected, idle, listening, thinking, speaking, error.
-- Display partial/final user and assistant transcript in compact/expanded contexts, with full content in a separately opened application scene.
-- Add transcript assembler with sequence/correlation/session handling.
-- Coalesce UI text updates to approximately 20–30 flushes per second.
-- Add registered actions where backend support exists: reconnect, stop, mute.
-- Use application scene for full transcript; keep Notch view short.
+- Use direct bootstrap and authenticated WebSocket transport to the default Xiaozhi Cloud backend.
+- Implement activation, session/hello lifecycle, microphone capture, bounded Opus pipelines, TTS playback, Auto and Push-to-Talk, abort, reconnect, sleep/wake recovery, and normalized presentation state.
+- Keep raw protocol and high-rate audio outside NotchSurface and the shared EventBus; keep transcript in session memory only.
+- Expose immediate conversation controls on the expanded Notch surface; use Settings and Diagnostics application scenes for durable configuration and detail.
+- Use the central Permission Coordinator for contextual microphone access and the shared Settings store for namespaced non-secret Module settings.
 
 ### Explicit non-goals
 
-- No Mac microphone input.
-- No direct raw WebSocket/audio/Opus decoding inside `NotchSurface`.
-- No unbounded transcript persistence.
+- No relay dependency.
+- No MCP, arbitrary remote execution, persistent transcript history, MQTT/UDP, wake word, realtime full duplex, or production AEC in the initial scope.
 - No arbitrary tool execution from voice/AI.
 
 ### Exit criteria
 
-- Disconnect/reconnect behavior is observable and safe.
-- Streamed text remains smooth with Vietnamese Unicode content.
-- Long transcripts are bounded and move to detail UI.
-- Module respects CPU/RAM/event-rate budgets.
+- The MVP Definition of Done in the Native Xiaozhi Client specification passes, including real-backend acceptance, permission, sleep/wake, reconnect, bounded audio, and native macOS QA gates.
+- Module respects CPU/RAM/event-rate budgets and can be disabled without retained resources.
 
 ---
 
@@ -613,28 +617,6 @@ Calendar/Reminders permissions must remain optional, requested contextually, and
 
 ---
 
-## M5 — Native Xiaozhi Voice
-
-### Goal
-
-Optionally make the Mac app an active voice endpoint after the display companion integration is stable and justified.
-
-### Scope, if approved
-
-- Mac microphone permission flow.
-- Audio input/output device selection.
-- Audio session lifecycle.
-- Level meter/waveform with bounded update rate.
-- Streaming protocol adapter.
-- Echo cancellation/device switching/error recovery considerations.
-- Explicit transcript/privacy retention settings.
-
-### Gate
-
-Begin only after M1 proves that user value requires native Mac audio. This phase has materially higher permission, performance, audio, and compatibility complexity.
-
----
-
 ## M6 — Future desktop modules
 
 ### Goal
@@ -680,7 +662,7 @@ Every new action/widget must add accessible label, keyboard path, disabled/error
 
 ## 7. Backlog rules
 
-### Must have before M1
+### Must have before NX
 
 - All F0–F10 Foundation Completion Gate conditions.
 - No unresolved critical windowing/lifecycle crash.
@@ -723,12 +705,12 @@ Every new action/widget must add accessible label, keyboard path, disabled/error
 | Settings become fragile as modules grow | Medium | Typed schema, versioned migrations, module namespaces | F4 |
 | Permission prompts reduce trust | High | Permission Coordinator, on-demand prompts, clear denial recovery | F5 |
 | Hotkey implementation requires unexpected permission/API behavior | Medium | Abstract shortcut service, capability availability UI, test early | F6 |
-| AI/IPC becomes arbitrary command-execution path | Critical | Action allow-list, typed input, confirmation, loopback authentication | F6/F8/M1 |
-| Streaming text/audio causes high CPU/RAM | High | Coalescing, bounded buffers, per-module performance policy, Instruments tests | F8/M1/M5 |
+| AI/IPC becomes arbitrary command-execution path | Critical | Action allow-list, typed input, confirmation, loopback authentication | F6/F8/NX |
+| Streaming text/audio causes high CPU/RAM | High | Coalescing, bounded buffers, per-module performance policy, Instruments tests | F8/NX |
 | Module resource leaks in background | High | Runtime ownership and stop cleanup tests | F7/F10 |
 | Multi-display adds disproportionate complexity | Medium | Built-in display first; delay full support | F2 onward |
 | Private APIs compromise future stability/distribution | Medium/High | Public API-first; isolated helper only after ADR/review | Any future phase |
-| Xiaozhi protocol/backend changes | Medium | Adapter/relay normalizes into stable EventEnvelope | M1 |
+| Xiaozhi protocol/backend changes | Medium | Native transport/session boundary normalizes state before presentation | NX |
 
 ---
 

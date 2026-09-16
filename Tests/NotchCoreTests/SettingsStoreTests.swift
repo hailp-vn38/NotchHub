@@ -139,7 +139,7 @@ func migratesV5XiaozhiSettings() async throws {
 
     let result = await SettingsStore(backend: MemorySettingsBackend(active: v5)).load()
     #expect(result.recovery == .loaded)
-    #expect(result.settings.schemaVersion == 6)
+    #expect(result.settings.schemaVersion == 7)
     #expect(result.settings.xiaozhi.ttsMuted == false)
 }
 
@@ -177,13 +177,13 @@ func quarantinesCorruptSnapshot() async throws {
 
 @Test("Future schema is read-only and original bytes remain untouched")
 func preservesFutureSchema() async throws {
-    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 7, "future": true])
+    let future = try JSONSerialization.data(withJSONObject: ["schemaVersion": 8, "future": true])
     let backend = MemorySettingsBackend(active: future)
     let store = SettingsStore(backend: backend)
     let loaded = await store.load()
     let mutation = await store.mutate(.theme(.dark))
 
-    #expect(loaded.recovery == .readOnlyFutureSchema(version: 7))
+    #expect(loaded.recovery == .readOnlyFutureSchema(version: 8))
     #expect(mutation.outcome == .readOnly)
     #expect(await backend.active == future)
     #expect(await backend.quarantined.isEmpty)

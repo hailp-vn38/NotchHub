@@ -62,12 +62,11 @@ Any proposal to include a permanently excluded area requires a new product decis
 After the Foundation Completion Gate, future modules may be added in this tentative sequence:
 
 1. Sample Status Module (M0).
-2. Xiaozhi Display Companion (M1).
+2. Native Xiaozhi Client (NX), with direct bootstrap/WebSocket, microphone input, TTS playback, and no relay dependency.
 3. Media or Clipboard (M2).
 4. Files or System Controls (M3).
 5. Calendar or Reminders (M4).
-6. Optional Native Xiaozhi Voice (M5).
-7. Other reviewed desktop productivity modules (M6).
+6. Other reviewed desktop productivity modules (M6).
 
 Every module remains subject to the same requirements for lifecycle, settings, permission, security, performance, accessibility, diagnostics, and testing.
 
@@ -729,7 +728,7 @@ The foundation is considered complete enough to begin real modules only when all
 14. CI, automated tests, manual QA, and profiling scenarios pass according to documented release criteria.
 15. Documentation and ADRs reflect the implementation actually present in the codebase.
 
-Only after all conditions are met may the project start M0/M1 real-module work.
+Only after all conditions are met may the project start M0/NX real-module work.
 
 ---
 

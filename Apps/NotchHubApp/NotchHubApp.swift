@@ -88,7 +88,8 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
             settingsStore: settingsStore,
             permissionCenter: permissionCenter,
             shortcutPresentation: ShortcutPresentationModel(bindingStore: shortcutBindings),
-            moduleRuntime: moduleRuntime
+            moduleRuntime: moduleRuntime,
+            xiaozhiConnectionTester: XiaozhiConnectionTester()
         )
         super.init()
     }
@@ -119,8 +120,9 @@ final class AppShellDelegate: NSObject, NSApplicationDelegate {
         Task {
             let settings = await settingsStore.load().settings
             let xiaozhi = XiaozhiModule(
+                bootstrapFactory: { XiaozhiCloudBootstrapClient(endpoint: $0) },
                 permissionCoordinator: permissionCoordinator,
-                ttsMutedProvider: { await self.settingsStore.load().settings.xiaozhi.ttsMuted }
+                settingsProvider: { await self.settingsStore.load().settings.xiaozhi }
             )
             await moduleRuntime.register(
                 xiaozhi,

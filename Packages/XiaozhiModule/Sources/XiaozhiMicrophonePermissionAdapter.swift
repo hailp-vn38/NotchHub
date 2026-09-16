@@ -18,7 +18,7 @@ public struct XiaozhiMicrophonePermissionAdapter: PermissionAdapter {
 
     public func requestAuthorization(for kind: PermissionKind) async -> PermissionStatus {
         guard kind == .microphone else { return .unavailable }
-        _ = await AVCaptureDevice.requestAccess(for: .audio)
+        _ = await Task { @MainActor in await AVCaptureDevice.requestAccess(for: .audio) }.value
         return await status(for: kind)
     }
 
@@ -26,6 +26,6 @@ public struct XiaozhiMicrophonePermissionAdapter: PermissionAdapter {
         guard kind == .microphone,
             let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
         else { return false }
-        return NSWorkspace.shared.open(url)
+        return await MainActor.run { NSWorkspace.shared.open(url) }
     }
 }

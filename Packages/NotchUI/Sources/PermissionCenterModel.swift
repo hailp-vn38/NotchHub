@@ -11,7 +11,6 @@ public final class PermissionCenterModel {
     public private(set) var microphoneStatus: PermissionStatus = .notDetermined
     public private(set) var microphoneGuidance = PermissionGuidance(
         reason: "", dataImplication: "", declineEffect: "", nextAction: "")
-    public private(set) var isShowingMicrophoneExplanation = false
     public let informationalCapabilities: [PermissionKind] = [
         .accessibility, .calendar, .reminders, .camera, .screenRecording, .automation,
     ]
@@ -37,7 +36,7 @@ public final class PermissionCenterModel {
 
     public func confirmNotificationsRecoveryOptIn() async {
         guard isShowingExplanation else { return }
-        _ = await coordinator.request(
+        let result = await coordinator.request(
             .notifications,
             context: .init(
                 featureID: PermissionFeatureID.recoveryNotifications,
@@ -49,19 +48,17 @@ public final class PermissionCenterModel {
         )
         isShowingExplanation = false
         await load()
+        if result != .authorized {
+            _ = await coordinator.openSystemSettings(for: .notifications)
+        }
     }
 
     public func dismissExplanation() {
         isShowingExplanation = false
     }
 
-    public func beginXiaozhiMicrophoneConsent() {
-        isShowingMicrophoneExplanation = true
-    }
-
-    public func confirmXiaozhiMicrophoneConsent() async {
-        guard isShowingMicrophoneExplanation else { return }
-        _ = await coordinator.request(
+    public func requestXiaozhiMicrophone() async {
+        let result = await coordinator.request(
             .microphone,
             context: .init(
                 featureID: PermissionFeatureID.xiaozhi,
@@ -71,12 +68,10 @@ public final class PermissionCenterModel {
                 explanationAcknowledged: true
             )
         )
-        isShowingMicrophoneExplanation = false
         await load()
-    }
-
-    public func dismissMicrophoneExplanation() {
-        isShowingMicrophoneExplanation = false
+        if result != .authorized {
+            _ = await coordinator.openSystemSettings(for: .microphone)
+        }
     }
 
     public func openSystemSettings() async -> Bool {

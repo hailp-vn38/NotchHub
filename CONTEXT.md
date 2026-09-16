@@ -48,6 +48,10 @@ _Avoid_: diagnostics record, silent fallback
 A credential or authentication value whose disclosure could grant access or reveal protected data; it is never part of a settings snapshot.
 _Avoid_: normal setting, exported configuration
 
+**Session credential**:
+A secret supplied by Xiaozhi bootstrap and retained only for the active connection or explicit diagnostic test. It is neither persisted nor stored in Keychain; a later connection obtains a new value through bootstrap.
+_Avoid_: saved token, Xiaozhi setting
+
 **Conversation transcript**:
 The transient recognized user or assistant text for one active voice session. It is held only in session memory by default and is cleared when that session ends, is aborted, disabled, or the Mac sleeps.
 _Avoid_: conversation history, diagnostics log
